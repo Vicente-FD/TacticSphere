@@ -1,0 +1,126 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-feature-settings: 'rlig' 1, 'kern' 1;
+  }
+
+  body {
+    @apply font-sans text-base text-ink bg-neutral-100 antialiased;
+  }
+
+  h1 {
+    @apply text-4xl font-semibold tracking-[-0.01em];
+  }
+
+  h2 {
+    @apply text-3xl font-semibold tracking-[-0.01em];
+  }
+
+  h3 {
+    @apply text-2xl font-medium;
+  }
+
+  h4 {
+    @apply text-xl font-medium;
+  }
+
+  a {
+    @apply text-accent transition-colors duration-120 ease-smooth hover:text-accent/90;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    @apply text-base;
+  }
+
+  ::selection {
+    @apply bg-accent text-white;
+  }
+}
+
+@layer components {
+  .ts-page {
+    @apply min-h-[calc(100vh-4rem)] bg-neutral-100 py-8 px-4 md:px-8;
+  }
+
+  .ts-container {
+    @apply mx-auto w-full max-w-6xl space-y-6;
+  }
+
+  .ts-card {
+    @apply bg-white rounded-xl shadow-card p-6 transition-shadow duration-160 ease-smooth hover:shadow-hover;
+  }
+
+  .ts-card-muted {
+    @apply bg-neutral-100 border border-neutral-200 rounded-xl p-6;
+  }
+
+  .ts-title {
+    @apply text-3xl font-semibold;
+  }
+
+  .ts-subtitle {
+    @apply text-lg text-neutral-400;
+  }
+
+  .ts-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent bg-accent px-4 py-2
+      font-medium text-white shadow-sm transition-all duration-120 ease-smooth hover:bg-accent/90 hover:shadow-hover
+      active:translate-y-[1px] disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .ts-btn--secondary {
+    @apply bg-white text-ink border border-neutral-200 hover:border-accent/50 hover:bg-neutral-100;
+  }
+
+  .ts-btn--ghost {
+    @apply bg-transparent text-neutral-400 hover:text-ink hover:bg-neutral-100/80 border-transparent;
+  }
+
+  .ts-chip {
+    @apply inline-flex items-center gap-2 rounded-pill bg-neutral-100 px-3 py-1 text-sm text-neutral-400;
+  }
+
+  .ts-input {
+    @apply w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-base text-ink placeholder:text-neutral-400
+      transition-all duration-120 ease-smooth focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none;
+  }
+
+  .ts-select {
+    @apply ts-input appearance-none;
+  }
+
+  .ts-label {
+    @apply text-sm font-medium text-neutral-700;
+  }
+
+  .ts-table {
+    @apply min-w-full divide-y divide-neutral-200;
+  }
+
+  .ts-table thead th {
+    @apply px-4 py-3 text-left text-sm font-semibold text-neutral-400 uppercase tracking-[0.08em];
+  }
+
+  .ts-table tbody tr {
+    @apply transition-colors hover:bg-neutral-100/70;
+  }
+
+  .ts-table tbody td {
+    @apply px-4 py-3 text-sm text-neutral-700 align-middle;
+  }
+
+  .ts-badge {
+    @apply inline-flex items-center rounded-pill bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent;
+  }
+}
