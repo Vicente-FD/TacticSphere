@@ -600,10 +600,25 @@ export class SurveyComponent implements OnInit {
     });
   }
 
+  private parseDate(value: string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+    const trimmed = normalized.replace(/\.(\d{3})\d+$/, '.$1');
+    const hasOffset = /[+-]\d{2}:?\d{2}$/.test(trimmed);
+    const withZone = trimmed.endsWith('Z') || hasOffset ? trimmed : `${trimmed}Z`;
+    const date = new Date(withZone);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
   isActive(a: Asignacion): boolean {
     const now = new Date();
-    const fi = new Date(a.fecha_inicio);
-    const fc = new Date(a.fecha_cierre);
+    const fi = this.parseDate(a.fecha_inicio);
+    const fc = this.parseDate(a.fecha_cierre);
+    if (!fi || !fc) {
+      return false;
+    }
     return fi <= now && now <= fc;
   }
 
@@ -925,7 +940,6 @@ export class SurveyComponent implements OnInit {
         if (allowFallback && err?.status === 404 && this.progress?.por_pilar?.length) {
           this.sidebarPillars = this.progress.por_pilar.map((pp) => ({
             id: pp.pilar_id,
-            empresa_id: 0,
             nombre: pp.pilar_nombre,
             descripcion: null,
             peso: 1,

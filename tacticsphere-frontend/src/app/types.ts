@@ -99,17 +99,24 @@ export interface EmpleadoUpdate {
 // ===== Pilares / Preguntas =====
 export interface Pilar {
   id: number;
-  empresa_id: number;
+  empresa_id?: number | null;
   nombre: string;
   descripcion?: string | null;
   peso: number;
 }
 
 export interface PilarCreate {
-  empresa_id: number;
+  empresa_id?: number | null;
   nombre: string;
   descripcion?: string | null;
   peso?: number; // default 1 en backend
+}
+
+export interface PilarUpdate {
+  empresa_id?: number | null;
+  nombre?: string;
+  descripcion?: string | null;
+  peso?: number;
 }
 
 export interface Pregunta {

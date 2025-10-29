@@ -1,66 +1,84 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, throwError } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../environments/environment';
-import { Pilar } from './types';
+import { Pilar, PilarCreate, PilarUpdate } from './types';
+
+type PilarCreatePayload = {
+  nombre: string;
+  peso: number;
+  descripcion?: string | null;
+};
+
+type PilarUpdatePayload = {
+  nombre?: string;
+  peso?: number;
+  descripcion?: string | null;
+};
 
 @Injectable({ providedIn: 'root' })
 export class PilarService {
   private http = inject(HttpClient);
-  private base = environment.apiUrl; // p.ej. http://127.0.0.1:8000
+  private base = environment.apiUrl;
+
+  listAll(): Observable<Pilar[]> {
+    return this.http.get<Pilar[]>(`${this.base}/pillars`).pipe(map((rows) => rows ?? []));
+  }
 
   /**
-   * Intenta /companies/{id}/pillars y, si no existe (404),
-   * hace fallback a /pillars?empresa_id=...
+   * Legacy signature kept for backward compatibility. Returns catálogo global + específico.
    */
   listByEmpresa(empresaId: number): Observable<Pilar[]> {
-    const aliasUrl = `${this.base}/companies/${empresaId}/pillars`;
-    return this.http.get<Pilar[]>(aliasUrl).pipe(
-      catchError((err) => {
-        // Fallback solo si el alias no existe
-        if (err && err.status === 404) {
-          const url = `${this.base}/pillars`;
-          return this.http.get<Pilar[]>(url, {
-            params: { empresa_id: String(empresaId) },
-          });
-        }
-        return throwError(() => err);
-      })
-    );
+    return this.http
+      .get<Pilar[]>(`${this.base}/pillars`, { params: { empresa_id: String(empresaId) } })
+      .pipe(map((rows) => rows ?? []));
   }
 
-  /** Alias para compatibilidad con código existente que usa `list()` */
-  list(empresaId: number): Observable<Pilar[]> {
-    return this.listByEmpresa(empresaId);
+  list(empresaId?: number | null): Observable<Pilar[]> {
+    if (empresaId != null) {
+      return this.listByEmpresa(empresaId);
+    }
+    return this.listAll();
   }
 
-  /**
-   * POST /pillars
-   * Saneamos descripcion: null -> undefined para evitar errores de tipos en el backend.
-   */
-  create(body: {
-    empresa_id: number;
-    nombre: string;
-    descripcion?: string | null;
-    peso?: number;
-  }): Observable<Pilar> {
-    const payload = {
-      empresa_id: body.empresa_id,
+  create(body: PilarCreate): Observable<Pilar> {
+    const payload: PilarCreatePayload = {
       nombre: body.nombre,
-      // si viene null, lo mandamos como undefined
-      descripcion: body.descripcion ?? undefined,
       peso: body.peso ?? 1,
     };
-    return this.http.post<Pilar>(`${this.base}/pillars`, payload);
+
+    if (body.descripcion !== undefined) {
+      payload.descripcion = body.descripcion;
+    }
+
+    const options =
+      body.empresa_id != null ? { params: { empresa_id: String(body.empresa_id) } } : {};
+
+    return this.http.post<Pilar>(`${this.base}/pillars`, payload, options);
   }
 
-  /** DELETE /pillars/{id} (si el backend lo expone) */
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/pillars/${id}`);
+  update(id: number, body: PilarUpdate): Observable<Pilar> {
+    const payload: PilarUpdatePayload = {};
+
+    if (body.nombre !== undefined) {
+      payload.nombre = body.nombre;
+    }
+    if (body.peso !== undefined) {
+      payload.peso = body.peso;
+    }
+    if (body.descripcion !== undefined) {
+      payload.descripcion = body.descripcion;
+    }
+
+    return this.http.patch<Pilar>(`${this.base}/pillars/${id}`, payload);
   }
 
-  /** Alias por si tu código llamaba a remove() */
-  remove(id: number): Observable<void> {
-    return this.delete(id);
+  delete(id: number, cascade = false): Observable<void> {
+    const options = cascade ? { params: { cascade: 'true' } as Record<string, string> } : undefined;
+    return this.http.delete<void>(`${this.base}/pillars/${id}`, options);
+  }
+
+  remove(id: number, cascade = false): Observable<void> {
+    return this.delete(id, cascade);
   }
 }

@@ -90,13 +90,13 @@ GLOBAL_TEMPLATE: List[Dict] = [
 ]
 
 
-def ensure_pilar(session, empresa_id: int, data: Dict) -> Tuple[Pilar, bool]:
-    stmt = select(Pilar).where(Pilar.empresa_id == empresa_id, Pilar.nombre == data["nombre"])
+def ensure_pilar(session, data: Dict) -> Tuple[Pilar, bool]:
+    stmt = select(Pilar).where(Pilar.nombre == data["nombre"])
     pilar = session.scalars(stmt).first()
     created = False
     if not pilar:
         pilar = Pilar(
-            empresa_id=empresa_id,
+            empresa_id=None,
             nombre=data["nombre"],
             descripcion=data.get("descripcion"),
             peso=data.get("peso", 1),
@@ -260,7 +260,7 @@ def main() -> None:
             question_pool: List[Pregunta] = []
 
             for pilar_data in GLOBAL_TEMPLATE:
-                pilar, nuevo = ensure_pilar(session, empresa.id, pilar_data)
+                pilar, nuevo = ensure_pilar(session, pilar_data)
                 if nuevo:
                     pilares_creados += 1
                 preguntas, nuevas = ensure_preguntas(session, pilar, pilar_data["preguntas"])

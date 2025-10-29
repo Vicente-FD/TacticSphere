@@ -51,6 +51,13 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'pillars',
+            loadComponent: () =>
+              import('./admin/pillars/pillars').then(
+                (m) => m.PillarsComponent
+              ),
+          },
+          {
             path: 'dashboards',
             loadComponent: () =>
               import('./admin/dashboards/dashboards').then(

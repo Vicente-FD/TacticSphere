@@ -29,6 +29,7 @@ import { AuthService } from '../../auth.service';
             >
             <a routerLink="/admin/dashboards" routerLinkActive="active">Resultados</a>
             <a routerLink="/admin/companies" routerLinkActive="active">Empresas</a>
+            <a routerLink="/admin/pillars" routerLinkActive="active">Pilares</a>
             <a routerLink="/admin/questions" routerLinkActive="active">Preguntas</a>
             <a routerLink="/admin/users" routerLinkActive="active">Usuarios</a>
             <a routerLink="/survey" class="block px-4 py-2 hover:bg-gray-100">Encuesta</a>

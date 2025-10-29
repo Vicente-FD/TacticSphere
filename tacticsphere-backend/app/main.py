@@ -78,10 +78,14 @@ def __whoami():
 # ======================================================
 # Helpers de autorización de empresa
 # ======================================================
-def _ensure_company_access(current: Usuario, target_empresa_id: int):
-    """ADMIN_SISTEMA: acceso total. ADMIN: solo su empresa."""
+def _ensure_company_access(current: Usuario, target_empresa_id: Optional[int]):
+    """ADMIN_SISTEMA: acceso total. ADMIN: su empresa o recursos globales."""
     if current.rol == RolEnum.ADMIN_SISTEMA:
         return
+    if target_empresa_id is None:
+        if current.rol == RolEnum.ADMIN:
+            return
+        raise HTTPException(status_code=403, detail="Permisos insuficientes")
     if current.rol == RolEnum.ADMIN and current.empresa_id == target_empresa_id:
         return
     raise HTTPException(status_code=403, detail="Permisos insuficientes")
@@ -388,11 +392,15 @@ def delete_user(
 # ======================================================
 @app.get("/pillars", response_model=list[PilarRead])
 def list_pillars(
-    empresa_id: int,
+    empresa_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
     current: Usuario = Depends(get_current_user),
 ):
-    _ensure_company_access(current, empresa_id)
+    if empresa_id is not None:
+        _ensure_company_access(current, empresa_id)
+    else:
+        if current.rol != RolEnum.ADMIN_SISTEMA and current.empresa_id is not None:
+            empresa_id = current.empresa_id
     return crud.list_pilares(db, empresa_id)
 
 @app.get("/companies/{empresa_id}/pillars", response_model=list[PilarRead])
@@ -410,8 +418,28 @@ def create_pillar(
     db: Session = Depends(get_db),
     current: Usuario = Depends(get_current_user),
 ):
-    _ensure_company_access(current, data.empresa_id)
+    if data.empresa_id is not None:
+        _ensure_company_access(current, data.empresa_id)
+    else:
+        if current.rol not in (RolEnum.ADMIN, RolEnum.ADMIN_SISTEMA):
+            raise HTTPException(status_code=403, detail="Permisos insuficientes")
     return crud.create_pilar(db, data.empresa_id, data.nombre, data.descripcion, data.peso)
+
+@app.delete("/pillars/{pilar_id}", status_code=204)
+def delete_pillar(
+    pilar_id: int,
+    cascade: bool = Query(False),
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    _ensure_company_access(current, p.empresa_id)
+    ok, reason = crud.delete_pilar(db, pilar_id, cascade=cascade)
+    if not ok:
+        raise HTTPException(status_code=400, detail=reason or "No se pudo eliminar el pilar")
+    return None
 
 @app.get("/questions", response_model=list[PreguntaRead])
 def list_questions(
@@ -693,7 +721,7 @@ def survey_pillar_questions(
 ):
     asg = _ensure_assignment_access(db, current, asignacion_id)
     pil = db.get(Pilar, pilar_id)
-    if not pil or pil.empresa_id != asg.empresa_id:
+    if not pil or (pil.empresa_id is not None and pil.empresa_id != asg.empresa_id):
         raise HTTPException(status_code=404, detail="Pilar no encontrado")
 
     preguntas, rmap = crud.get_pilar_questions_with_answers(db, asignacion_id, pilar_id, empleado_id)

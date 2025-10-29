@@ -111,14 +111,14 @@ class Pilar(Base):
     __tablename__ = "pilares"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    empresa_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("empresas.id", ondelete="CASCADE"), nullable=False, index=True
+    empresa_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("empresas.id", ondelete="SET NULL"), nullable=True, index=True
     )
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     peso: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    empresa: Mapped["Empresa"] = relationship("Empresa", back_populates="pilares")
+    empresa: Mapped[Optional["Empresa"]] = relationship("Empresa", back_populates="pilares")
     preguntas: Mapped[List["Pregunta"]] = relationship(
         "Pregunta", back_populates="pilar", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -132,7 +132,7 @@ class Pilar(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("empresa_id", "nombre", name="uq_pilar_empresa_nombre"),
+        UniqueConstraint("nombre", name="uq_pilar_nombre"),
     )
 
 class Pregunta(Base):

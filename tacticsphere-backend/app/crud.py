@@ -1,7 +1,7 @@
-from typing import List, Optional, Dict, Tuple
-from datetime import datetime, timedelta  # usamos naive UTC
+from typing import List, Optional, Dict, Tuple, Iterable
+from datetime import datetime, timedelta, timezone  # usamos naive UTC
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 
 from .auth import hash_password
 from .models import (
@@ -91,7 +91,17 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
     db.add(emp)
     db.flush()  # para conseguir emp.id
     if departamentos:
-        for n in [x.strip() for x in departamentos if x and x.strip()]:
+        seen: set[str] = set()
+        for raw in departamentos:
+            if not raw:
+                continue
+            n = raw.strip()
+            if not n:
+                continue
+            key = n.lower()
+            if key in seen:
+                continue
+            seen.add(key)
             db.add(Departamento(nombre=n, empresa_id=emp.id))
     db.commit()
     db.refresh(emp)
@@ -186,21 +196,45 @@ def update_empleado(
 # PILARES / PREGUNTAS
 # ======================================================
 
-def create_pilar(db: Session, empresa_id: int, nombre: str, descripcion: Optional[str], peso: int) -> Pilar:
+def create_pilar(
+    db: Session,
+    empresa_id: Optional[int],
+    nombre: str,
+    descripcion: Optional[str],
+    peso: int,
+) -> Pilar:
     p = Pilar(empresa_id=empresa_id, nombre=nombre, descripcion=descripcion, peso=peso)
     db.add(p)
     db.commit()
     db.refresh(p)
     return p
 
-def list_pilares(db: Session, empresa_id: int) -> List[Pilar]:
-    return db.scalars(select(Pilar).where(Pilar.empresa_id == empresa_id)).all()
+def list_pilares(db: Session, empresa_id: Optional[int]) -> List[Pilar]:
+    stmt = select(Pilar)
+    if empresa_id is not None:
+        stmt = stmt.where(or_(Pilar.empresa_id == empresa_id, Pilar.empresa_id.is_(None)))
+    else:
+        stmt = stmt.where(Pilar.empresa_id.is_(None))
+    return db.scalars(stmt.order_by(Pilar.id)).all()
+
+def delete_pilar(db: Session, pilar_id: int, cascade: bool = False) -> Tuple[bool, Optional[str]]:
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        return False, "Pilar no existe"
+    if not cascade:
+        existen = db.scalar(select(func.count(Pregunta.id)).where(Pregunta.pilar_id == pilar_id)) or 0
+        if existen:
+            return False, "Pilar tiene preguntas asociadas"
+    db.delete(p)
+    db.commit()
+    return True, None
 
 def create_pregunta(db: Session, pilar_id: int, enunciado: str, tipo, es_obligatoria: bool, peso: int) -> Pregunta:
     q = Pregunta(pilar_id=pilar_id, enunciado=enunciado, tipo=tipo, es_obligatoria=es_obligatoria, peso=peso)
     db.add(q)
     db.commit()
     db.refresh(q)
+    sync_question_with_questionnaires(db, q)
     return q
 
 def list_preguntas(db: Session, pilar_id: int) -> List[Pregunta]:
@@ -252,18 +286,19 @@ def build_or_get_auto_cuestionario(db: Session, empresa_id: int) -> Cuestionario
     Devuelve un Cuestionario PUBLICADO para la empresa.
     Si no existe, crea uno con TODAS las preguntas existentes (de todos los pilares).
     """
-    existente = get_latest_published_cuestionario(db, empresa_id)
-    if existente:
-        return existente
-
-    # Tomar TODAS las preguntas definidas para la empresa
     todas_pregs = db.scalars(
         select(Pregunta)
         .join(Pilar, Pregunta.pilar_id == Pilar.id)
-        .where(Pilar.empresa_id == empresa_id)
+        .where(or_(Pilar.empresa_id == empresa_id, Pilar.empresa_id.is_(None)))
     ).all()
     if not todas_pregs:
         raise ValueError("No hay preguntas definidas en el sistema para crear un cuestionario.")
+
+    existente = get_latest_published_cuestionario(db, empresa_id)
+    if existente:
+        ensure_questionnaire_questions(db, existente, todas_pregs, purge_missing=True)
+        db.commit()
+        return existente
 
     c = create_cuestionario(
         db=db,
@@ -417,15 +452,21 @@ def get_or_create_auto_asignacion(
     Garantiza una asignación vigente a nivel EMPRESA.
     Si no hay, crea una con cuestionario AUTO (todas las preguntas) y vigencia amplia.
     """
-    vigente = get_active_asignacion_for_empresa(db, empresa_id)
-    if vigente:
-        return vigente
-
-    # asegurar cuestionario PUBLICADO (auto)
+    # Asegurar cuestionario actualizado (global + de empresa)
     cuest = build_or_get_auto_cuestionario(db, empresa_id)
 
-    # crear asignación larga (10 años)
-    now = datetime.utcnow()  # naive UTC
+    vigente = get_active_asignacion_for_empresa(db, empresa_id)
+    if vigente:
+        now = datetime.now(timezone.utc)
+        vigente.cuestionario_id = cuest.id
+        vigente.fecha_inicio = now - timedelta(hours=1)
+        vigente.fecha_cierre = now + timedelta(days=3650)
+        vigente.anonimo = anonimo
+        db.commit()
+        db.refresh(vigente)
+        return vigente
+
+    now = datetime.now(timezone.utc)
     fi = now - timedelta(hours=1)
     fc = now + timedelta(days=3650)
 
@@ -453,7 +494,7 @@ def list_pilares_por_asignacion(db: Session, asignacion_id: int) -> List[Pilar]:
         .join(Pregunta, Pregunta.pilar_id == Pilar.id)
         .join(CuestionarioPregunta, CuestionarioPregunta.pregunta_id == Pregunta.id)
         .where(CuestionarioPregunta.cuestionario_id == asg.cuestionario_id)
-        .where(Pilar.empresa_id == asg.empresa_id)
+        .where(or_(Pilar.empresa_id == asg.empresa_id, Pilar.empresa_id.is_(None)))
         .group_by(Pilar.id)
         .order_by(Pilar.id)
     )
@@ -481,7 +522,7 @@ def get_pilar_questions_with_answers(
         return [], {}
 
     pil = db.get(Pilar, pilar_id)
-    if not pil or pil.empresa_id != asg.empresa_id:
+    if not pil:
         return [], {}
 
     q_pregs = (
@@ -512,6 +553,74 @@ def get_pilar_questions_with_answers(
     respuestas = db.scalars(resp_stmt).all()
     rmap: Dict[int, Respuesta] = {r.pregunta_id: r for r in respuestas}
     return preguntas, rmap
+
+
+def ensure_questionnaire_questions(
+    db: Session,
+    cuestionario: Cuestionario,
+    preguntas: Iterable[Pregunta],
+    purge_missing: bool = False,
+) -> int:
+    existing_rows = list(
+        db.execute(
+            select(CuestionarioPregunta.pregunta_id).where(CuestionarioPregunta.cuestionario_id == cuestionario.id)
+        )
+    )
+    existing_ids = {row[0] for row in existing_rows}
+
+    if purge_missing:
+        valid_ids = {p.id for p in preguntas}
+        missing = [pid for pid in existing_ids if pid not in valid_ids]
+        if missing:
+            db.execute(
+                delete(CuestionarioPregunta).where(
+                    CuestionarioPregunta.cuestionario_id == cuestionario.id,
+                    CuestionarioPregunta.pregunta_id.in_(missing),
+                )
+            )
+            existing_ids -= set(missing)
+    orden = (
+        db.scalar(
+            select(func.max(CuestionarioPregunta.orden)).where(CuestionarioPregunta.cuestionario_id == cuestionario.id)
+        )
+        or 0
+    )
+    added = 0
+    for pregunta in preguntas:
+        if pregunta.id in existing_ids:
+            continue
+        orden += 1
+        db.add(
+            CuestionarioPregunta(
+                cuestionario_id=cuestionario.id,
+                pregunta_id=pregunta.id,
+                orden=orden,
+            )
+        )
+        added += 1
+    if added:
+        db.flush()
+    return added
+
+
+def sync_question_with_questionnaires(db: Session, pregunta: Pregunta) -> None:
+    pilar = db.get(Pilar, pregunta.pilar_id)
+    if not pilar:
+        return
+
+    if pilar.empresa_id is None:
+        target_cuestionarios = db.scalars(select(Cuestionario)).all()
+    else:
+        target_cuestionarios = db.scalars(
+            select(Cuestionario).where(Cuestionario.empresa_id == pilar.empresa_id)
+        ).all()
+
+    if not target_cuestionarios:
+        return
+
+    for cuest in target_cuestionarios:
+        ensure_questionnaire_questions(db, cuest, [pregunta])
+    db.commit()
 
 def submit_bulk_answers(
     db: Session,
@@ -596,7 +705,7 @@ def compute_assignment_progress(
         .join(Pregunta, Pregunta.pilar_id == Pilar.id)
         .join(CuestionarioPregunta, CuestionarioPregunta.pregunta_id == Pregunta.id)
         .where(CuestionarioPregunta.cuestionario_id == asg.cuestionario_id)
-        .where(Pilar.empresa_id == asg.empresa_id)
+        .where(or_(Pilar.empresa_id == asg.empresa_id, Pilar.empresa_id.is_(None)))
         .group_by(Pilar.id)
         .order_by(Pilar.id)
     )
@@ -612,7 +721,7 @@ def compute_assignment_progress(
             Respuesta.pregunta_id == Pregunta.id,
             Respuesta.asignacion_id == asignacion_id
         ))
-        .where(Pilar.empresa_id == asg.empresa_id)
+        .where(or_(Pilar.empresa_id == asg.empresa_id, Pilar.empresa_id.is_(None)))
         .group_by(Pilar.id)
     )
     if asg.anonimo:

@@ -105,14 +105,14 @@ class EmpleadoRead(BaseModel):
 # ======================================================
 
 class PilarCreate(BaseModel):
-    empresa_id: int
+    empresa_id: Optional[int] = None
     nombre: str
     descripcion: Optional[str] = None
     peso: int = 1
 
 class PilarRead(BaseModel):
     id: int
-    empresa_id: int
+    empresa_id: Optional[int] = None
     nombre: str
     descripcion: Optional[str] = None
     peso: int

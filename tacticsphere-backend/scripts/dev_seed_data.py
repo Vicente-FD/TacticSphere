@@ -80,7 +80,7 @@ def main():
         pilares = []
         for p in pilares_data:
             obj, _ = get_or_create(
-                db, Pilar, empresa_id=empresa.id, nombre=p["nombre"],
+                db, Pilar, empresa_id=None, nombre=p["nombre"],
                 defaults=dict(descripcion=p["descripcion"], peso=p["peso"])
             )
             pilares.append(obj)

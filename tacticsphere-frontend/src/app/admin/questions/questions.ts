@@ -4,11 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { LucideAngularModule } from 'lucide-angular';
 
-import { CompanyService } from '../../company.service';
 import { PilarService } from '../../pillar.service';
 import { QuestionService } from '../../question.service';
 
-import { Empresa, Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
+import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
 
 @Component({
   standalone: true,
@@ -25,7 +24,7 @@ import { Empresa, Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
         <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div class="space-y-1">
             <h1 class="ts-title">Preguntas</h1>
-            <p class="ts-subtitle">Configura los cuestionarios por empresa y pilar.</p>
+            <p class="ts-subtitle">Gestiona el banco global de preguntas por pilar.</p>
           </div>
           <div class="ts-chip h-fit">
             <lucide-icon name="ListChecks" class="h-4 w-4 text-accent" strokeWidth="1.75"></lucide-icon>
@@ -37,39 +36,12 @@ import { Empresa, Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
           <div class="space-y-6">
             <div class="ts-card space-y-4">
               <div class="flex items-center gap-3">
-                <lucide-icon name="Building2" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
-                <div>
-                  <h2 class="text-lg font-semibold text-ink">Empresa</h2>
-                  <p class="text-sm text-neutral-400">Selecciona la empresa para ver sus pilares y preguntas.</p>
-                </div>
-              </div>
-
-              <label class="block space-y-2">
-                <span class="ts-label">Empresa</span>
-                <select
-                  class="ts-select"
-                  [(ngModel)]="selectedEmpresaId"
-                  (change)="onEmpresaChange()"
-                  [disabled]="loadingEmpresas"
-                >
-                  <option [ngValue]="null">Selecciona una empresa</option>
-                  <option *ngFor="let e of empresas()" [ngValue]="e.id">{{ e.nombre }}</option>
-                </select>
-              </label>
-
-              <ngx-skeleton-loader
-                *ngIf="loadingEmpresas"
-                count="3"
-                [theme]="{ height: '16px', marginBottom: '12px', borderRadius: '6px' }"
-              ></ngx-skeleton-loader>
-            </div>
-
-            <div class="ts-card space-y-4" *ngIf="selectedEmpresaId">
-              <div class="flex items-center gap-3">
                 <lucide-icon name="Layers" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
                 <div>
                   <h2 class="text-lg font-semibold text-ink">Pilar</h2>
-                  <p class="text-sm text-neutral-400">Escoge el pilar sobre el que quieres trabajar.</p>
+                  <p class="text-sm text-neutral-400">
+                    Selecciona el pilar global sobre el que quieres trabajar.
+                  </p>
                 </div>
               </div>
 
@@ -222,7 +194,7 @@ import { Empresa, Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
             <ng-template #emptyQuestions>
               <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 p-6 text-center">
                 <p class="text-sm text-neutral-400">
-                  {{ selectedPilarId ? 'Aún no hay preguntas en este pilar.' : 'Selecciona una empresa y pilar para comenzar.' }}
+                  {{ selectedPilarId ? 'Aún no hay preguntas en este pilar.' : 'Selecciona un pilar para comenzar.' }}
                 </p>
               </div>
             </ng-template>
@@ -233,18 +205,14 @@ import { Empresa, Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
   `,
 })
 export class QuestionsComponent implements OnInit {
-  private companiesSrv = inject(CompanyService);
   private pillarsSrv = inject(PilarService);
   private questionsSrv = inject(QuestionService);
 
-  empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   pilares: WritableSignal<Pilar[]> = signal<Pilar[]>([]);
   preguntas: WritableSignal<Pregunta[]> = signal<Pregunta[]>([]);
 
-  selectedEmpresaId: number | null = null;
   selectedPilarId: number | null = null;
 
-  loadingEmpresas = true;
   loadingPilares = false;
   loadingPreguntas = false;
   creatingQuestion = false;
@@ -263,29 +231,17 @@ export class QuestionsComponent implements OnInit {
   };
 
   ngOnInit(): void {
-    this.loadCompanies();
+    this.loadPilares();
   }
 
-  private loadCompanies(): void {
-    this.loadingEmpresas = true;
-    this.companiesSrv.list().subscribe({
-      next: (rows) => this.empresas.set(rows ?? []),
-      error: (error) => console.error('Error listando empresas', error),
-      complete: () => (this.loadingEmpresas = false),
-    });
-  }
-
-  onEmpresaChange(): void {
+  private loadPilares(): void {
     this.pilares.set([]);
     this.preguntas.set([]);
     this.selectedPilarId = null;
-
-    if (!this.selectedEmpresaId) return;
-
     this.loadingPilares = true;
-    this.pillarsSrv.list(this.selectedEmpresaId).subscribe({
-      next: (rows) => this.pilares.set(rows ?? []),
-      error: (error) => console.error('Error listando pilares', error),
+    this.pillarsSrv.listAll().subscribe({
+      next: (rows: Pilar[]) => this.pilares.set(rows ?? []),
+      error: (error: unknown) => console.error('Error listando pilares', error),
       complete: () => (this.loadingPilares = false),
     });
   }
@@ -293,8 +249,8 @@ export class QuestionsComponent implements OnInit {
   private cargarPreguntas(pilarId: number): void {
     this.loadingPreguntas = true;
     this.questionsSrv.listByPilar(pilarId).subscribe({
-      next: (rows) => this.preguntas.set(rows ?? []),
-      error: (error) => console.error('Error listando preguntas', error),
+      next: (rows: Pregunta[]) => this.preguntas.set(rows ?? []),
+      error: (error: unknown) => console.error('Error listando preguntas', error),
       complete: () => (this.loadingPreguntas = false),
     });
   }
