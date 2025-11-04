@@ -16,7 +16,8 @@ import { CommonModule } from "@angular/common";
 import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { NgxEchartsDirective, NgxEchartsModule } from "ngx-echarts";
-import { EChartsOption } from "echarts";
+import * as echarts from "echarts";
+import type { EChartsOption } from "echarts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { forkJoin, of, Subscription, firstValueFrom } from "rxjs";
@@ -36,6 +37,21 @@ import {
   PillarProgress,
   Usuario,
 } from "../../types";
+import { tsMonoTheme } from "../../theme/theme-echarts";
+
+const TS_MONO_THEME = "tsMono";
+const echartsWithTheme = echarts as unknown as {
+  registerTheme: (name: string, theme: unknown) => void;
+  getTheme?: (name: string) => unknown;
+};
+
+if (!echartsWithTheme.getTheme?.(TS_MONO_THEME)) {
+  try {
+    echartsWithTheme.registerTheme(TS_MONO_THEME, tsMonoTheme);
+  } catch {
+    // If theme already exists we quietly ignore to keep bootstrap resilient.
+  }
+}
 
 type DashboardScope = "GLOBAL" | "COMPANY" | "DEPARTMENT" | "EMPLOYEE";
 

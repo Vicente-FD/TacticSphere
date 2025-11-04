@@ -4,40 +4,46 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: '#111111',
-        bg: '#FFFFFF',
-        accent: '#3A8FFF',
-        'accent-soft': '#4CC3FF',
+        bg: '#ffffff',
+        ink: '#0f0f0f',
+        muted: '#6b7280',
+        border: '#e5e7eb',
+        accent: '#111111',
         success: '#10B981',
         warning: '#F59E0B',
         error: '#EF4444',
-        neutral: {
-          700: '#1F1F1F',
-          400: '#8C8C8C',
-          200: '#EAEAEA',
-          100: '#F7F7F7',
-        },
       },
       fontFamily: {
-        sans: ['"Inter"', 'system-ui', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
-        md: '8px',
-        xl: '12px',
-        '2xl': '20px',
+        md: '0.5rem',
+        xl: '0.75rem',
+        '2xl': '1rem',
         pill: '9999px',
       },
       boxShadow: {
-        card: '0 2px 12px rgba(0,0,0,0.06)',
-        hover: '0 6px 20px rgba(0,0,0,0.08)',
+        card: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03)',
+        focus: '0 0 0 3px rgba(17,17,17,0.18)',
       },
-      transitionTimingFunction: {
-        smooth: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: 0 },
+          '100%': { opacity: 1 },
+        },
+        subtleUp: {
+          '0%': { transform: 'translateY(4px)', opacity: 0 },
+          '100%': { transform: 'translateY(0)', opacity: 1 },
+        },
+        pulseSoft: {
+          '0%,100%': { opacity: 0.9 },
+          '50%': { opacity: 1 },
+        },
       },
-      transitionDuration: {
-        80: '80ms',
-        120: '120ms',
-        160: '160ms',
+      animation: {
+        fadeIn: 'fadeIn .24s ease-out both',
+        subtleUp: 'subtleUp .28s ease-out both',
+        pulseSoft: 'pulseSoft 1.6s ease-in-out infinite',
       },
       strokeWidth: {
         lucide: '1.75',

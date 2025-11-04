@@ -1,6 +1,6 @@
 <div class="ts-page">
   <div class="ts-container space-y-6">
-    <section class="ts-card space-y-6">
+    <section class="ts-card space-y-6 animate-subtleUp">
       <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 class="ts-title">Resultados analiticos</h1>
@@ -11,9 +11,9 @@
         <div class="flex flex-wrap gap-2 text-sm">
           <ng-container *ngFor="let card of kpiCards(); trackBy: trackById">
             <div class="ts-chip">
-              <span class="uppercase text-[11px] tracking-[0.08em] text-neutral-400">{{ card.label }}</span>
+              <span class="uppercase text-[11px] tracking-[0.08em] text-muted">{{ card.label }}</span>
               <span class="ml-2 text-lg font-semibold text-ink">{{ card.value }}</span>
-              <span *ngIf="card.suffix" class="ml-1 text-sm text-neutral-400">{{ card.suffix }}</span>
+              <span *ngIf="card.suffix" class="ml-1 text-sm text-muted">{{ card.suffix }}</span>
             </div>
           </ng-container>
         </div>
@@ -90,7 +90,7 @@
         </button>
       </div>
 
-      <div *ngIf="info()" class="rounded-md border border-neutral-200 bg-neutral-100 px-4 py-3 text-sm text-neutral-500">
+      <div *ngIf="info()" class="rounded-2xl border border-border bg-[#f6f6f6] px-4 py-3 text-sm text-muted">
         {{ info() }}
       </div>
       <div *ngIf="error()" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
@@ -100,12 +100,12 @@
 
     <section id="analytics-export" class="space-y-6" *ngIf="!loading(); else loadingState">
       <ng-container *ngIf="insights().length; else emptyState">
-        <div class="ts-card space-y-3 min-w-0">
+        <div class="ts-card space-y-3 min-w-0 animate-subtleUp">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-ink">Resumen del filtro actual</h2>
-            <p class="text-sm text-neutral-400">Estos son los criterios aplicados al informe.</p>
+            <p class="text-sm text-muted">Estos son los criterios aplicados al informe.</p>
           </div>
-          <ul class="text-sm text-neutral-500 space-y-1">
+          <ul class="text-sm text-muted space-y-1">
             <li *ngFor="let item of filterSummary(); let idx = index; trackBy: trackByIndex">
               {{ item }}
             </li>
@@ -113,59 +113,89 @@
         </div>
 
         <div class="grid gap-6 xl:grid-cols-12">
-          <div class="ts-card space-y-4 xl:col-span-7 min-w-0">
+          <div class="ts-card space-y-4 xl:col-span-7 min-w-0 animate-subtleUp">
             <div class="space-y-1">
               <h2 class="text-lg font-semibold text-ink">Desempeno por pilar</h2>
-              <p class="text-sm text-neutral-400">
+              <p class="text-sm text-muted">
                 Promedio global de cada pilar considerando los filtros aplicados.
               </p>
             </div>
-            <echarts class="block w-full h-[26rem]" [options]="barPillarOption()" [autoResize]="true"></echarts>
+            <echarts
+              class="block h-[26rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="barPillarOption()"
+              [autoResize]="true"
+            ></echarts>
           </div>
 
-          <div class="ts-card space-y-4 xl:col-span-5 min-w-0">
+          <div class="ts-card space-y-4 xl:col-span-5 min-w-0 animate-subtleUp">
             <div class="space-y-1">
               <h2 class="text-lg font-semibold text-ink">Equilibrio organizacional</h2>
-              <p class="text-sm text-neutral-400">Comparar la fortaleza relativa entre pilares.</p>
+              <p class="text-sm text-muted">Comparar la fortaleza relativa entre pilares.</p>
             </div>
-            <echarts class="block w-full h-[26rem]" [options]="radarBalanceOption()" [autoResize]="true"></echarts>
+            <echarts
+              class="block h-[26rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="radarBalanceOption()"
+              [autoResize]="true"
+            ></echarts>
           </div>
         </div>
 
-        <div class="ts-card space-y-4 min-w-0">
+        <div class="ts-card space-y-4 min-w-0 animate-subtleUp">
           <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 class="text-lg font-semibold text-ink">Evolucion temporal</h2>
-              <p class="text-sm text-neutral-400">Sigue la tendencia del puntaje global y del pilar seleccionado.</p>
+              <p class="text-sm text-muted">Sigue la tendencia del puntaje global y del pilar seleccionado.</p>
             </div>
           </div>
-          <echarts class="block w-full h-[26rem]" [options]="timelineOption()" [autoResize]="true"></echarts>
+          <echarts
+            class="block h-[26rem] w-full animate-fadeIn"
+            [theme]="'tsMono'"
+            [options]="timelineOption()"
+            [autoResize]="true"
+          ></echarts>
         </div>
 
         <div class="grid gap-6 xl:grid-cols-12">
-          <div class="ts-card space-y-4 xl:col-span-6 min-w-0">
+          <div class="ts-card space-y-4 xl:col-span-6 min-w-0 animate-subtleUp">
             <div class="space-y-1">
               <h2 class="text-lg font-semibold text-ink">Participacion por departamento</h2>
-              <p class="text-sm text-neutral-400">Comparativa de respuestas completadas y pendientes.</p>
+              <p class="text-sm text-muted">Comparativa de respuestas completadas y pendientes.</p>
             </div>
-            <echarts class="block w-full h-[26rem]" [options]="departmentParticipationOption()" [autoResize]="true"></echarts>
+            <echarts
+              class="block h-[26rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="departmentParticipationOption()"
+              [autoResize]="true"
+            ></echarts>
           </div>
 
-          <div class="ts-card space-y-4 xl:col-span-6 min-w-0">
+          <div class="ts-card space-y-4 xl:col-span-6 min-w-0 animate-subtleUp">
             <div class="space-y-1">
               <h2 class="text-lg font-semibold text-ink">Pilar vs departamento</h2>
-              <p class="text-sm text-neutral-400">Detecta fortalezas y brechas puntuales.</p>
+              <p class="text-sm text-muted">Detecta fortalezas y brechas puntuales.</p>
             </div>
-            <echarts class="block w-full h-[26rem]" [options]="heatmapOption()" [autoResize]="true"></echarts>
+            <echarts
+              class="block h-[26rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="heatmapOption()"
+              [autoResize]="true"
+            ></echarts>
           </div>
         </div>
 
-        <div class="ts-card space-y-4 min-w-0">
+        <div class="ts-card space-y-4 min-w-0 animate-subtleUp">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-ink">Ranking de desempeno</h2>
-            <p class="text-sm text-neutral-400">Top de departamentos o empleados segun el filtro actual.</p>
+            <p class="text-sm text-muted">Top de departamentos o empleados segun el filtro actual.</p>
           </div>
-          <echarts class="block w-full h-[26rem]" [options]="rankingOption()" [autoResize]="true"></echarts>
+          <echarts
+            class="block h-[26rem] w-full animate-fadeIn"
+            [theme]="'tsMono'"
+            [options]="rankingOption()"
+            [autoResize]="true"
+          ></echarts>
         </div>
       </ng-container>
     </section>
@@ -174,21 +204,21 @@
       <section class="space-y-4">
         <div class="ts-card">
           <div class="animate-pulse space-y-4">
-            <div class="h-4 w-1/4 rounded bg-neutral-200"></div>
-            <div class="h-72 rounded-lg bg-neutral-200"></div>
+            <div class="h-4 w-1/4 rounded bg-border"></div>
+            <div class="h-72 rounded-lg bg-border"></div>
           </div>
         </div>
         <div class="ts-card">
           <div class="animate-pulse space-y-4">
-            <div class="h-4 w-1/4 rounded bg-neutral-200"></div>
-            <div class="h-72 rounded-lg bg-neutral-200"></div>
+            <div class="h-4 w-1/4 rounded bg-border"></div>
+            <div class="h-72 rounded-lg bg-border"></div>
           </div>
         </div>
       </section>
     </ng-template>
 
     <ng-template #emptyState>
-      <section class="ts-card text-center text-sm text-neutral-400">
+      <section class="ts-card text-center text-sm text-muted">
         No encontramos resultados para los filtros aplicados. Ajusta los criterios o espera a que existan nuevas
         respuestas.
       </section>
