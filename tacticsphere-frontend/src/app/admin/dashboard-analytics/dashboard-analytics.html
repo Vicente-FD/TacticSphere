@@ -80,6 +80,14 @@
         <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
           Actualizar datos
         </button>
+        <button
+          class="ts-btn"
+          type="button"
+          (click)="exportPdf()"
+          [disabled]="loading() || exporting() || !insights().length"
+        >
+          {{ exporting() ? "Generando PDF..." : "Exportar PDF" }}
+        </button>
       </div>
 
       <div *ngIf="info()" class="rounded-md border border-neutral-200 bg-neutral-100 px-4 py-3 text-sm text-neutral-500">
@@ -90,8 +98,20 @@
       </div>
     </section>
 
-    <section class="space-y-6" *ngIf="!loading(); else loadingState">
+    <section id="analytics-export" class="space-y-6" *ngIf="!loading(); else loadingState">
       <ng-container *ngIf="insights().length; else emptyState">
+        <div class="ts-card space-y-3 min-w-0">
+          <div class="space-y-1">
+            <h2 class="text-lg font-semibold text-ink">Resumen del filtro actual</h2>
+            <p class="text-sm text-neutral-400">Estos son los criterios aplicados al informe.</p>
+          </div>
+          <ul class="text-sm text-neutral-500 space-y-1">
+            <li *ngFor="let item of filterSummary(); let idx = index; trackBy: trackByIndex">
+              {{ item }}
+            </li>
+          </ul>
+        </div>
+
         <div class="grid gap-6 xl:grid-cols-12">
           <div class="ts-card space-y-4 xl:col-span-7 min-w-0">
             <div class="space-y-1">

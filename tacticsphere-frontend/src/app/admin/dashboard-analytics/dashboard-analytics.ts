@@ -13,16 +13,20 @@
   effect,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
+import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { NgxEchartsDirective, NgxEchartsModule } from "ngx-echarts";
 import { EChartsOption } from "echarts";
-import { forkJoin, of, Subscription } from "rxjs";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { forkJoin, of, Subscription, firstValueFrom } from "rxjs";
 import { catchError, map, switchMap } from "rxjs/operators";
 
 import { AssignmentsService } from "../../assignments.service";
 import { CompanyService } from "../../company.service";
 import { EmployeeService } from "../../employee.service";
 import { SurveyService } from "../../survey.service";
+import { environment } from "../../../environments/environment";
 import {
   Asignacion,
   AssignmentProgress,
@@ -30,6 +34,7 @@ import {
   Empleado,
   Empresa,
   PillarProgress,
+  Usuario,
 } from "../../types";
 
 type DashboardScope = "GLOBAL" | "COMPANY" | "DEPARTMENT" | "EMPLOYEE";
@@ -79,6 +84,7 @@ interface PillarAggregate {
 export class DashboardAnalyticsComponent
   implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked
 {
+  private http = inject(HttpClient);
   private assignmentsSvc = inject(AssignmentsService);
   private surveySvc = inject(SurveyService);
   private companySvc = inject(CompanyService);
@@ -96,6 +102,7 @@ export class DashboardAnalyticsComponent
   private loadingSignal = signal<boolean>(true);
   private errorSignal = signal<string>("");
   private infoSignal = signal<string>("");
+  private exportingSignal = signal<boolean>(false);
 
   private filterSignal = signal<DashboardFilter>({ scope: "GLOBAL" });
   private pillarSelectionSignal = signal<number | "ALL">("ALL");
@@ -109,6 +116,10 @@ export class DashboardAnalyticsComponent
   );
 
   private subscriptions: Subscription[] = [];
+  private logoDataUrl: string | null = null;
+  private userLoaded = false;
+  private currentUserName: string | null = null;
+  private currentUserEmail: string | null = null;
 
   ///////////////////////////
   // Public getters for template
@@ -122,6 +133,7 @@ export class DashboardAnalyticsComponent
   companies = this.companiesSignal.asReadonly();
   departments = this.departmentsSignal.asReadonly();
   employees = this.employeesSignal.asReadonly();
+  exporting = this.exportingSignal.asReadonly();
 
   scopeModel: DashboardScope = "GLOBAL";
   selectedCompanyId: number | null = null;
@@ -559,6 +571,51 @@ export class DashboardAnalyticsComponent
   // Filter helpers
   ///////////////////////////
 
+  filterSummary(): string[] {
+    const scopeLabels: Record<DashboardScope, string> = {
+      GLOBAL: "Global",
+      COMPANY: "Por empresa",
+      DEPARTMENT: "Por departamento",
+      EMPLOYEE: "Por empleado",
+    };
+
+    const summary: string[] = [`Ambito: ${scopeLabels[this.scopeModel]}`];
+
+    if (this.scopeModel !== "GLOBAL") {
+      const company =
+        this.selectedCompanyId != null
+          ? this.resolveCompanyName(this.selectedCompanyId)
+          : "Sin seleccionar";
+      summary.push(`Empresa: ${company}`);
+    }
+
+    if (this.scopeModel === "DEPARTMENT" || this.scopeModel === "EMPLOYEE") {
+      const department =
+        this.selectedDepartmentId != null
+          ? this.resolveDepartmentName(this.selectedDepartmentId, this.selectedCompanyId)
+          : "Sin seleccionar";
+      summary.push(`Departamento: ${department}`);
+    }
+
+    if (this.scopeModel === "EMPLOYEE") {
+      const employee =
+        this.selectedEmployeeId != null
+          ? this.resolveEmployeeName(this.selectedEmployeeId)
+          : "Sin seleccionar";
+      summary.push(`Empleado: ${employee}`);
+    }
+
+    const selection = this.pillarSelectionSignal();
+    const pillarLabel =
+      selection === "ALL"
+        ? "Todos los pilares"
+        : this.pillarOptions().find((p) => p.id === selection)?.name ?? `Pilar #${selection}`;
+    summary.push(`Pilar: ${pillarLabel}`);
+    summary.push(`Asignaciones analizadas: ${this.insights().length}`);
+
+    return summary;
+  }
+
   pillarOptions() {
     const options = new Map<number, string>();
     this.insights().forEach((insight) => {
@@ -569,6 +626,10 @@ export class DashboardAnalyticsComponent
     return Array.from(options.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  trackByIndex(index: number) {
+    return index;
   }
 
   filteredEmployees = computed(() => {
@@ -657,6 +718,72 @@ export class DashboardAnalyticsComponent
     this.filterSignal.set({ ...current });
   }
 
+  async exportPdf(): Promise<void> {
+    if (this.exportingSignal()) {
+      return;
+    }
+    const container = document.getElementById("analytics-export");
+    if (!container) {
+      this.errorSignal.set("No pudimos encontrar el contenido para exportar.");
+      return;
+    }
+
+    try {
+      this.errorSignal.set("");
+      this.exportingSignal.set(true);
+      this.resizeAllCharts();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await this.ensureLogo();
+      await this.ensureCurrentUser();
+
+      const canvas = await html2canvas(container, { scale: 2, backgroundColor: "#FFFFFF" });
+      const imgData = canvas.toDataURL("image/png");
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const title = "TacticSphere - Informe analitico";
+
+      if (this.logoDataUrl) {
+        pdf.addImage(this.logoDataUrl, "PNG", 15, 12, 20, 20);
+        pdf.setFontSize(16);
+        pdf.text(title, 40, 24);
+      } else {
+        pdf.setFontSize(16);
+        pdf.text(title, 15, 24);
+      }
+
+      const generatedAt = new Date();
+      const metadataLines = this.buildMetadataLines(generatedAt);
+      let metaY = this.logoDataUrl ? 36 : 30;
+      pdf.setFontSize(11);
+      metadataLines.forEach((line) => {
+        pdf.text(line, 15, metaY);
+        metaY += 5;
+      });
+
+      const contentTop = metaY + 4;
+      const imgWidth = pageWidth - 30;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const maxHeight = pageHeight - contentTop - 15;
+      let drawWidth = imgWidth;
+      let drawHeight = imgHeight;
+      if (maxHeight > 0 && drawHeight > maxHeight) {
+        const scale = maxHeight / drawHeight;
+        drawHeight *= scale;
+        drawWidth *= scale;
+      }
+
+      pdf.addImage(imgData, "PNG", 15, contentTop, drawWidth, drawHeight);
+      pdf.save("tacticsphere-analytics.pdf");
+    } catch (err) {
+      console.error("Error exportando PDF analitico", err);
+      this.errorSignal.set("No pudimos generar el PDF. Intenta nuevamente.");
+    } finally {
+      this.exportingSignal.set(false);
+    }
+  }
+
   @HostListener("window:resize")
   onWindowResize(): void {
     this.resizeAllCharts();
@@ -692,6 +819,8 @@ export class DashboardAnalyticsComponent
   ngOnInit(): void {
     this.loadCompanies();
     this.refreshCurrentFilter();
+    this.ensureCurrentUser().catch(() => void 0);
+    this.ensureLogo().catch(() => void 0);
   }
 
   ngOnDestroy(): void {
@@ -1205,6 +1334,53 @@ export class DashboardAnalyticsComponent
   ///////////////////////////
   // Utilities
   ///////////////////////////
+
+  private buildMetadataLines(timestamp: Date): string[] {
+    const name = (this.currentUserName ?? "").trim() || "Usuario desconocido";
+    const email = (this.currentUserEmail ?? "").trim();
+    const userLine = email ? `${name} <${email}>` : name;
+    const lines = [
+      `Generado por: ${userLine}`,
+      `Fecha y hora: ${timestamp.toLocaleString()}`,
+      "Filtros aplicados:",
+    ];
+    this.filterSummary().forEach((item) => lines.push(`- ${item}`));
+    return lines;
+  }
+
+  private async ensureCurrentUser(): Promise<void> {
+    if (this.userLoaded) return;
+    try {
+      const me = await firstValueFrom(
+        this.http.get<Usuario>(`${environment.apiUrl}/me`)
+      );
+      if (me) {
+        this.currentUserName = me.nombre ?? me.email ?? this.currentUserName;
+        this.currentUserEmail = me.email ?? this.currentUserEmail;
+      }
+    } catch (error) {
+      console.warn("No se pudo cargar el usuario para el PDF", error);
+    } finally {
+      this.userLoaded = true;
+    }
+  }
+
+  private async ensureLogo(): Promise<void> {
+    if (this.logoDataUrl) return;
+    try {
+      const response = await fetch("assets/logo_ts.png");
+      if (!response.ok) return;
+      const blob = await response.blob();
+      this.logoDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn("No se pudo cargar el logo para el PDF", error);
+    }
+  }
 
   private activePillarIds(): number[] | null {
     const selection = this.pillarSelectionSignal();
