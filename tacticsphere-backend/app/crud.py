@@ -5,9 +5,18 @@ from sqlalchemy import select, func, and_, or_
 
 from .auth import hash_password
 from .models import (
-    Usuario, Empresa, Departamento, Empleado,
-    Pilar, Pregunta, Cuestionario, CuestionarioPregunta,
-    Asignacion, Respuesta, RolEnum
+    Usuario,
+    Empresa,
+    Departamento,
+    Empleado,
+    Pilar,
+    Pregunta,
+    Cuestionario,
+    CuestionarioPregunta,
+    Asignacion,
+    Respuesta,
+    RolEnum,
+    TipoPreguntaEnum,
 )
 
 # ======================================================
@@ -692,15 +701,55 @@ def compute_assignment_progress(
     asignacion_id: int,
     empleado_id: Optional[int] = None
 ) -> Dict:
+    """
+    Calcula dos tipos de métricas:
+      - completion: porcentaje de avance (preguntas respondidas / totales)
+      - progreso: puntaje promedio (normalizado 0..1) según las respuestas entregadas
+    """
     asg = get_asignacion(db, asignacion_id)
     if not asg:
-        return {"total": 0, "respondidas": 0, "progreso": 0.0, "por_pilar": []}
+        return {
+            "total": 0,
+            "respondidas": 0,
+            "progreso": 0.0,
+            "completion": 0.0,
+            "por_pilar": [],
+        }
+
+    def normalize_answer(tipo: TipoPreguntaEnum, value: Optional[str]) -> Optional[float]:
+        if value is None:
+            return None
+        raw = value.strip()
+        if not raw:
+            return None
+        if tipo == TipoPreguntaEnum.LIKERT:
+            try:
+                num = float(raw.replace(",", "."))
+            except ValueError:
+                return None
+            if 1 <= num <= 5:
+                return (num - 1.0) / 4.0
+            # fallback: si viene 0..1 o 0..100
+            if 0 <= num <= 1:
+                return num
+            if 0 <= num <= 100:
+                return num / 100.0
+            return None
+        if tipo == TipoPreguntaEnum.SI_NO:
+            lowered = raw.lower()
+            if lowered in {"1", "si", "sí", "true", "t", "yes", "y"}:
+                return 1.0
+            if lowered in {"0", "no", "false", "f", "not", "n"}:
+                return 0.0
+            return None
+        # Preguntas abiertas no aportan a puntaje
+        return None
 
     totales_stmt = (
         select(
             Pilar.id.label("pilar_id"),
             Pilar.nombre.label("pilar_nombre"),
-            func.count(Pregunta.id).label("total")
+            func.count(Pregunta.id).label("total"),
         )
         .join(Pregunta, Pregunta.pilar_id == Pilar.id)
         .join(CuestionarioPregunta, CuestionarioPregunta.pregunta_id == Pregunta.id)
@@ -714,48 +763,106 @@ def compute_assignment_progress(
     resp_stmt = (
         select(
             Pilar.id.label("pilar_id"),
-            func.count(Respuesta.id).label("respondidas")
+            func.count(Respuesta.id).label("respondidas"),
         )
         .join(Pregunta, Pregunta.pilar_id == Pilar.id)
-        .join(Respuesta, and_(
-            Respuesta.pregunta_id == Pregunta.id,
-            Respuesta.asignacion_id == asignacion_id
-        ))
+        .join(
+            Respuesta,
+            and_(
+                Respuesta.pregunta_id == Pregunta.id,
+                Respuesta.asignacion_id == asignacion_id,
+            ),
+        )
         .where(or_(Pilar.empresa_id == asg.empresa_id, Pilar.empresa_id.is_(None)))
         .group_by(Pilar.id)
     )
+    detalle_stmt = (
+        select(
+            Pilar.id.label("pilar_id"),
+            Pregunta.tipo.label("tipo"),
+            Respuesta.valor.label("valor"),
+        )
+        .join(Pregunta, Pregunta.pilar_id == Pilar.id)
+        .join(
+            Respuesta,
+            and_(
+                Respuesta.pregunta_id == Pregunta.id,
+                Respuesta.asignacion_id == asignacion_id,
+            ),
+        )
+        .where(or_(Pilar.empresa_id == asg.empresa_id, Pilar.empresa_id.is_(None)))
+    )
+
     if asg.anonimo:
         resp_stmt = resp_stmt.where(Respuesta.empleado_id.is_(None))
+        detalle_stmt = detalle_stmt.where(Respuesta.empleado_id.is_(None))
     else:
         if empleado_id is not None:
             resp_stmt = resp_stmt.where(Respuesta.empleado_id == empleado_id)
+            detalle_stmt = detalle_stmt.where(Respuesta.empleado_id == empleado_id)
         else:
-            resp_stmt = resp_stmt.where(Respuesta.empleado_id == -1)
+            # Agregamos todas las respuestas (todos los empleados asignados)
+            resp_stmt = resp_stmt.where(Respuesta.empleado_id.isnot(None))
+            detalle_stmt = detalle_stmt.where(Respuesta.empleado_id.isnot(None))
 
     resp_rows = db.execute(resp_stmt).all()
-    resp_map = {row.pilar_id: row.respondidas for row in resp_rows}
+    detalle_rows = db.execute(detalle_stmt).all()
+
+    resp_map = {row.pilar_id: int(row.respondidas or 0) for row in resp_rows}
+
+    score_map: Dict[int, Dict[str, float]] = {}
+    global_score_sum = 0.0
+    global_score_count = 0
+    for row in detalle_rows:
+        normalized = normalize_answer(row.tipo, row.valor)
+        if normalized is None:
+            continue
+        agg = score_map.setdefault(
+            row.pilar_id,
+            {"sum": 0.0, "count": 0.0},
+        )
+        agg["sum"] += normalized
+        agg["count"] += 1
+        global_score_sum += normalized
+        global_score_count += 1
 
     por_pilar = []
     total_global = 0
     respondidas_global = 0
     for row in totales_rows:
-        r = int(resp_map.get(row.pilar_id, 0) or 0)
-        t = int(row.total or 0)
-        progreso = (r / t) if t else 0.0
+        total_preguntas = int(row.total or 0)
+        respondidas = resp_map.get(row.pilar_id, 0)
+        score_info = score_map.get(row.pilar_id, {"sum": 0.0, "count": 0.0})
+        promedio = (
+            (score_info["sum"] / score_info["count"]) if score_info["count"] else 0.0
+        )
+        completion = (respondidas / total_preguntas) if total_preguntas else 0.0
+        if completion > 1.0:
+            completion = 1.0
+
         por_pilar.append({
             "pilar_id": row.pilar_id,
             "pilar_nombre": row.pilar_nombre,
-            "total": t,
-            "respondidas": r,
-            "progreso": progreso,
+            "total": total_preguntas,
+            "respondidas": respondidas,
+            "progreso": promedio,
+            "completion": completion,
         })
-        total_global += t
-        respondidas_global += r
 
-    progreso_global = (respondidas_global / total_global) if total_global else 0.0
+        total_global += total_preguntas
+        respondidas_global += respondidas
+
+    progreso_global = (
+        (global_score_sum / global_score_count) if global_score_count else 0.0
+    )
+    completion_global = (respondidas_global / total_global) if total_global else 0.0
+    if completion_global > 1.0:
+        completion_global = 1.0
+
     return {
         "total": total_global,
         "respondidas": respondidas_global,
         "progreso": progreso_global,
+        "completion": completion_global,
         "por_pilar": por_pilar,
     }

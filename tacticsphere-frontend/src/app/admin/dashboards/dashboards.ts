@@ -39,8 +39,20 @@ interface DashboardFilter {
 }
 
 interface AssignmentInsight {
-  asignacion: Asignacion;
+  Asignacion: Asignacion;
   progress: AssignmentProgress | null;
+}
+
+interface HeatmapRow {
+  label: string;
+  kind: 'DEPARTMENT' | 'COMPANY' | 'EMPLOYEE';
+  values: Array<number | null>;
+  average: number | null;
+}
+
+interface PillarTrendSerie {
+  name: string;
+  values: Array<number | null>;
 }
 
 @Component({
@@ -55,12 +67,12 @@ interface AssignmentInsight {
             <div>
               <h1 class="ts-title">Resultados</h1>
               <p class="ts-subtitle">
-                Visualiza el avance agregado de las encuestas por asignación y pilar.
+                Visualiza el avance agregado de las encuestas por Asignacion y pilar.
               </p>
             </div>
             <div class="flex flex-wrap gap-2 text-sm">
               <div class="ts-chip">
-                Total asignaciones:
+                Total Asignaciones:
                 <span class="font-semibold text-ink">{{ totalAssignments() }}</span>
               </div>
               <div class="ts-chip">
@@ -89,7 +101,7 @@ interface AssignmentInsight {
                   [(ngModel)]="selectedCompanyId"
                   (ngModelChange)="onCompanyChange($event)"
                 >
-                  <option [ngValue]="null">Selecciona empresa…</option>
+                  <option [ngValue]="null">selecciona empresa.</option>
                   <option *ngFor="let company of companies()" [ngValue]="company.id">
                     {{ company.nombre }}
                   </option>
@@ -173,31 +185,122 @@ interface AssignmentInsight {
           <ng-template #dashboardsReady>
             <ng-container *ngIf="insights().length; else emptyState">
               <div class="grid gap-6 xl:grid-cols-2">
-                <div class="ts-card space-y-4">
+                <div class="ts-card space-y-4 min-w-0">
                   <div>
-                    <h2 class="text-lg font-semibold text-ink">Progreso por asignación</h2>
+                    <h2 class="text-lg font-semibold text-ink">Desempeno por pilar</h2>
                     <p class="text-sm text-neutral-400">
-                      Avance general comparado entre las asignaciones filtradas.
+                      Comparativo horizontal del promedio de avance por pilar.
                     </p>
                   </div>
-                  <echarts class="h-72 w-full" [options]="assignmentChartOption()"></echarts>
+                  <echarts class="h-[26rem] w-full" [options]="pillarChartOption()" [autoResize]="true"></echarts>
                 </div>
 
-                <div class="ts-card space-y-4">
+                <div class="ts-card space-y-4 min-w-0">
                   <div>
-                    <h2 class="text-lg font-semibold text-ink">Pilares destacados</h2>
+                    <h2 class="text-lg font-semibold text-ink">Equilibrio organizacional</h2>
                     <p class="text-sm text-neutral-400">
-                      Promedio de avance por pilar considerando las asignaciones visibles.
+                      Radar para identificar fortalezas y brechas entre pilares.
                     </p>
                   </div>
-                  <echarts class="h-72 w-full" [options]="pillarChartOption()"></echarts>
+                  <echarts class="h-[26rem] w-full" [options]="radarChartOption()" [autoResize]="true"></echarts>
+                </div>
+              </div>
+
+              <div class="ts-card space-y-4 min-w-0">
+                <div>
+                  <h2 class="text-lg font-semibold text-ink">Evolucion por pilar</h2>
+                  <p class="text-sm text-neutral-400">
+                    Tendencia temporal del promedio alcanzado en cada pilar.
+                  </p>
+                </div>
+                <echarts class="h-[26rem] w-full" [options]="trendChartOption()" [autoResize]="true"></echarts>
+              </div>
+
+              <div class="ts-card space-y-4 min-w-0">
+                <div>
+                  <h2 class="text-lg font-semibold text-ink">Mapa de calor por departamento</h2>
+                  <p class="text-sm text-neutral-400">
+                    Progreso porcentual por pilar en los departamentos evaluados.
+                  </p>
+                </div>
+                <echarts class="h-[28rem] w-full" [options]="heatmapOption()" [autoResize]="true"></echarts>
+              </div>
+
+              <div class="grid gap-6 xl:grid-cols-2">
+                <div class="ts-card space-y-4 min-w-0">
+                  <div>
+                    <h2 class="text-lg font-semibold text-ink">Progreso por asignacion</h2>
+                    <p class="text-sm text-neutral-400">
+                      Avance general comparado entre las Asignaciones filtradas.
+                    </p>
+                  </div>
+                  <echarts class="h-[26rem] w-full" [options]="assignmentChartOption()" [autoResize]="true"></echarts>
+                </div>
+
+                <div class="ts-card space-y-5 min-w-0">
+                  <div>
+                    <h2 class="text-lg font-semibold text-ink">Ranking de departamentos</h2>
+                    <p class="text-sm text-neutral-400">
+                      Mejores y peores desempenos considerando el promedio de sus pilares.
+                    </p>
+                  </div>
+
+                  <ng-container *ngIf="departmentRanking() as ranking">
+                    <ng-container *ngIf="ranking.best.length || ranking.worst.length; else rankingEmpty">
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                            Mejores
+                          </h3>
+                          <ul class="mt-2 space-y-2">
+                            <li
+                              *ngFor="let item of ranking.best; let index = index"
+                              class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
+                            >
+                              <span class="text-sm font-medium text-ink">
+                                {{ index + 1 }}. {{ item.label }}
+                              </span>
+                              <span class="text-sm font-semibold text-accent">
+                                {{ item.value != null ? (item.value + '%') : 'Sin datos' }}
+                              </span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                            Peores
+                          </h3>
+                          <ul class="mt-2 space-y-2">
+                            <li
+                              *ngFor="let item of ranking.worst; let index = index"
+                              class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
+                            >
+                              <span class="text-sm font-medium text-ink">
+                                {{ index + 1 }}. {{ item.label }}
+                              </span>
+                              <span class="text-sm font-semibold text-red-500">
+                                {{ item.value != null ? (item.value + '%') : 'Sin datos' }}
+                              </span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </ng-container>
+                  </ng-container>
+
+                  <ng-template #rankingEmpty>
+                    <div class="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-400">
+                      No hay datos suficientes para construir el ranking.
+                    </div>
+                  </ng-template>
                 </div>
               </div>
 
               <div class="ts-card space-y-5">
                 <div class="flex items-center justify-between">
                   <div>
-                    <h2 class="text-lg font-semibold text-ink">Detalle de asignaciones</h2>
+                    <h2 class="text-lg font-semibold text-ink">Detalle de Asignaciones</h2>
                     <p class="text-sm text-neutral-400">
                       Vigencia y avance por pilares según el filtro aplicado.
                     </p>
@@ -208,7 +311,7 @@ interface AssignmentInsight {
                   <table class="ts-table min-w-[720px]">
                     <thead>
                       <tr>
-                        <th>Asignación</th>
+                        <th>Asignacion</th>
                         <th>Cuestionario</th>
                         <th>Alcance</th>
                         <th>Vigencia</th>
@@ -219,33 +322,33 @@ interface AssignmentInsight {
                     <tbody>
                       <tr *ngFor="let insight of insights()">
                         <td class="align-top">
-                          <div class="font-medium text-ink">#{{ insight.asignacion.id }}</div>
+                          <div class="font-medium text-ink">#{{ insight.Asignacion.id }}</div>
                           <div class="text-xs text-neutral-400">
-                            {{ parseDate(insight.asignacion.fecha_inicio) | date: 'yyyy-MM-dd' }}
+                            {{ parseDate(insight.Asignacion.fecha_inicio) | date: 'yyyy-MM-dd' }}
                           </div>
                         </td>
                         <td class="align-top text-sm text-neutral-500">
-                          Cuestionario {{ insight.asignacion.cuestionario_id }}
+                          Cuestionario {{ insight.Asignacion.cuestionario_id }}
                         </td>
                         <td class="align-top text-sm text-neutral-500">
-                          {{ insight.asignacion.alcance_tipo }}
-                          <span *ngIf="insight.asignacion.alcance_id">#{{ insight.asignacion.alcance_id }}</span>
+                          {{ insight.Asignacion.alcance_tipo }}
+                          <span *ngIf="insight.Asignacion.alcance_id">#{{ insight.Asignacion.alcance_id }}</span>
                         </td>
                         <td class="align-top text-sm">
                           <div>
-                            {{ parseDate(insight.asignacion.fecha_inicio) | date: 'yyyy-MM-dd HH:mm' }}
+                            {{ parseDate(insight.Asignacion.fecha_inicio) | date: 'yyyy-MM-dd HH:mm' }}
                           </div>
                           <div>
-                            {{ parseDate(insight.asignacion.fecha_cierre) | date: 'yyyy-MM-dd HH:mm' }}
+                            {{ parseDate(insight.Asignacion.fecha_cierre) | date: 'yyyy-MM-dd HH:mm' }}
                           </div>
                           <span
                             class="mt-1 inline-flex items-center rounded-pill px-2 py-1 text-xs font-semibold"
-                            [class.bg-success/20]="isActive(insight.asignacion)"
-                            [class.text-success]="isActive(insight.asignacion)"
-                            [class.bg-error/10]="!isActive(insight.asignacion)"
-                            [class.text-error]="!isActive(insight.asignacion)"
+                            [class.bg-success/20]="isActive(insight.Asignacion)"
+                            [class.text-success]="isActive(insight.Asignacion)"
+                            [class.bg-error/10]="!isActive(insight.Asignacion)"
+                            [class.text-error]="!isActive(insight.Asignacion)"
                           >
-                            {{ isActive(insight.asignacion) ? 'ACTIVA' : 'FUERA DE VIGENCIA' }}
+                            {{ isActive(insight.Asignacion) ? 'ACTIVA' : 'FUERA DE VIGENCIA' }}
                           </span>
                         </td>
                         <td class="align-top text-sm">
@@ -327,6 +430,7 @@ export class DashboardsComponent implements OnInit {
   selectedEmployeeId: number | null = null;
 
   private logoDataUrl: string | null = null;
+  private departmentNameCache = new Map<string, string>();
 
   constructor() {
     effect(() => {
@@ -350,35 +454,70 @@ export class DashboardsComponent implements OnInit {
 
   assignmentChartOption = computed<EChartsOption>(() => {
     const assignments = this.insights();
+    if (!assignments.length) {
+      return {
+        title: {
+          text: 'Sin datos para mostrar',
+          left: 'center',
+          top: 'middle',
+          textStyle: { color: '#9CA3AF', fontWeight: 500 },
+        },
+        xAxis: { show: false },
+        yAxis: { show: false },
+        series: [],
+      };
+    }
+    const labels = assignments.map((a) => `#${a.Asignacion.id}`);
+    const values = assignments.map((a) => this.progressPercent(a.progress));
+
     return {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: ({ 0: param }: any) =>
-          param ? `Asignación ${param.name}<br/>Avance: ${param.value}%` : '',
+        formatter: (params: any) => {
+          const data = Array.isArray(params) ? params[0] : params;
+          if (!data) return '';
+          const index = data.dataIndex ?? 0;
+          const label = labels[index] ?? '';
+          const value = values[index] ?? 0;
+          return `Asignacion ${label}<br/>Avance: ${value}%`;
+        },
       },
-      grid: { left: '6%', right: '3%', bottom: '8%', top: '12%' },
+      grid: { left: 56, right: 32, bottom: 96, top: 64, containLabel: true },
       xAxis: {
         type: 'category',
-        data: assignments.map((a) => `#${a.asignacion.id}`),
-        axisLabel: { color: '#8C8C8C' },
+        data: labels,
         axisTick: { alignWithLabel: true },
+        axisLabel: {
+          color: '#1F2937',
+          fontWeight: 600,
+          interval: 0,
+          formatter: (value: string) => this.wrapLabel(value, 12),
+          lineHeight: 16,
+        },
       },
       yAxis: {
         type: 'value',
         max: 100,
-        axisLabel: { formatter: '{value}%', color: '#8C8C8C' },
+        axisLabel: { formatter: '{value}%', color: '#6B7280' },
         splitLine: { lineStyle: { color: '#EAEAEA' } },
       },
       series: [
         {
           type: 'bar',
-          data: assignments.map((a) => this.progressPercent(a.progress)),
+          data: values,
+          barWidth: 32,
           itemStyle: {
             color: '#3A8FFF',
             borderRadius: [8, 8, 0, 0],
           },
-          barWidth: '45%',
+          label: {
+            show: true,
+            position: 'top',
+            formatter: '{c}%',
+            color: '#1F2937',
+            fontWeight: 600,
+          },
         },
       ],
     };
@@ -386,43 +525,311 @@ export class DashboardsComponent implements OnInit {
 
   pillarChartOption = computed<EChartsOption>(() => {
     const stats = this.buildPillarStats();
+    if (!stats.length) {
+      return {
+        title: {
+          text: 'Sin informacion de pilares',
+          left: 'center',
+          top: 'middle',
+          textStyle: { color: '#9CA3AF', fontWeight: 500 },
+        },
+        xAxis: { show: false },
+        yAxis: { show: false },
+        series: [],
+      };
+    }
+
+    const categories = stats.map((s) => s.name);
+    const values = stats.map((s) => Math.round(s.value));
+
     return {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: ({ 0: param }: any) =>
-          param ? `${param.name}: ${param.value}%` : '',
+        formatter: (params: any) => {
+          const data = Array.isArray(params) ? params[0] : params;
+          if (!data) return '';
+          return `${data.name}: ${data.value}%`;
+        },
       },
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      grid: { left: 220, right: 60, bottom: 48, top: 72, containLabel: true },
       xAxis: {
         type: 'value',
         max: 100,
-        axisLabel: { formatter: '{value}%', color: '#8C8C8C' },
+        axisLabel: { formatter: '{value}%', color: '#6B7280' },
         splitLine: { lineStyle: { color: '#EAEAEA' } },
       },
       yAxis: {
         type: 'category',
-        data: stats.map((s) => s.name),
-        axisLabel: { color: '#1F1F1F', fontWeight: 500 },
+        data: categories,
+        axisLabel: {
+          color: '#1F2937',
+          fontWeight: 600,
+          width: 220,
+          overflow: 'break',
+          lineHeight: 18,
+        },
       },
       series: [
         {
           type: 'bar',
-          data: stats.map((s) => Math.round(s.value)),
-          itemStyle: {
-            color: '#10B981',
-            borderRadius: [0, 8, 8, 0],
-          },
+          data: values,
+          barWidth: 22,
+          itemStyle: { color: '#10B981', borderRadius: [0, 12, 12, 0] },
           label: {
             show: true,
             position: 'right',
             formatter: '{c}%',
-            color: '#1F1F1F',
+            color: '#065F46',
             fontWeight: 600,
           },
         },
       ],
     };
+  });
+
+  radarChartOption = computed<EChartsOption>(() => {
+    const stats = this.buildPillarStats();
+    if (!stats.length) {
+      return {
+        title: {
+          text: 'Sin informacion de pilares',
+          left: 'center',
+          top: 'middle',
+          textStyle: { color: '#9CA3AF', fontWeight: 500 },
+        },
+      };
+    }
+
+    const indicators = stats.map((item) => ({
+      name: this.wrapLabel(item.name, 22),
+      max: 100,
+    }));
+    const values = stats.map((item) => Math.round(item.value));
+
+    return {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          const data = Array.isArray(params.value) ? params.value : values;
+          return data
+            .map((value: number, index: number) => {
+              const label = stats[index]?.name ?? '';
+              return `${label}: ${value}%`;
+            })
+            .join('<br/>');
+        },
+      },
+      radar: {
+        indicator: indicators,
+        radius: '68%',
+        splitNumber: 5,
+        axisName: { color: '#374151', fontSize: 12 },
+        splitLine: { lineStyle: { color: ['#BFDBFE', '#DBEAFE', '#EFF6FF'] } },
+        splitArea: {
+          areaStyle: {
+            color: ['rgba(59,130,246,0.10)', 'rgba(59,130,246,0.05)'],
+          },
+        },
+        axisLine: { lineStyle: { color: 'rgba(59,130,246,0.35)' } },
+      },
+      series: [
+        {
+          type: 'radar',
+          data: [
+            {
+              value: values,
+              areaStyle: { color: 'rgba(16,185,129,0.35)' },
+              lineStyle: { color: '#10B981', width: 2 },
+              itemStyle: { color: '#0F766E' },
+              label: {
+                show: true,
+                formatter: ({ value }: any) => `${value}%`,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  });
+
+  heatmapOption = computed<EChartsOption>(() => {
+    const heatmap = this.buildHeatmapData();
+    if (!heatmap.pillars.length || !heatmap.rows.length) {
+      return {
+        title: {
+          text: 'Sin informacion por departamento',
+          left: 'center',
+          top: 'middle',
+          textStyle: { color: '#9CA3AF', fontWeight: 500 },
+        },
+      } as EChartsOption;
+    }
+
+    const dataset = heatmap.rows.flatMap((row, rowIndex) =>
+      heatmap.pillars.map((pillar, colIndex) => {
+        const value = row.values[colIndex];
+        return [colIndex, rowIndex, value == null ? null : Math.round(value)];
+      })
+    );
+
+    return {
+      tooltip: {
+        formatter: (params: any) => {
+          const [col, row, value] = params.value ?? [];
+          const pillarLabel = heatmap.pillars[col] ?? '';
+          const departmentLabel = heatmap.rows[row]?.label ?? '';
+          const display = value == null ? 'Sin datos' : `${value}%`;
+          return `${departmentLabel}<br/>${pillarLabel}: ${display}`;
+        },
+      },
+      grid: { top: 48, left: 140, right: 48, bottom: 48, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: heatmap.pillars,
+        axisLabel: {
+          color: '#374151',
+          width: 160,
+          overflow: 'break',
+        },
+      },
+      yAxis: {
+        type: 'category',
+        data: heatmap.rows.map((row) => row.label),
+        axisLabel: {
+          color: '#1F2937',
+          fontWeight: 600,
+          width: 220,
+          overflow: 'break',
+        },
+      },
+      visualMap: {
+        min: 0,
+        max: 100,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 12,
+        inRange: {
+          color: ['#EF4444', '#FBBF24', '#10B981'],
+        },
+      },
+      series: [
+        {
+          type: 'heatmap',
+          data: dataset,
+          label: {
+            show: true,
+            color: '#111827',
+            formatter: (item: any) => {
+              const val = item.value?.[2];
+              return val == null ? '' : `${val}%`;
+            },
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 12,
+              shadowColor: 'rgba(51,65,85,0.35)',
+            },
+          },
+        },
+      ],
+    } as EChartsOption;
+  });
+
+  trendChartOption = computed<EChartsOption>(() => {
+    const trend = this.buildPillarTrendData();
+    if (!trend.labels.length || !trend.series.length) {
+      return {
+        title: {
+          text: 'Sin historial disponible',
+          left: 'center',
+          top: 'middle',
+          textStyle: { color: '#9CA3AF', fontWeight: 500 },
+        },
+      } as EChartsOption;
+    }
+
+    return {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const list = Array.isArray(params) ? params : [params];
+          return list
+            .map((item: any) => {
+              const value = item?.value;
+              const display =
+                value === null || value === undefined || value === '' ? 'Sin datos' : `${value}%`;
+              return `${item?.seriesName ?? ''}: ${display}`;
+            })
+            .join('<br/>');
+        },
+      },
+      legend: {
+        top: 0,
+        type: 'scroll',
+        data: trend.series.map((serie) => serie.name),
+      },
+      grid: { left: 56, right: 32, bottom: 48, top: 64, containLabel: true },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: trend.labels,
+        axisLabel: {
+          color: '#374151',
+          rotate: 18,
+          interval: 0,
+          width: 120,
+          overflow: 'break',
+          lineHeight: 16,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        max: 100,
+        axisLabel: { formatter: '{value}%', color: '#6B7280' },
+        splitLine: { lineStyle: { color: '#E5E7EB' } },
+      },
+      series: trend.series.map((serie) => ({
+        name: serie.name,
+        type: 'line',
+        smooth: true,
+        connectNulls: true,
+        symbolSize: 6,
+        data: serie.values.map((value) =>
+          value == null ? null : this.clampPercent(Math.round(value))
+        ),
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.12 },
+      })),
+    } as EChartsOption;
+  });
+
+  departmentRanking = computed(() => {
+    const heatmap = this.buildHeatmapData();
+    const departments = heatmap.rows.filter((row) => row.kind === 'DEPARTMENT');
+    const dataset = departments.length ? departments : heatmap.rows;
+    if (!dataset.length) {
+      return { best: [], worst: [] } as {
+        best: { label: string; value: number | null }[];
+        worst: { label: string; value: number | null }[];
+      };
+    }
+
+    const ordered = [...dataset].sort(
+      (a, b) => (b.average ?? 0) - (a.average ?? 0)
+    );
+    const best = ordered.slice(0, Math.min(5, ordered.length)).map((row) => ({
+      label: row.label,
+      value: row.average == null ? null : Math.round(row.average),
+    }));
+    const tail = ordered.slice(-Math.min(5, ordered.length)).reverse();
+    const worst = tail.map((row) => ({
+      label: row.label,
+      value: row.average == null ? null : Math.round(row.average),
+    }));
+
+    return { best, worst };
   });
 
   requiresCompany(): boolean {
@@ -484,13 +891,14 @@ export class DashboardsComponent implements OnInit {
 
   progressPercent(progress: AssignmentProgress | null | undefined): number {
     if (!progress) return 0;
-    return Math.round(progress.progreso * 100);
+    const raw = Number(progress.progreso ?? 0) * 100;
+    return this.clampPercent(Math.round(raw));
   }
 
-  isActive(asignacion: Asignacion): boolean {
+  isActive(Asignacion: Asignacion): boolean {
     const now = Date.now();
-    const start = this.parseDate(asignacion.fecha_inicio).getTime();
-    const end = this.parseDate(asignacion.fecha_cierre).getTime();
+    const start = this.parseDate(Asignacion.fecha_inicio).getTime();
+    const end = this.parseDate(Asignacion.fecha_cierre).getTime();
     if (Number.isNaN(start) || Number.isNaN(end)) return false;
     return start <= now && now <= end;
   }
@@ -510,6 +918,49 @@ export class DashboardsComponent implements OnInit {
       normalized = `${normalized}Z`;
     }
     return new Date(normalized);
+  }
+
+  private clampPercent(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    if (value < 0) {
+      return 0;
+    }
+    if (value > 100) {
+      return 100;
+    }
+    return value;
+  }
+
+  private wrapLabel(value: string, maxChars = 18): string {
+    if (!value) {
+      return '';
+    }
+    const words = String(value).split(/\s+/);
+    const lines: string[] = [];
+    let current = '';
+    words.forEach((word) => {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maxChars) {
+        current = candidate;
+      } else {
+        if (current) {
+          lines.push(current);
+        }
+        if (word.length <= maxChars) {
+          current = word;
+        } else {
+          const segments = word.match(new RegExp(`.{1,${maxChars}}`, 'g')) ?? [word];
+          lines.push(...segments.slice(0, -1));
+          current = segments[segments.length - 1] ?? '';
+        }
+      }
+    });
+    if (current) {
+      lines.push(current);
+    }
+    return lines.join('\n');
   }
 
   async exportPdf(): Promise<void> {
@@ -552,7 +1003,18 @@ export class DashboardsComponent implements OnInit {
 
   private loadCompanies(): void {
     this.companySvc.list().subscribe({
-      next: (rows) => this.companiesSignal.set(rows ?? []),
+      next: (rows) => {
+        const list = rows ?? [];
+        this.companiesSignal.set(list);
+        list.forEach((company) => {
+          company.departamentos?.forEach((department) => {
+            this.departmentNameCache.set(
+              this.departmentCacheKey(company.id, department.id),
+              department.nombre
+            );
+          });
+        });
+      },
       error: (err) => {
         console.error('Error cargando empresas', err);
         this.errorSignal.set('No pudimos cargar la lista de empresas.');
@@ -562,7 +1024,16 @@ export class DashboardsComponent implements OnInit {
 
   private loadDepartments(companyId: number): void {
     this.companySvc.listDepartments(companyId).subscribe({
-      next: (rows) => this.departmentsSignal.set(rows ?? []),
+      next: (rows) => {
+        const list = rows ?? [];
+        this.departmentsSignal.set(list);
+        list.forEach((department) => {
+          this.departmentNameCache.set(
+            this.departmentCacheKey(companyId, department.id),
+            department.nombre
+          );
+        });
+      },
       error: (err) => {
         console.error('Error cargando departamentos', err);
         this.errorSignal.set('No pudimos cargar los departamentos de la empresa seleccionada.');
@@ -668,7 +1139,7 @@ export class DashboardsComponent implements OnInit {
           console.error('Error cargando dashboards', err);
           this.errorSignal.set(
             err?.error?.detail ??
-              'No pudimos cargar los resultados. Intenta nuevamente más tarde.'
+              'No pudimos cargar los resultados. Intenta nuevamente mas tarde.'
           );
           return of([]);
         })
@@ -690,14 +1161,14 @@ export class DashboardsComponent implements OnInit {
           switchMap((employees) => {
             if (!employees.length) {
               return of(
-                assignments.map((asignacion) => ({
-                  asignacion,
+                assignments.map((Asignacion) => ({
+                  Asignacion,
                   progress: null,
                 }))
               );
             }
-            const obs = assignments.map((asignacion) =>
-              this.aggregateProgressForEmployees(asignacion, employees)
+            const obs = assignments.map((Asignacion) =>
+              this.aggregateProgressForEmployees(Asignacion, employees)
             );
             return forkJoin(obs);
           })
@@ -705,11 +1176,11 @@ export class DashboardsComponent implements OnInit {
     }
 
     if (filter.scope === 'EMPLOYEE' && filter.employeeId != null) {
-      const obs = assignments.map((asignacion) =>
-        this.survey.getProgress(asignacion.id, filter.employeeId).pipe(
+      const obs = assignments.map((Asignacion) =>
+        this.survey.getProgress(Asignacion.id, filter.employeeId).pipe(
           catchError(() => of(null)),
           map((progress) => ({
-            asignacion,
+            Asignacion,
             progress,
           }))
         )
@@ -718,11 +1189,11 @@ export class DashboardsComponent implements OnInit {
     }
 
     // Global or company scope.
-    const obs = assignments.map((asignacion) =>
-      this.survey.getProgress(asignacion.id).pipe(
+    const obs = assignments.map((Asignacion) =>
+      this.survey.getProgress(Asignacion.id).pipe(
         catchError(() => of(null)),
         map((progress) => ({
-          asignacion,
+          Asignacion,
           progress,
         }))
       )
@@ -731,18 +1202,18 @@ export class DashboardsComponent implements OnInit {
   }
 
   private aggregateProgressForEmployees(
-    asignacion: Asignacion,
+    Asignacion: Asignacion,
     employees: Empleado[]
   ) {
     const requests = employees.map((emp) =>
-      this.survey.getProgress(asignacion.id, emp.id).pipe(catchError(() => of(null)))
+      this.survey.getProgress(Asignacion.id, emp.id).pipe(catchError(() => of(null)))
     );
     return forkJoin(requests).pipe(
       map((results) => {
         const valid = results.filter((p): p is AssignmentProgress => !!p);
         const aggregated = valid.length ? this.combineProgress(valid) : null;
         return {
-          asignacion,
+          Asignacion,
           progress: aggregated,
         };
       })
@@ -819,6 +1290,196 @@ export class DashboardsComponent implements OnInit {
       .sort((a, b) => b.value - a.value);
   }
 
+  private buildHeatmapData(): { pillars: string[]; rows: HeatmapRow[] } {
+    const pillars: string[] = [];
+    const pillarIndex = new Map<string, number>();
+    const rowsMap = new Map<
+      string,
+      {
+        label: string;
+        kind: HeatmapRow['kind'];
+        stats: Map<string, { sum: number; count: number }>;
+      }
+    >();
+
+    this.insights()
+      .filter((insight) => insight.progress?.por_pilar?.length)
+      .forEach((insight) => {
+        const context = this.resolveDepartmentContext(insight.Asignacion);
+        if (!context) {
+          return;
+        }
+        const entry =
+          rowsMap.get(context.key) ?? {
+            label: context.label,
+            kind: context.kind,
+            stats: new Map<string, { sum: number; count: number }>(),
+          };
+
+        insight.progress?.por_pilar.forEach((pillar) => {
+          if (!pillarIndex.has(pillar.pilar_nombre)) {
+            pillarIndex.set(pillar.pilar_nombre, pillars.length);
+            pillars.push(pillar.pilar_nombre);
+          }
+          const current =
+            entry.stats.get(pillar.pilar_nombre) ?? { sum: 0, count: 0 };
+          current.sum += pillar.progreso ?? 0;
+          current.count += 1;
+          entry.stats.set(pillar.pilar_nombre, current);
+        });
+
+        rowsMap.set(context.key, entry);
+      });
+
+    const rows: HeatmapRow[] = Array.from(rowsMap.values()).map((entry) => {
+      const values = pillars.map((pillarName) => {
+        const stat = entry.stats.get(pillarName);
+        if (!stat || !stat.count) {
+          return null;
+        }
+        return (stat.sum / stat.count) * 100;
+      });
+      const valid = values.filter((value): value is number => value != null);
+      const average = valid.length
+        ? valid.reduce((acc, value) => acc + value, 0) / valid.length
+        : null;
+      return { label: entry.label, kind: entry.kind, values, average };
+    });
+
+    rows.sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
+
+    return { pillars, rows };
+  }
+
+  private buildPillarTrendData(): {
+    labels: string[];
+    series: PillarTrendSerie[];
+  } {
+    const items = this.insights()
+      .filter((insight) => insight.progress?.por_pilar?.length)
+      .map((insight) => ({
+        id: insight.Asignacion.id,
+        date: this.parseDate(insight.Asignacion.fecha_inicio),
+        progress: insight.progress!,
+      }))
+      .filter((item) => !Number.isNaN(item.date.getTime()))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (!items.length) {
+      return { labels: [], series: [] };
+    }
+
+    const labels = items.map(
+      (item) => `#${item.id} ${this.formatDateLabel(item.date)}`
+    );
+
+    const pillarNames: string[] = [];
+    const seen = new Set<string>();
+    items.forEach((item) => {
+      item.progress.por_pilar.forEach((pillar) => {
+        if (!seen.has(pillar.pilar_nombre)) {
+          seen.add(pillar.pilar_nombre);
+          pillarNames.push(pillar.pilar_nombre);
+        }
+      });
+    });
+
+    const series: PillarTrendSerie[] = pillarNames.map((name) => ({
+      name,
+      values: new Array<number | null>(items.length).fill(null),
+    }));
+
+    const indexMap = new Map<string, number>();
+    pillarNames.forEach((name, index) => indexMap.set(name, index));
+
+    items.forEach((item, itemIndex) => {
+      item.progress.por_pilar.forEach((pillar) => {
+        const seriesIndex = indexMap.get(pillar.pilar_nombre);
+        if (seriesIndex == null) {
+          return;
+        }
+        const percent = (pillar.progreso ?? 0) * 100;
+        series[seriesIndex].values[itemIndex] = percent;
+      });
+    });
+
+    return { labels, series };
+  }
+
+  private resolveDepartmentContext(
+    Asignacion: Asignacion
+  ): { key: string; label: string; kind: HeatmapRow['kind'] } | null {
+    if (Asignacion.alcance_tipo === 'DEPARTAMENTO' && Asignacion.alcance_id != null) {
+      const label =
+        this.getDepartmentLabel(Asignacion.empresa_id, Asignacion.alcance_id) ??
+        `Departamento #${Asignacion.alcance_id}`;
+      return {
+        key: this.departmentCacheKey(Asignacion.empresa_id, Asignacion.alcance_id),
+        label,
+        kind: 'DEPARTMENT',
+      };
+    }
+
+    if (Asignacion.alcance_tipo === 'EMPRESA') {
+      const companyName = this.getCompanyName(Asignacion.empresa_id);
+      return {
+        key: `company:${Asignacion.empresa_id}`,
+        label: `${companyName} (Empresa)`,
+        kind: 'COMPANY',
+      };
+    }
+
+    return null;
+  }
+
+  private departmentCacheKey(companyId: number, departmentId: number): string {
+    return `${companyId}:${departmentId}`;
+  }
+
+  private getCompanyName(companyId: number): string {
+    const match = this.companiesSignal().find((company) => company.id === companyId);
+    return match?.nombre ?? `Empresa #${companyId}`;
+  }
+
+  private getDepartmentLabel(
+    companyId: number,
+    departmentId: number
+  ): string | null {
+    const cacheKey = this.departmentCacheKey(companyId, departmentId);
+    const cached = this.departmentNameCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const fromSignal = this.departmentsSignal()
+      .find((department) => department.id === departmentId)?.nombre;
+    if (fromSignal) {
+      this.departmentNameCache.set(cacheKey, fromSignal);
+      return fromSignal;
+    }
+
+    const company = this.companiesSignal().find((item) => item.id === companyId);
+    const fromCompany = company?.departamentos?.find(
+      (department) => department.id === departmentId
+    )?.nombre;
+    if (fromCompany) {
+      this.departmentNameCache.set(cacheKey, fromCompany);
+      return fromCompany;
+    }
+
+    return null;
+  }
+
+  private formatDateLabel(date: Date): string {
+    if (Number.isNaN(date.getTime())) {
+      return 'Fecha sin definir';
+    }
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   private async ensureLogo(): Promise<void> {
     if (this.logoDataUrl) return;
     try {
@@ -835,3 +1496,4 @@ export class DashboardsComponent implements OnInit {
     }
   }
 }
+

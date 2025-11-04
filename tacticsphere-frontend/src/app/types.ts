@@ -231,12 +231,14 @@ export interface PillarProgress {
   pilar_nombre: string;
   total: number;
   respondidas: number;
+  completion?: number; // 0..1, may be undefined on legacy responses
   progreso: number; // 0..1
 }
 
 export interface AssignmentProgress {
   total: number;
   respondidas: number;
+  completion?: number; // 0..1
   progreso: number; // 0..1
   por_pilar: PillarProgress[];
 }

@@ -289,10 +289,12 @@ class PillarProgress(BaseModel):
     pilar_nombre: str
     total: int            # total de preguntas en el pilar asociadas al cuestionario de la asignación
     respondidas: int      # cuántas ya tienen respuesta para esta asignación (+empleado si aplica)
-    progreso: float       # 0..1
+    progreso: float       # 0..1 (puntaje promedio normalizado)
+    completion: float     # 0..1 (avance de participación)
 
 class AssignmentProgress(BaseModel):
     total: int
     respondidas: int
-    progreso: float
+    progreso: float       # 0..1 (puntaje global)
+    completion: float     # 0..1 (participación global)
     por_pilar: List[PillarProgress]

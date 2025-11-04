@@ -60,8 +60,8 @@ export const routes: Routes = [
           {
             path: 'dashboards',
             loadComponent: () =>
-              import('./admin/dashboards/dashboards').then(
-                (m) => m.DashboardsComponent
+              import('./admin/dashboard-analytics/dashboard-analytics').then(
+                (m) => m.DashboardAnalyticsComponent
               ),
           },
           {
