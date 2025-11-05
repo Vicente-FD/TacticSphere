@@ -110,7 +110,7 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
               </div>
 
               <button
-                class="ts-btn w-full md:w-auto"
+                class="ts-btn ts-btn--positive w-full md:w-auto"
                 (click)="crearPregunta()"
                 [disabled]="creatingQuestion || !form.enunciado.trim()"
               >
@@ -168,7 +168,7 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
                     </div>
 
                     <button
-                      class="ts-btn ts-btn--ghost border border-error/30 text-error hover:bg-error/10 hover:text-error"
+                      class="ts-btn ts-btn--danger"
                       (click)="eliminarPregunta(q.id)"
                       [disabled]="deletingId === q.id"
                     >

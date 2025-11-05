@@ -118,7 +118,7 @@ import { AssignmentsService } from '../assignments.service';
 
               <div class="lg:col-span-12 flex flex-wrap gap-3">
                 <button
-                  class="ts-btn"
+                  class="ts-btn ts-btn--positive"
                   (click)="crearEmpleado()"
                   [disabled]="creatingEmp || !formEmp.empresa_id || !formEmp.nombre"
                 >
@@ -352,7 +352,7 @@ import { AssignmentsService } from '../assignments.service';
 
             <div class="flex items-center justify-end">
               <button
-                class="ts-btn w-full md:w-auto"
+                class="ts-btn ts-btn--positive w-full md:w-auto"
                 (click)="begin()"
                 [disabled]="loadingBegin || (!asignacionId && !formEmp.empresa_id)"
               >
@@ -406,11 +406,19 @@ import { AssignmentsService } from '../assignments.service';
               <div class="flex flex-wrap items-center gap-3">
                 <div class="ts-chip">{{ pr.respondidas }} / {{ pr.total }} respondidas</div>
                 <button
-                  class="ts-btn md:w-auto"
+                  class="ts-btn ts-btn--positive md:w-auto"
                   (click)="submitPilar()"
                   [disabled]="loadingSubmit || !hasQuestions"
                 >
                   {{ loadingSubmit ? 'Guardando...' : 'Guardar respuestas' }}
+                </button>
+                <button
+                  *ngIf="canFinalize"
+                  class="ts-btn ts-btn--positive md:w-auto"
+                  (click)="submitFullSurvey()"
+                  [disabled]="loadingFinalSubmit"
+                >
+                  {{ loadingFinalSubmit ? 'Enviando...' : 'Enviar formulario completo' }}
                 </button>
               </div>
             </div>
@@ -577,6 +585,7 @@ export class SurveyComponent implements OnInit {
   loadingBegin = false;
   loadingQuestions = false;
   loadingSubmit = false;
+  loadingFinalSubmit = false;
 
   message = '';
   error = '';
@@ -1006,6 +1015,7 @@ export class SurveyComponent implements OnInit {
       return;
     }
 
+    this.clearFeedback();
     const body: BulkAnswersRequest = {
       respuestas: this.questions.preguntas
         .filter((q) => this.answers[q.id] != null)
@@ -1042,8 +1052,40 @@ export class SurveyComponent implements OnInit {
     });
   }
 
+  submitFullSurvey(): void {
+    if (!this.asignacionId || !this.canFinalize || this.loadingFinalSubmit) {
+      return;
+    }
+
+    this.clearFeedback();
+    const body: BulkAnswersRequest = { respuestas: [] };
+    this.loadingFinalSubmit = true;
+
+    this.survey.submitAnswers(this.asignacionId, body, this.empleadoId).subscribe({
+      next: () => {
+        this.loadingFinalSubmit = false;
+        this.message = 'Formulario completo enviado.';
+        this.loadProgress();
+      },
+      error: (err) => {
+        this.loadingFinalSubmit = false;
+        if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
+          this.error = 'Esta asignación requiere Empleado ID. Selecciónalo o ingrésalo antes de enviar.';
+        } else if (err?.status === 403) {
+          this.error = 'Asignación fuera de vigencia';
+        } else {
+          this.error = err?.error?.detail ?? 'No se pudo enviar el formulario completo';
+        }
+      },
+    });
+  }
+
   get hasQuestions(): boolean {
     return !!this.questions?.preguntas?.length;
+  }
+
+  get canFinalize(): boolean {
+    return !!this.progress && this.progress.total > 0 && this.progress.respondidas >= this.progress.total;
   }
 
   private clearFeedback(): void {

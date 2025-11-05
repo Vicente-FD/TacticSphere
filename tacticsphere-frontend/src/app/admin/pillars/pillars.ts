@@ -89,7 +89,7 @@ import { Pilar } from '../../types';
             </div>
 
             <button
-              class="ts-btn w-full"
+              class="ts-btn ts-btn--positive w-full"
               (click)="crearPilar()"
               [disabled]="creating || !form.nombre.trim()"
             >
@@ -176,7 +176,7 @@ import { Pilar } from '../../types';
                         </button>
                         <button
                           *ngIf="editingId === pilar.id"
-                          class="ts-btn"
+                          class="ts-btn ts-btn--positive"
                           (click)="guardarEdicion(pilar)"
                           [disabled]="saving"
                         >
@@ -191,7 +191,7 @@ import { Pilar } from '../../types';
                           Cancelar
                         </button>
                         <button
-                          class="ts-btn ts-btn--ghost border border-error/30 text-error hover:bg-error/10 hover:text-error"
+                          class="ts-btn ts-btn--danger"
                           (click)="confirmarEliminar(pilar)"
                           [disabled]="deletingId === pilar.id"
                         >

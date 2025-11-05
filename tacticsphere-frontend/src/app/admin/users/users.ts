@@ -32,8 +32,8 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
           </div>
         </div>
 
-        <div class="grid gap-6 xl:grid-cols-[0.4fr_0.6fr]">
-          <div class="space-y-6">
+        <div class="space-y-6">
+          <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
             <div class="ts-card space-y-4">
               <div class="flex items-center gap-3">
                 <lucide-icon name="Building2" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
@@ -120,7 +120,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
               </div>
 
               <button
-                class="ts-btn w-full md:w-auto"
+                class="ts-btn ts-btn--positive w-full md:w-auto"
                 (click)="createUser()"
                 [disabled]="creatingUser || !isValidForm()"
               >
@@ -141,7 +141,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
             </div>
           </div>
 
-          <div class="ts-card space-y-5 overflow-x-auto">
+          <div class="ts-card space-y-5">
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-lg font-semibold text-ink">Usuarios</h2>
@@ -157,7 +157,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
             </ng-container>
 
             <ng-container *ngIf="!loadingUsers && users().length; else emptyUsers">
-              <table class="ts-table">
+              <table class="ts-table w-full table-fixed">
                 <thead>
                   <tr>
                     <th>ID</th>
@@ -173,10 +173,10 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                   <tr *ngFor="let u of users()">
                     <td class="text-xs uppercase tracking-wide text-neutral-400">#{{ u.id }}</td>
                     <td class="font-medium text-ink">{{ u.nombre }}</td>
-                    <td class="text-sm text-neutral-500">{{ u.email }}</td>
+                    <td class="text-sm text-neutral-500 break-words">{{ u.email }}</td>
                     <td>
                       <select
-                        class="ts-select min-w-[150px]"
+                        class="ts-select w-full max-w-[12rem]"
                         [ngModel]="u.rol"
                         (ngModelChange)="changeRole(u, $event)"
                         [disabled]="updatingRoleId === u.id"
@@ -184,7 +184,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                         <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
                       </select>
                     </td>
-                    <td class="text-sm text-neutral-500">{{ empresaName(u.empresa_id) }}</td>
+                    <td class="text-sm text-neutral-500 break-words">{{ empresaName(u.empresa_id) }}</td>
                     <td>
                       <label class="flex items-center gap-2 text-sm text-neutral-500">
                         <input
@@ -197,45 +197,47 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                         <span>{{ u.activo ? 'Sí' : 'No' }}</span>
                       </label>
                     </td>
-                    <td class="space-x-2 whitespace-nowrap">
-                      <button
-                        class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
-                        (click)="resetPassword(u)"
-                        [disabled]="resettingId === u.id"
-                      >
-                        <lucide-icon
-                          *ngIf="resettingId !== u.id"
-                          name="KeyRound"
-                          class="h-4 w-4"
-                          strokeWidth="1.75"
-                        ></lucide-icon>
-                        <lucide-icon
-                          *ngIf="resettingId === u.id"
-                          name="Loader2"
-                          class="h-4 w-4 animate-spin"
-                          strokeWidth="1.75"
-                        ></lucide-icon>
-                        <span>Reset pass</span>
-                      </button>
-                      <button
-                        class="ts-btn ts-btn--ghost border border-error/30 text-error hover:bg-error/10 hover:text-error"
-                        (click)="deleteUser(u)"
-                        [disabled]="deletingId === u.id"
-                      >
-                        <lucide-icon
-                          *ngIf="deletingId !== u.id"
-                          name="Trash2"
-                          class="h-4 w-4"
-                          strokeWidth="1.75"
-                        ></lucide-icon>
-                        <lucide-icon
-                          *ngIf="deletingId === u.id"
-                          name="Loader2"
-                          class="h-4 w-4 animate-spin"
-                          strokeWidth="1.75"
-                        ></lucide-icon>
-                        <span>Eliminar</span>
-                      </button>
+                    <td>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
+                          (click)="resetPassword(u)"
+                          [disabled]="resettingId === u.id"
+                        >
+                          <lucide-icon
+                            *ngIf="resettingId !== u.id"
+                            name="KeyRound"
+                            class="h-4 w-4"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <lucide-icon
+                            *ngIf="resettingId === u.id"
+                            name="Loader2"
+                            class="h-4 w-4 animate-spin"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <span>Reset pass</span>
+                        </button>
+                        <button
+                          class="ts-btn ts-btn--danger"
+                          (click)="deleteUser(u)"
+                          [disabled]="deletingId === u.id"
+                        >
+                          <lucide-icon
+                            *ngIf="deletingId !== u.id"
+                            name="Trash2"
+                            class="h-4 w-4"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <lucide-icon
+                            *ngIf="deletingId === u.id"
+                            name="Loader2"
+                            class="h-4 w-4 animate-spin"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <span>Eliminar</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>

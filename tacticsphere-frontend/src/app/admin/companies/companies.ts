@@ -67,7 +67,11 @@ import { Empresa, Lead } from '../../types';
               </label>
             </div>
 
-            <button class="ts-btn w-full md:w-auto" (click)="crear()" [disabled]="creating || !form.nombre.trim()">
+            <button
+              class="ts-btn ts-btn--positive w-full md:w-auto"
+              (click)="crear()"
+              [disabled]="creating || !form.nombre.trim()"
+            >
               <lucide-icon
                 *ngIf="!creating"
                 name="Plus"
@@ -127,7 +131,7 @@ import { Empresa, Lead } from '../../types';
                     </div>
 
                     <button
-                      class="ts-btn ts-btn--ghost border border-error/30 text-error hover:bg-error/10 hover:text-error"
+                      class="ts-btn ts-btn--danger"
                       (click)="eliminar(e)"
                       [disabled]="deletingId === e.id"
                     >
@@ -212,7 +216,7 @@ import { Empresa, Lead } from '../../types';
                     <div class="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        class="ts-btn text-xs"
+                        class="ts-btn ts-btn--positive text-xs"
                         (click)="acceptLead(lead)"
                         [disabled]="leadActionId() !== null"
                       >
@@ -226,7 +230,7 @@ import { Empresa, Lead } from '../../types';
                       </button>
                       <button
                         type="button"
-                        class="ts-btn ts-btn--secondary text-xs"
+                        class="ts-btn ts-btn--danger text-xs"
                         (click)="deleteLead(lead)"
                         [disabled]="leadActionId() !== null"
                       >

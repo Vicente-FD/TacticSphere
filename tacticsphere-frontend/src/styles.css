@@ -112,7 +112,7 @@
   }
 
   .ts-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-pill border border-ink bg-white px-5 py-2.5 text-sm font-medium text-ink transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2 rounded-pill border border-ink bg-white px-5 py-2.5 text-sm font-medium text-ink transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .ts-btn--secondary {
@@ -121,6 +121,14 @@
 
   .ts-btn--ghost {
     @apply bg-transparent text-muted border border-transparent;
+  }
+
+  .ts-btn--positive {
+    @apply border border-success/40 bg-white text-[#0b7a56] hover:bg-success/15 hover:text-[#0b7a56];
+  }
+
+  .ts-btn--danger {
+    @apply border border-error/30 bg-white text-error hover:bg-error/10 hover:text-error;
   }
 
   .ts-chip {
