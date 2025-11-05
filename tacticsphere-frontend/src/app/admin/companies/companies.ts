@@ -5,7 +5,8 @@ import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { LucideAngularModule } from 'lucide-angular';
 
 import { CompanyService } from '../../company.service';
-import { Empresa } from '../../types';
+import { LeadService } from '../../core/services/lead.service';
+import { Empresa, Lead } from '../../types';
 
 @Component({
   standalone: true,
@@ -25,7 +26,7 @@ import { Empresa } from '../../types';
             <p class="ts-subtitle">Administra la información base y los departamentos asociados.</p>
           </div>
           <div class="ts-chip h-fit">
-            <lucide-icon name="Building2" class="h-4 w-4 text-accent" strokeWidth="1.75"></lucide-icon>
+            <lucide-icon name="Building2" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
             {{ empresas().length }} registradas
           </div>
         </div>
@@ -34,7 +35,7 @@ import { Empresa } from '../../types';
           <div class="ts-card space-y-6">
             <div>
               <h2 class="text-xl font-semibold text-ink">Crear empresa</h2>
-              <p class="text-sm text-neutral-400">Completa los datos para dar de alta una nueva empresa.</p>
+              <p class="text-sm text-muted">Completa los datos para dar de alta una nueva empresa.</p>
             </div>
 
             <div class="space-y-4">
@@ -62,7 +63,7 @@ import { Empresa } from '../../types';
                   [(ngModel)]="form.departamentos"
                   placeholder="Ventas, Marketing, Operaciones"
                 />
-                <span class="text-xs text-neutral-400">Separa cada departamento con coma.</span>
+                <span class="text-xs text-muted">Separa cada departamento con coma.</span>
               </label>
             </div>
 
@@ -86,7 +87,7 @@ import { Empresa } from '../../types';
           <div class="ts-card space-y-4">
             <div class="flex items-center justify-between">
               <h2 class="text-xl font-semibold text-ink">Listado</h2>
-              <span class="text-sm text-neutral-400">
+              <span class="text-sm text-muted">
                 {{ loadingList ? 'Cargando empresas...' : 'Actualizado al día' }}
               </span>
             </div>
@@ -100,26 +101,26 @@ import { Empresa } from '../../types';
               <div class="space-y-3">
                 <div
                   *ngFor="let e of empresas()"
-                  class="rounded-xl border border-neutral-200 p-4 transition-all duration-120 ease-smooth hover:border-accent/40 hover:shadow-card"
+                  class="rounded-xl border border-border p-4 transition-all duration-200 hover:border-ink/40 hover:shadow-card"
                 >
                   <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div class="space-y-1">
                       <div class="flex items-center gap-2">
                         <lucide-icon
                           name="Building2"
-                          class="h-5 w-5 text-accent"
+                          class="h-5 w-5 text-ink"
                           strokeWidth="1.75"
                         ></lucide-icon>
                         <p class="text-lg font-semibold text-ink">{{ e.nombre }}</p>
                       </div>
-                      <div class="flex flex-wrap gap-2 text-sm text-neutral-400">
+                      <div class="flex flex-wrap gap-2 text-sm text-muted">
                         <span class="ts-chip">RUT: {{ e.rut || 'Sin RUT' }}</span>
                         <span class="ts-chip">Giro: {{ e.giro || 'Sin giro' }}</span>
                         <span class="ts-chip">
                           Estado:
                           <span class="font-medium text-success" *ngIf="e.activa; else inactive">Activa</span>
                           <ng-template #inactive>
-                            <span class="font-medium text-neutral-400">Inactiva</span>
+                            <span class="font-medium text-muted">Inactiva</span>
                           </ng-template>
                         </span>
                       </div>
@@ -150,12 +151,63 @@ import { Empresa } from '../../types';
             </ng-container>
 
             <ng-template #emptyState>
-              <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 p-6 text-center">
-                <p class="text-sm text-neutral-400">
+              <div class="rounded-xl border border-dashed border-border bg-[#f6f6f6] p-6 text-center">
+                <p class="text-sm text-muted">
                   Todavía no tienes empresas registradas. Comienza creando la primera con el formulario.
                 </p>
               </div>
             </ng-template>
+          </div>
+        </div>
+
+        <div class="ts-card space-y-4">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="space-y-1">
+              <h2 class="text-xl font-semibold text-ink">Empresas que desean una consultoría</h2>
+              <p class="text-sm text-muted">
+                Solicitudes recibidas desde la landing pública.
+              </p>
+            </div>
+            <div class="ts-chip">
+              <lucide-icon name="Mail" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+              {{ leads().length }} solicitudes
+            </div>
+          </div>
+
+          <div *ngIf="loadingLeads" class="space-y-3">
+            <ngx-skeleton-loader count="3" [theme]="{ height: '50px', marginBottom: '0.75rem', borderRadius: '18px' }">
+            </ngx-skeleton-loader>
+          </div>
+
+          <div *ngIf="!loadingLeads && leads().length" class="overflow-x-auto">
+            <table class="ts-table min-w-full">
+              <thead>
+                <tr>
+                  <th class="whitespace-nowrap">Empresa</th>
+                  <th class="whitespace-nowrap">Correo</th>
+                  <th class="whitespace-nowrap">Fecha</th>
+                  <th class="whitespace-nowrap">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let lead of leads(); trackBy: trackByLead">
+                  <td class="py-3 font-medium text-ink">{{ lead.company }}</td>
+                  <td class="py-3">
+                    <a class="text-ink underline-offset-2 hover:underline" [href]="'mailto:' + lead.email">
+                      {{ lead.email }}
+                    </a>
+                  </td>
+                  <td class="py-3 text-sm text-muted">{{ lead.created_at | date: 'medium' }}</td>
+                  <td class="py-3">
+                    <span class="ts-chip text-xs font-medium text-ink">Nuevo</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div *ngIf="!loadingLeads && !leads().length" class="rounded-xl border border-dashed border-border bg-[#f6f6f6] p-6 text-center text-sm text-muted">
+            Aún no recibimos solicitudes de consultoría. Cuando lleguen, aparecerán aquí.
           </div>
         </div>
       </div>
@@ -164,11 +216,15 @@ import { Empresa } from '../../types';
 })
 export class CompaniesComponent implements OnInit {
   private api = inject(CompanyService);
+  private leadsApi = inject(LeadService);
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;
   creating = false;
   deletingId: number | null = null;
+
+  leads: WritableSignal<Lead[]> = signal<Lead[]>([]);
+  loadingLeads = true;
 
   form = {
     nombre: '',
@@ -179,6 +235,7 @@ export class CompaniesComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadEmpresas();
+    this.loadLeads();
   }
 
   private loadEmpresas(): void {
@@ -187,6 +244,25 @@ export class CompaniesComponent implements OnInit {
       next: (rows: Empresa[]) => this.empresas.set(rows ?? []),
       error: (error) => console.error('Error cargando empresas', error),
       complete: () => (this.loadingList = false),
+    });
+  }
+
+  private loadLeads(): void {
+    this.loadingLeads = true;
+    this.leadsApi.listLeads().subscribe({
+      next: (rows: Lead[]) => {
+        const ordered = [...(rows ?? [])].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        this.leads.set(ordered);
+      },
+      error: (error) => {
+        console.error('Error cargando leads', error);
+        this.loadingLeads = false;
+      },
+      complete: () => {
+        this.loadingLeads = false;
+      },
     });
   }
 
@@ -237,4 +313,6 @@ export class CompaniesComponent implements OnInit {
       },
     });
   }
+
+  trackByLead = (_: number, item: Lead) => item.id;
 }

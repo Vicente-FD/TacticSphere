@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   UserPlus,
   Users,
+  Sparkles,
 } from 'lucide-angular';
 import { NgxEchartsModule } from 'ngx-echarts';
 import { tokenInterceptor } from './token.interceptor';
@@ -55,6 +56,7 @@ export const appConfig: ApplicationConfig = {
         ShieldCheck,
         UserPlus,
         Users,
+        Sparkles,
       })
     ),
     importProvidersFrom(

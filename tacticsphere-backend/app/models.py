@@ -105,6 +105,17 @@ class Empleado(Base):
     )
 
 # -----------------------------
+# Marketing / Leads
+# -----------------------------
+class ConsultingLead(Base):
+    __tablename__ = "consulting_leads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    company: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+# -----------------------------
 # Pilares / Preguntas / Cuestionarios
 # -----------------------------
 class Pilar(Base):

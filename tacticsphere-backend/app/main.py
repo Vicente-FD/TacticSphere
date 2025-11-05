@@ -39,6 +39,8 @@ from .schemas import (
     PillarQuestionsResponse,
     BulkAnswersRequest, BulkAnswersResponse,
     AssignmentProgress,
+    LeadCreate,
+    LeadRead,
 )
 from passlib.context import CryptContext  # ✅ agregado para bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")  # ✅ contexto para hash compatible con login
@@ -145,6 +147,25 @@ def seed_admin(db: Session = Depends(get_db)):
         empresa_id=None,
     )
     return {"ok": True, "admin_id": admin.id}
+
+# ======================================================
+# CONSULTING LEADS (público)
+# ======================================================
+@app.post("/consulting-leads", response_model=LeadRead, status_code=201)
+def create_consulting_lead_endpoint(payload: LeadCreate, db: Session = Depends(get_db)):
+    company = payload.company.strip()
+    if not company:
+        raise HTTPException(status_code=422, detail="La empresa es obligatoria")
+    lead = crud.create_consulting_lead(db, company=company, email=payload.email.lower())
+    return lead
+
+@app.get("/consulting-leads", response_model=list[LeadRead])
+def list_consulting_leads_endpoint(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    return crud.list_consulting_leads(db, limit=limit, offset=offset)
 
 # ======================================================
 # EMPRESAS

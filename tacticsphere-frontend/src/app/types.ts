@@ -253,3 +253,10 @@ export interface Asignacion {
   fecha_cierre: string;   // ISO string
   anonimo: boolean;
 }
+
+export interface Lead {
+  id: number;
+  company: string;
+  email: string;
+  created_at: string; // ISO
+}

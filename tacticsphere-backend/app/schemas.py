@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Optional, List, Literal
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, EmailStr
 
 from .models import RolEnum, TipoPreguntaEnum
 
@@ -132,6 +132,21 @@ class PreguntaRead(BaseModel):
     tipo: TipoPreguntaEnum
     es_obligatoria: bool
     peso: int
+    model_config = ConfigDict(from_attributes=True)
+
+# ======================================================
+# LEADS / CONSULTING REQUESTS
+# ======================================================
+
+class LeadCreate(BaseModel):
+    company: str
+    email: EmailStr
+
+class LeadRead(BaseModel):
+    id: int
+    company: str
+    email: EmailStr
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 # ======================================================

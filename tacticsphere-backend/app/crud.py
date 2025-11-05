@@ -15,6 +15,7 @@ from .models import (
     CuestionarioPregunta,
     Asignacion,
     Respuesta,
+    ConsultingLead,
     RolEnum,
     TipoPreguntaEnum,
 )
@@ -866,3 +867,23 @@ def compute_assignment_progress(
         "completion": completion_global,
         "por_pilar": por_pilar,
     }
+
+# ======================================================
+# CONSULTING LEADS
+# ======================================================
+
+def create_consulting_lead(db: Session, company: str, email: str) -> ConsultingLead:
+    lead = ConsultingLead(company=company, email=email)
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+def list_consulting_leads(db: Session, limit: int = 100, offset: int = 0) -> List[ConsultingLead]:
+    stmt = (
+        select(ConsultingLead)
+        .order_by(ConsultingLead.created_at.desc(), ConsultingLead.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return db.scalars(stmt).all()

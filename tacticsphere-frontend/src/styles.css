@@ -66,6 +66,26 @@
   border-radius: 0.5rem;
 }
 
+@keyframes subtleUp {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes halo {
+  0% {
+    box-shadow: 0 0 0 0 rgba(15, 15, 15, 0.12);
+  }
+  100% {
+    box-shadow: 0 0 0 24px rgba(15, 15, 15, 0);
+  }
+}
+
 @layer components {
   .ts-page {
     @apply min-h-[calc(100vh-4rem)] bg-bg py-8 px-4 md:px-8;
@@ -164,4 +184,20 @@
 .ts-input:focus {
   box-shadow: var(--shadow), var(--shadow);
   outline: none;
+}
+
+.ts-hero-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ts-hero-logo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  animation: halo 3.2s ease-out infinite;
+  pointer-events: none;
 }

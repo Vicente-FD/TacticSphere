@@ -1,0 +1,171 @@
+<div class="min-h-screen bg-bg text-ink">
+  <section class="relative overflow-hidden">
+    <div class="mx-auto flex min-h-[80vh] max-w-6xl flex-col items-center justify-center gap-10 px-6 py-24 text-center">
+      <div class="ts-hero-logo rounded-full border border-border/60 bg-white/70 p-6" @fadeScaleIn>
+        <img src="assets/logo_ts.png" alt="TacticSphere" class="h-36 w-auto sm:h-40" decoding="async" />
+      </div>
+
+      <div class="space-y-6" @fadeUp>
+        <h1 class="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
+          Diagnostica la madurez tecnológica de tu organización con claridad
+        </h1>
+        <p class="mx-auto max-w-3xl text-base text-muted md:text-lg">
+          TacticSphere combina consultoría especializada y una plataforma inteligente basada en ITIL&nbsp;4 para
+          revelar dónde está tu empresa hoy y qué pasos concretos debe seguir para acelerar su transformación digital.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-4" @fadeUp>
+        <a
+          routerLink="/login"
+          class="ts-btn group inline-flex items-center gap-2 border border-ink px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
+          aria-label="Ir al login"
+        >
+          <span>Ir al login</span>
+          <lucide-icon name="LogIn" class="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth="1.75">
+          </lucide-icon>
+        </a>
+        <button
+          type="button"
+          class="ts-btn group inline-flex items-center gap-2 border border-ink px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
+          aria-label="Solicitar consultoría"
+          (click)="openModal()"
+        >
+          <span>Solicitar consultoría</span>
+          <lucide-icon
+            name="Sparkles"
+            class="h-4 w-4 transition-transform group-hover:rotate-3"
+            strokeWidth="1.75"
+          ></lucide-icon>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-white py-20">
+    <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6">
+      <article
+        *ngFor="let section of sections; trackBy: trackBySection"
+        #sectionBlock
+        class="ts-card min-w-0 overflow-hidden transition-all duration-500 ease-out"
+        [attr.data-section-id]="section.id"
+        [class.opacity-100]="sectionIsVisible(section.id)"
+        [class.translate-y-0]="sectionIsVisible(section.id)"
+        [class.opacity-0]="!sectionIsVisible(section.id)"
+        [class.translate-y-6]="!sectionIsVisible(section.id)"
+      >
+        <div class="flex items-start gap-4">
+          <div class="mt-1 hidden h-8 w-8 shrink-0 rounded-full border border-border bg-white sm:flex sm:items-center sm:justify-center">
+            <lucide-icon name="Layers" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+          </div>
+          <div class="space-y-4">
+            <h2 class="ts-title">{{ section.title }}</h2>
+            <p *ngFor="let paragraph of section.description" class="text-base leading-relaxed text-muted">
+              {{ paragraph }}
+            </p>
+            <ul *ngIf="section.items?.length" class="space-y-3 text-sm text-muted">
+              <li *ngFor="let item of section.items" class="flex gap-3">
+                <span class="mt-1 h-1.5 w-1.5 rounded-full bg-ink"></span>
+                <span>{{ item }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <div
+        class="ts-card flex flex-col gap-4 overflow-hidden bg-white/80 text-center shadow-card md:flex-row md:items-center md:justify-between md:text-left"
+      >
+        <div class="space-y-2">
+          <h3 class="text-xl font-semibold text-ink">¿Listo para mapear tu ruta digital?</h3>
+          <p class="text-sm text-muted">
+            Solicita una consultoría y recibe un diagnóstico accionable para impulsar tus iniciativas tecnológicas.
+          </p>
+        </div>
+        <div class="flex flex-wrap justify-center gap-3 md:justify-end">
+          <a
+            routerLink="/login"
+            class="ts-btn ts-btn--secondary group border border-border transition-transform duration-200 hover:-translate-y-0.5"
+            aria-label="Abrir login"
+          >
+            Acceder al panel
+          </a>
+          <button
+            type="button"
+            class="ts-btn group transition-transform duration-200 hover:-translate-y-0.5"
+            aria-label="Abrir formulario de consultoría"
+            (click)="openModal()"
+          >
+            Solicitar consultoría
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<ts-modal title="Solicitar consultoría" [open]="modalOpen()" (close)="closeModal()">
+  <form class="space-y-5" [formGroup]="form" (ngSubmit)="onSubmitConsulting()">
+    <div class="space-y-2">
+      <label class="ts-label block" for="consulting-company">Empresa</label>
+      <input
+        id="consulting-company"
+        type="text"
+        class="ts-input"
+        placeholder="Nombre de la empresa"
+        formControlName="company"
+        autocomplete="organization"
+        required
+      />
+      <p class="text-xs text-error" *ngIf="form.controls.company.touched && form.controls.company.invalid">
+        Ingresa un nombre de empresa válido (mínimo 2 caracteres).
+      </p>
+    </div>
+
+    <div class="space-y-2">
+      <label class="ts-label block" for="consulting-email">Correo de contacto</label>
+      <input
+        id="consulting-email"
+        type="email"
+        class="ts-input"
+        placeholder="nombre@empresa.com"
+        formControlName="email"
+        autocomplete="email"
+        required
+      />
+      <p class="text-xs text-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
+        Ingresa un correo electrónico válido.
+      </p>
+    </div>
+
+    <div *ngIf="submitState() === 'success'" class="rounded-xl border border-border bg-[#f6f6f6] p-3 text-sm text-ink">
+      ¡Gracias! Nuestro equipo se pondrá en contacto contigo a la brevedad.
+    </div>
+    <div *ngIf="submitState() === 'error'" class="rounded-xl border border-error/40 bg-error/10 p-3 text-sm text-error">
+      No pudimos registrar tu solicitud. Inténtalo nuevamente en unos segundos.
+    </div>
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        class="ts-btn ts-btn--secondary sm:w-auto"
+        (click)="closeModal()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="ts-btn sm:w-auto"
+        [disabled]="submitState() === 'loading'"
+      >
+        <lucide-icon
+          *ngIf="submitState() === 'loading'"
+          name="Loader2"
+          class="h-4 w-4 animate-spin"
+          strokeWidth="1.75"
+        ></lucide-icon>
+        <span>{{ submitState() === 'loading' ? 'Enviando...' : 'Enviar solicitud' }}</span>
+      </button>
+    </div>
+  </form>
+</ts-modal>
