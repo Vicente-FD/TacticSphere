@@ -18,16 +18,20 @@ export class LeadService {
   private memoryLeads: Lead[] = [];
 
   createLead(payload: LeadPayload): Observable<Lead> {
+    const normalized: LeadPayload = {
+      company: payload.company.trim(),
+      email: payload.email.trim().toLowerCase(),
+    };
     if (!this.apiBase) {
-      return of(this.persistLocal(payload));
+      return of(this.persistLocal(normalized));
     }
 
     return this.http
-      .post<Lead>(`${this.apiBase}/consulting-leads`, payload)
+      .post<Lead>(`${this.apiBase}/consulting-leads`, normalized)
       .pipe(
         catchError((error) => {
           if (error.status === 0) {
-            return of(this.persistLocal(payload));
+            return of(this.persistLocal(normalized));
           }
           throw error;
         }),
@@ -51,6 +55,40 @@ export class LeadService {
       );
   }
 
+  deleteLead(id: number): Observable<void> {
+    if (!this.apiBase) {
+      this.removeLocal(id);
+      return of(void 0);
+    }
+
+    return this.http.delete<void>(`${this.apiBase}/consulting-leads/${id}`).pipe(
+      catchError((error) => {
+        if (error.status === 0) {
+          this.removeLocal(id);
+          return of(void 0);
+        }
+        throw error;
+      }),
+    );
+  }
+
+  clearLeads(): Observable<void> {
+    if (!this.apiBase) {
+      this.clearLocal();
+      return of(void 0);
+    }
+
+    return this.http.delete<void>(`${this.apiBase}/consulting-leads`).pipe(
+      catchError((error) => {
+        if (error.status === 0) {
+          this.clearLocal();
+          return of(void 0);
+        }
+        throw error;
+      }),
+    );
+  }
+
   private persistLocal(payload: LeadPayload): Lead {
     const now = new Date();
     const current = this.readLocal();
@@ -61,13 +99,26 @@ export class LeadService {
       created_at: now.toISOString(),
     };
     current.unshift(lead);
+    this.saveLocal(current);
+    return lead;
+  }
+
+  private removeLocal(id: number): void {
+    const current = this.readLocal().filter((lead) => lead.id !== id);
+    this.saveLocal(current);
+  }
+
+  private clearLocal(): void {
+    this.saveLocal([]);
+  }
+
+  private saveLocal(data: Lead[]): void {
     const storage = this.getStorage();
     if (storage) {
-      storage.setItem(STORAGE_KEY, JSON.stringify(current));
+      storage.setItem(STORAGE_KEY, JSON.stringify(data));
     } else {
-      this.memoryLeads = current;
+      this.memoryLeads = data;
     }
-    return lead;
   }
 
   private readLocal(): Lead[] {

@@ -89,6 +89,21 @@ export class AuthService {
     return !!current && list.includes(current);
   }
 
+  getDefaultRoute(): string {
+    const role = this.getRole();
+    switch (role) {
+      case 'ADMIN_SISTEMA':
+      case 'ADMIN':
+        return '/admin/dashboards';
+      case 'ANALISTA':
+        return '/results';
+      case 'USUARIO':
+        return '/results';
+      default:
+        return '/home';
+    }
+  }
+
   isLoggedIn(): boolean {
     return !!this.getToken();
   }

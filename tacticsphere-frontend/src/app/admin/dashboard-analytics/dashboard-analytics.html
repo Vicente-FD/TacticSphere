@@ -20,19 +20,26 @@
       </div>
 
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <label class="block space-y-2">
+        <label class="block space-y-2" *ngIf="scopeOptions.length">
           <span class="ts-label">Ambito</span>
-          <select class="ts-select" [(ngModel)]="scopeModel" (ngModelChange)="onScopeChange()">
-            <option value="GLOBAL">Global</option>
-            <option value="COMPANY">Por empresa</option>
-            <option value="DEPARTMENT">Por departamento</option>
-            <option value="EMPLOYEE">Por empleado</option>
+          <select
+            class="ts-select"
+            [(ngModel)]="scopeModel"
+            (ngModelChange)="onScopeChange()"
+            [disabled]="scopeOptions.length === 1"
+          >
+            <option *ngFor="let option of scopeOptions" [value]="option.value">{{ option.label }}</option>
           </select>
         </label>
 
         <label class="block space-y-2" *ngIf="requiresCompany()">
           <span class="ts-label">Empresa</span>
-          <select class="ts-select" [(ngModel)]="selectedCompanyId" (ngModelChange)="onCompanyChange($event)">
+          <select
+            class="ts-select"
+            [(ngModel)]="selectedCompanyId"
+            (ngModelChange)="onCompanyChange($event)"
+            [disabled]="isUser"
+          >
             <option [ngValue]="null">Selecciona empresa...</option>
             <option *ngFor="let company of companies()" [ngValue]="company.id">{{ company.nombre }}</option>
           </select>

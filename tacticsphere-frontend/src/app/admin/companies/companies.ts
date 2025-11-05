@@ -161,16 +161,26 @@ import { Empresa, Lead } from '../../types';
         </div>
 
         <div class="ts-card space-y-4">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="space-y-1">
               <h2 class="text-xl font-semibold text-ink">Empresas que desean una consultoría</h2>
               <p class="text-sm text-muted">
                 Solicitudes recibidas desde la landing pública.
               </p>
             </div>
-            <div class="ts-chip">
-              <lucide-icon name="Mail" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
-              {{ leads().length }} solicitudes
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary text-xs sm:text-sm"
+                (click)="clearLeads()"
+                [disabled]="loadingLeads || !leads().length || leadActionId() !== null"
+              >
+                Limpiar solicitudes
+              </button>
+              <div class="ts-chip">
+                <lucide-icon name="Mail" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+                {{ leads().length }} solicitudes
+              </div>
             </div>
           </div>
 
@@ -186,7 +196,7 @@ import { Empresa, Lead } from '../../types';
                   <th class="whitespace-nowrap">Empresa</th>
                   <th class="whitespace-nowrap">Correo</th>
                   <th class="whitespace-nowrap">Fecha</th>
-                  <th class="whitespace-nowrap">Estado</th>
+                  <th class="whitespace-nowrap">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,7 +209,30 @@ import { Empresa, Lead } from '../../types';
                   </td>
                   <td class="py-3 text-sm text-muted">{{ lead.created_at | date: 'medium' }}</td>
                   <td class="py-3">
-                    <span class="ts-chip text-xs font-medium text-ink">Nuevo</span>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="ts-btn text-xs"
+                        (click)="acceptLead(lead)"
+                        [disabled]="leadActionId() !== null"
+                      >
+                        <lucide-icon
+                          *ngIf="leadActionId() === lead.id"
+                          name="Loader2"
+                          class="h-3.5 w-3.5 animate-spin"
+                          strokeWidth="1.75"
+                        ></lucide-icon>
+                        <span>{{ leadActionId() === lead.id ? 'Procesando...' : 'Aceptar' }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="ts-btn ts-btn--secondary text-xs"
+                        (click)="deleteLead(lead)"
+                        [disabled]="leadActionId() !== null"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -225,6 +258,7 @@ export class CompaniesComponent implements OnInit {
 
   leads: WritableSignal<Lead[]> = signal<Lead[]>([]);
   loadingLeads = true;
+  readonly leadActionId = signal<number | null>(null);
 
   form = {
     nombre: '',
@@ -259,9 +293,11 @@ export class CompaniesComponent implements OnInit {
       error: (error) => {
         console.error('Error cargando leads', error);
         this.loadingLeads = false;
+        this.leadActionId.set(null);
       },
       complete: () => {
         this.loadingLeads = false;
+        this.leadActionId.set(null);
       },
     });
   }
@@ -293,6 +329,61 @@ export class CompaniesComponent implements OnInit {
         this.creating = false;
       },
       complete: () => (this.creating = false),
+    });
+  }
+
+  acceptLead(lead: Lead): void {
+    if (!lead) return;
+    this.leadActionId.set(lead.id);
+    this.leadsApi.deleteLead(lead.id).subscribe({
+      next: () => {
+        this.leads.set(this.leads().filter((item) => item.id !== lead.id));
+      },
+      error: (error) => {
+        console.error('No se pudo procesar la solicitud', error);
+        this.leadActionId.set(null);
+      },
+      complete: () => {
+        this.leadActionId.set(null);
+      },
+    });
+  }
+
+  deleteLead(lead: Lead): void {
+    if (!lead) return;
+    if (!confirm(`¿Eliminar la solicitud de ${lead.company}?`)) return;
+
+    this.leadActionId.set(lead.id);
+    this.leadsApi.deleteLead(lead.id).subscribe({
+      next: () => {
+        this.leads.set(this.leads().filter((item) => item.id !== lead.id));
+      },
+      error: (error) => {
+        console.error('No se pudo eliminar la solicitud', error);
+        this.leadActionId.set(null);
+      },
+      complete: () => {
+        this.leadActionId.set(null);
+      },
+    });
+  }
+
+  clearLeads(): void {
+    if (!this.leads().length) return;
+    if (!confirm('¿Deseas limpiar todas las solicitudes de consultoría?')) return;
+
+    this.leadActionId.set(-1);
+    this.leadsApi.clearLeads().subscribe({
+      next: () => {
+        this.leads.set([]);
+      },
+      error: (error) => {
+        console.error('No se pudo limpiar las solicitudes', error);
+        this.leadActionId.set(null);
+      },
+      complete: () => {
+        this.leadActionId.set(null);
+      },
     });
   }
 

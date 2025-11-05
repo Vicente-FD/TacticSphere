@@ -25,7 +25,8 @@ from .models import (
 # ======================================================
 
 def get_user_by_email(db: Session, email: str):
-    return db.scalars(select(Usuario).where(Usuario.email == email)).first()
+    normalized = email.lower()
+    return db.scalars(select(Usuario).where(func.lower(Usuario.email) == normalized)).first()
 
 def list_usuarios(db: Session, empresa_id: Optional[int] = None) -> List[Usuario]:
     stmt = select(Usuario)
@@ -36,7 +37,7 @@ def list_usuarios(db: Session, empresa_id: Optional[int] = None) -> List[Usuario
 def create_usuario(db: Session, nombre: str, email: str, password: str, rol: RolEnum, empresa_id: Optional[int]):
     user = Usuario(
         nombre=nombre,
-        email=email,
+        email=email.lower(),
         password_hash=hash_password(password),
         rol=rol,
         empresa_id=empresa_id,
@@ -873,7 +874,7 @@ def compute_assignment_progress(
 # ======================================================
 
 def create_consulting_lead(db: Session, company: str, email: str) -> ConsultingLead:
-    lead = ConsultingLead(company=company, email=email)
+    lead = ConsultingLead(company=company, email=email.lower())
     db.add(lead)
     db.commit()
     db.refresh(lead)
@@ -887,3 +888,16 @@ def list_consulting_leads(db: Session, limit: int = 100, offset: int = 0) -> Lis
         .limit(limit)
     )
     return db.scalars(stmt).all()
+
+def delete_consulting_lead(db: Session, lead_id: int) -> bool:
+    lead = db.get(ConsultingLead, lead_id)
+    if not lead:
+        return False
+    db.delete(lead)
+    db.commit()
+    return True
+
+def clear_consulting_leads(db: Session) -> int:
+    count = db.query(ConsultingLead).delete()
+    db.commit()
+    return count

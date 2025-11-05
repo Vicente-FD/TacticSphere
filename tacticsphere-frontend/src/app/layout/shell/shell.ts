@@ -1,4 +1,4 @@
-// src/app/layout/shell/shell.ts
+﻿// src/app/layout/shell/shell.ts
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterOutlet, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -12,7 +12,7 @@ import { AuthService } from '../../auth.service';
     <div class="min-h-screen bg-bg text-ink">
       <header class="sticky top-0 z-40 border-b border-border bg-white shadow-card">
         <div class="flex h-16 w-full items-center justify-between gap-6 px-6">
-          <a routerLink="/" class="flex items-center gap-3">
+          <a [routerLink]="defaultRoute" class="flex items-center gap-3">
             <img src="assets/logo_ts.png" alt="TacticSphere" class="h-8 w-auto" />
             <span class="text-lg font-semibold tracking-tight text-ink">TacticSphere</span>
           </a>
@@ -28,42 +28,47 @@ import { AuthService } from '../../auth.service';
           <nav class="flex flex-col gap-1 px-4 py-6 text-sm">
             <a
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
-              routerLink="/admin"
-              routerLinkActive="bg-[#f6f6f6] text-ink"
-              [routerLinkActiveOptions]="{ exact: true }"
-              >Dashboard Admin</a
-            >
-            <a
-              class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
-              routerLink="/admin/dashboards"
+              routerLink="/results"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               >Resultados</a
             >
             <a
+              *ngIf="canManageAdmin"
+              class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
+              routerLink="/admin/dashboards"
+              routerLinkActive="bg-[#f6f6f6] text-ink"
+              >Panel admin</a
+            >
+            <a
+              *ngIf="canManageAdmin"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/companies"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               >Empresas</a
             >
             <a
+              *ngIf="canManageAdmin"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/pillars"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               >Pilares</a
             >
             <a
+              *ngIf="canManageAdmin"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/questions"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               >Preguntas</a
             >
             <a
+              *ngIf="canManageAdmin"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/users"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               >Usuarios</a
             >
             <a
+              *ngIf="canSeeSurvey"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/survey"
               routerLinkActive="bg-[#f6f6f6] text-ink"
@@ -81,7 +86,7 @@ import { AuthService } from '../../auth.service';
               <span>© {{ currentYear }} TacticSphere. Todos los derechos reservados.</span>
               <div class="flex flex-wrap items-center gap-4">
                 <a class="transition-colors hover:text-ink" href="mailto:contacto@tacticsphere.com">Contacto</a>
-                <a class="transition-colors hover:text-ink" routerLink="/admin/dashboards">Panel</a>
+                <a class="transition-colors hover:text-ink" [routerLink]="defaultRoute">Ir a inicio</a>
               </div>
             </div>
           </footer>
@@ -94,10 +99,13 @@ export class ShellComponent {
   private router = inject(Router);
   private auth = inject(AuthService);
 
-  rol = this.auth.getRole() ?? 'N/A';
+  readonly rol = this.auth.getRole() ?? 'N/A';
   readonly currentYear = new Date().getFullYear();
+  readonly canManageAdmin = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA']);
+  readonly canSeeSurvey = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA', 'ANALISTA']);
+  readonly defaultRoute = this.auth.getDefaultRoute() || '/results';
 
-  logout() {
+  logout(): void {
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }

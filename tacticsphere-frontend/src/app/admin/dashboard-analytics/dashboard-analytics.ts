@@ -27,6 +27,7 @@ import { AssignmentsService } from "../../assignments.service";
 import { CompanyService } from "../../company.service";
 import { EmployeeService } from "../../employee.service";
 import { SurveyService } from "../../survey.service";
+import { AuthService } from "../../auth.service";
 import { environment } from "../../../environments/environment";
 import {
   Asignacion,
@@ -105,6 +106,26 @@ export class DashboardAnalyticsComponent
   private surveySvc = inject(SurveyService);
   private companySvc = inject(CompanyService);
   private employeeSvc = inject(EmployeeService);
+  private auth = inject(AuthService);
+  private readonly role = this.auth.getRole();
+  private readonly empresaId = this.auth.getEmpresaId();
+  readonly isUser = this.role === "USUARIO";
+  readonly isAnalyst = this.role === "ANALISTA";
+  readonly isAdmin = this.role === "ADMIN" || this.role === "ADMIN_SISTEMA";
+  private availableScopes: DashboardScope[] = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
+  private readonly scopeLabels: Record<DashboardScope, string> = {
+    GLOBAL: "Global",
+    COMPANY: "Por empresa",
+    DEPARTMENT: "Por departamento",
+    EMPLOYEE: "Por empleado",
+  };
+
+  get scopeOptions(): Array<{ value: DashboardScope; label: string }> {
+    return this.availableScopes.map((value) => ({
+      value,
+      label: this.scopeLabels[value],
+    }));
+  }
   @ViewChildren(NgxEchartsDirective) charts!: QueryList<NgxEchartsDirective>;
 
   ///////////////////////////
@@ -588,14 +609,7 @@ export class DashboardAnalyticsComponent
   ///////////////////////////
 
   filterSummary(): string[] {
-    const scopeLabels: Record<DashboardScope, string> = {
-      GLOBAL: "Global",
-      COMPANY: "Por empresa",
-      DEPARTMENT: "Por departamento",
-      EMPLOYEE: "Por empleado",
-    };
-
-    const summary: string[] = [`Ambito: ${scopeLabels[this.scopeModel]}`];
+    const summary: string[] = [`Ambito: ${this.scopeLabels[this.scopeModel]}`];
 
     if (this.scopeModel !== "GLOBAL") {
       const company =
@@ -672,6 +686,12 @@ export class DashboardAnalyticsComponent
   }
 
   onScopeChange(): void {
+    if (!this.availableScopes.includes(this.scopeModel)) {
+      this.scopeModel = this.availableScopes[0];
+    }
+    if (this.isUser) {
+      this.scopeModel = "COMPANY";
+    }
     if (this.scopeModel === "GLOBAL") {
       this.selectedCompanyId = null;
       this.selectedDepartmentId = null;
@@ -690,6 +710,10 @@ export class DashboardAnalyticsComponent
   }
 
   onCompanyChange(companyId: number | null): void {
+    if (this.isUser) {
+      this.selectedCompanyId = this.empresaId ?? null;
+      companyId = this.selectedCompanyId;
+    }
     this.selectedDepartmentId = null;
     this.selectedEmployeeId = null;
     this.employeeSearch = "";
@@ -821,6 +845,26 @@ export class DashboardAnalyticsComponent
   // Lifecycle
   ///////////////////////////
 
+  private configureRoleContext(): void {
+    if (this.isUser) {
+      this.availableScopes = ["COMPANY"];
+      this.scopeModel = "COMPANY";
+      this.selectedCompanyId = this.empresaId ?? null;
+      this.selectedDepartmentId = null;
+      this.selectedEmployeeId = null;
+      if (this.empresaId == null) {
+        this.infoSignal.set("Tu usuario no tiene una empresa asociada. Contacta al administrador.");
+      }
+    } else if (this.isAnalyst) {
+      this.availableScopes = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
+      this.scopeModel = "GLOBAL";
+    } else {
+      this.availableScopes = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
+      this.scopeModel = "GLOBAL";
+    }
+    this.updateFilter();
+  }
+
   ngAfterViewInit(): void {
     setTimeout(() => this.resizeAllCharts(), 0);
   }
@@ -833,8 +877,8 @@ export class DashboardAnalyticsComponent
   }
 
   ngOnInit(): void {
+    this.configureRoleContext();
     this.loadCompanies();
-    this.refreshCurrentFilter();
     this.ensureCurrentUser().catch(() => void 0);
     this.ensureLogo().catch(() => void 0);
   }
@@ -979,7 +1023,24 @@ export class DashboardAnalyticsComponent
 
   private loadCompanies(): void {
     const sub = this.companySvc.list().subscribe({
-      next: (rows) => this.companiesSignal.set(rows ?? []),
+      next: (rows) => {
+        let companies = rows ?? [];
+        if (this.isUser) {
+          if (this.empresaId != null) {
+            companies = companies.filter((company) => company.id === this.empresaId);
+            this.selectedCompanyId = this.empresaId;
+          } else {
+            companies = [];
+          }
+          if (!companies.length && this.empresaId != null) {
+            this.infoSignal.set(
+              "No encontramos la empresa asociada a tu usuario. Contacta al administrador."
+            );
+          }
+          this.updateFilter();
+        }
+        this.companiesSignal.set(companies);
+      },
       error: () => {
         this.errorSignal.set("No pudimos cargar la lista de empresas.");
       },

@@ -1,4 +1,4 @@
-// src/app/role.guard.ts
+﻿// src/app/role.guard.ts
 import { inject } from '@angular/core';
 import {
   ActivatedRouteSnapshot,
@@ -22,27 +22,23 @@ export const roleGuard = (allowed: RolEnum[]): CanActivateFn => {
     const router = inject(Router);
     const auth = inject(AuthService);
 
-    // debe estar logueado
     if (!auth.isLoggedIn()) {
       return router.parseUrl('/login');
     }
 
-    const rol = auth.getRole(); // 'ADMIN_SISTEMA' | 'ADMIN' | 'ANALISTA' | 'USUARIO' | null
+    const rol = auth.getRole();
     if (!rol) {
       return router.parseUrl('/login');
     }
 
-    // acceso directo si el rol está permitido
+    if (rol === 'ADMIN' || rol === 'ADMIN_SISTEMA') {
+      return true;
+    }
+
     if (allowed.includes(rol)) {
       return true;
     }
 
-    // privilegio superior: ADMIN_SISTEMA puede pasar donde pidan ADMIN
-    if (rol === 'ADMIN_SISTEMA' && allowed.includes('ADMIN')) {
-      return true;
-    }
-
-    // si no cumple, lo mandamos al home
-    return router.parseUrl('/');
+    return router.parseUrl(auth.getDefaultRoute());
   };
 };

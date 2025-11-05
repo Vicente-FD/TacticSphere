@@ -1,4 +1,4 @@
-import { Routes } from '@angular/router';
+﻿import { Routes } from '@angular/router';
 import { authGuard } from './auth.guard';
 import { roleGuard } from './role.guard';
 import { RolEnum } from './types';
@@ -25,8 +25,22 @@ export const routes: Routes = [
     children: [
       {
         path: '',
+        pathMatch: 'full',
+        redirectTo: 'results',
+      },
+      {
+        path: 'results',
+        canActivate: [roleGuard(['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'] as RolEnum[])],
         loadComponent: () =>
-          import('./admin/home/home').then((m) => m.HomeComponent),
+          import('./admin/dashboard-analytics/dashboard-analytics').then(
+            (m) => m.DashboardAnalyticsComponent,
+          ),
+      },
+      {
+        path: 'survey',
+        canActivate: [roleGuard(['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA'] as RolEnum[])],
+        loadComponent: () =>
+          import('./survey/survey').then((m) => m.SurveyComponent),
       },
       {
         path: 'admin',
@@ -34,8 +48,15 @@ export const routes: Routes = [
         children: [
           {
             path: '',
+            pathMatch: 'full',
+            redirectTo: 'dashboards',
+          },
+          {
+            path: 'dashboards',
             loadComponent: () =>
-              import('./admin/home/home').then((m) => m.HomeComponent),
+              import('./admin/dashboard-analytics/dashboard-analytics').then(
+                (m) => m.DashboardAnalyticsComponent,
+              ),
           },
           {
             path: 'companies',
@@ -59,23 +80,11 @@ export const routes: Routes = [
               ),
           },
           {
-            path: 'dashboards',
-            loadComponent: () =>
-              import('./admin/dashboard-analytics/dashboard-analytics').then(
-                (m) => m.DashboardAnalyticsComponent,
-              ),
-          },
-          {
             path: 'users',
             loadComponent: () =>
               import('./admin/users/users').then((m) => m.UsersComponent),
           },
         ],
-      },
-      {
-        path: 'survey',
-        loadComponent: () =>
-          import('./survey/survey').then((m) => m.SurveyComponent),
       },
     ],
   },

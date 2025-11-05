@@ -1,4 +1,4 @@
-# app/main.py
+﻿# app/main.py
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +7,7 @@ from app.database import get_db
 import os, time
 import hashlib
 from datetime import datetime, timedelta  # usamos naive UTC para coherencia
-from pydantic import BaseModel  # ⬅️ para SimpleBeginRequest
+from pydantic import BaseModel  # â¬…ï¸ para SimpleBeginRequest
 from app import models, database
 from .database import Base, engine, get_db
 from .models import (
@@ -42,8 +42,8 @@ from .schemas import (
     LeadCreate,
     LeadRead,
 )
-from passlib.context import CryptContext  # ✅ agregado para bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")  # ✅ contexto para hash compatible con login
+from passlib.context import CryptContext  # âœ… agregado para bcrypt
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")  # âœ… contexto para hash compatible con login
 
 app = FastAPI(title="TacticSphere API")
 
@@ -71,25 +71,25 @@ def _routes():
 def __whoami():
     return {
         "file": __file__,
-        "cwd": os.getcwd__,  # mantenemos como en tu versión
+        "cwd": os.getcwd__,  # mantenemos como en tu versiÃ³n
         "app_id": id(app),
         "loaded_at": time.ctime(),
         "routes": [f"{sorted(r.methods)} {r.path}" for r in app.routes][:25],
     }
 
 # ======================================================
-# Helpers de autorización de empresa
+# Helpers de autorizaciÃ³n de empresa
 # ======================================================
 def _ensure_company_access(current: Usuario, target_empresa_id: Optional[int]):
-    """ADMIN_SISTEMA: acceso total. ADMIN: su empresa o recursos globales."""
-    if current.rol == RolEnum.ADMIN_SISTEMA:
+    """Valida el acceso a recursos ligados a empresa según rol."""
+    if current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ANALISTA, RolEnum.ADMIN):
         return
-    if target_empresa_id is None:
-        if current.rol == RolEnum.ADMIN:
+
+    if current.rol == RolEnum.USUARIO:
+        if current.empresa_id is not None and current.empresa_id == target_empresa_id:
             return
         raise HTTPException(status_code=403, detail="Permisos insuficientes")
-    if current.rol == RolEnum.ADMIN and current.empresa_id == target_empresa_id:
-        return
+
     raise HTTPException(status_code=403, detail="Permisos insuficientes")
 
 def _ensure_can_assign_role(current: Usuario, rol_objetivo: RolEnum):
@@ -103,15 +103,16 @@ def _ensure_can_assign_role(current: Usuario, rol_objetivo: RolEnum):
 def _ensure_assignment_access(db: Session, current: Usuario, asignacion_id: int) -> Asignacion:
     """
     Valida que el usuario pueda acceder a la asignación.
-    ADMIN_SISTEMA: acceso total.
-    ADMIN / otros: sólo si la asignación pertenece a su empresa.
+    ADMIN_SISTEMA / ADMIN / ANALISTA: acceso total.
+    USUARIO: sólo si la asignación pertenece a su empresa.
     """
     asg = crud.get_asignacion(db, asignacion_id)
     if not asg:
         raise HTTPException(status_code=404, detail="Asignación no encontrada")
-    if current.rol != RolEnum.ADMIN_SISTEMA:
-        if current.empresa_id is None or current.empresa_id != asg.empresa_id:
-            raise HTTPException(status_code=403, detail="No puedes acceder a esta asignación")
+    if current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN, RolEnum.ANALISTA):
+        return asg
+    if current.empresa_id is None or current.empresa_id != asg.empresa_id:
+        raise HTTPException(status_code=403, detail="No puedes acceder a esta asignación")
     return asg
 
 # ======================================================
@@ -119,9 +120,15 @@ def _ensure_assignment_access(db: Session, current: Usuario, asignacion_id: int)
 # ======================================================
 @app.post("/auth/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = crud.get_user_by_email(db, payload.email)
+    email_normalized = payload.email.strip().lower()
+    user = crud.get_user_by_email(db, email_normalized)
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
+    if not user.activo:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario desactivado, contacte al administrador",
+        )
     token = create_access_token({
         "sub": str(user.id),
         "rol": user.rol.value,
@@ -149,7 +156,7 @@ def seed_admin(db: Session = Depends(get_db)):
     return {"ok": True, "admin_id": admin.id}
 
 # ======================================================
-# CONSULTING LEADS (público)
+# CONSULTING LEADS (pÃºblico)
 # ======================================================
 @app.post("/consulting-leads", response_model=LeadRead, status_code=201)
 def create_consulting_lead_endpoint(payload: LeadCreate, db: Session = Depends(get_db)):
@@ -166,6 +173,24 @@ def list_consulting_leads_endpoint(
     db: Session = Depends(get_db),
 ):
     return crud.list_consulting_leads(db, limit=limit, offset=offset)
+
+@app.delete("/consulting-leads/{lead_id}", status_code=204)
+def delete_consulting_lead_endpoint(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles(RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN)),
+):
+    if not crud.delete_consulting_lead(db, lead_id):
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    return None
+
+@app.delete("/consulting-leads", status_code=204)
+def clear_consulting_leads_endpoint(
+    db: Session = Depends(get_db),
+    _admin=Depends(require_roles(RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN)),
+):
+    crud.clear_consulting_leads(db)
+    return None
 
 # ======================================================
 # EMPRESAS
@@ -257,7 +282,7 @@ def create_employee(
     if data.departamento_id:
         dep = db.get(Departamento, data.departamento_id)
         if not dep or dep.empresa_id != empresa_id:
-            raise HTTPException(status_code=400, detail="Departamento inválido para la empresa")
+            raise HTTPException(status_code=400, detail="Departamento invÃ¡lido para la empresa")
 
     return crud.create_empleado(
         db,
@@ -284,7 +309,7 @@ def update_employee(
     if data.departamento_id is not None:
         dep = db.get(Departamento, data.departamento_id)
         if not dep or dep.empresa_id != emp.empresa_id:
-            raise HTTPException(status_code=400, detail="Departamento inválido para la empresa")
+            raise HTTPException(status_code=400, detail="Departamento invÃ¡lido para la empresa")
 
     updated = crud.update_empleado(
         db,
@@ -378,7 +403,7 @@ def reset_password(
 
     if current.rol == RolEnum.ADMIN:
         if u.empresa_id != current.empresa_id:
-            raise HTTPException(status_code=403, detail="No puedes cambiar contraseña de otra empresa")
+            raise HTTPException(status_code=403, detail="No puedes cambiar contraseÃ±a de otra empresa")
     elif current.rol != RolEnum.ADMIN_SISTEMA:
         raise HTTPException(status_code=403, detail="Permisos insuficientes")
 
@@ -498,7 +523,7 @@ def create_question(
     _ensure_company_access(current, p.empresa_id)
 
     if data.tipo not in (TipoPreguntaEnum.LIKERT, TipoPreguntaEnum.ABIERTA, TipoPreguntaEnum.SI_NO):
-        raise HTTPException(status_code=400, detail="Tipo inválido")
+        raise HTTPException(status_code=400, detail="Tipo invÃ¡lido")
 
     return crud.create_pregunta(db, data.pilar_id, data.enunciado, data.tipo, data.es_obligatoria, data.peso)
 
@@ -602,13 +627,21 @@ def list_assignments(
     db: Session = Depends(get_db),
     current: Usuario = Depends(get_current_user),
 ):
-    # ADMIN ve solo su empresa; ADMIN_SISTEMA opcional filtra por query
-    if current.rol == RolEnum.ADMIN:
-        empresa_id = current.empresa_id
-    elif current.rol != RolEnum.ADMIN_SISTEMA:
+    effective_empresa_id = empresa_id
+    if current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ANALISTA):
+        pass
+    elif current.rol == RolEnum.ADMIN:
+        effective_empresa_id = empresa_id if empresa_id is not None else current.empresa_id
+    elif current.rol == RolEnum.USUARIO:
+        if current.empresa_id is None:
+            raise HTTPException(status_code=403, detail="Permisos insuficientes")
+        if empresa_id is not None and empresa_id != current.empresa_id:
+            raise HTTPException(status_code=403, detail="Permisos insuficientes")
+        effective_empresa_id = current.empresa_id
+    else:
         raise HTTPException(status_code=403, detail="Permisos insuficientes")
 
-    return crud.list_asignaciones(db, empresa_id=empresa_id)
+    return crud.list_asignaciones(db, empresa_id=effective_empresa_id)
 
 @app.get("/assignments/{asignacion_id}", response_model=AsignacionRead)
 def get_assignment(
@@ -619,7 +652,7 @@ def get_assignment(
     asg = _ensure_assignment_access(db, current, asignacion_id)
     return asg
 
-# Obtener (y opcionalmente crear) asignación vigente de una empresa
+# Obtener (y opcionalmente crear) asignaciÃ³n vigente de una empresa
 @app.get("/companies/{empresa_id}/assignments/active", response_model=Optional[AsignacionRead])
 def get_active_assignment_for_company(
     empresa_id: int,
@@ -645,15 +678,15 @@ def get_active_assignment_for_company(
 def seed_demo_survey(db: Session = Depends(get_db)):
     # Empresa
     empresas = crud.list_empresas(db)
-    emp = empresas[0] if empresas else crud.create_empresa(db, "DemoCo", None, None, ["Diseño", "TI"])
+    emp = empresas[0] if empresas else crud.create_empresa(db, "DemoCo", None, None, ["DiseÃ±o", "TI"])
 
     # Pilar
     pilares = crud.list_pilares(db, emp.id)
-    pil = pilares[0] if pilares else crud.create_pilar(db, emp.id, "Cultura", "Buenas prácticas", 1)
+    pil = pilares[0] if pilares else crud.create_pilar(db, emp.id, "Cultura", "Buenas prÃ¡cticas", 1)
 
     # Pregunta
     if not crud.list_preguntas(db, pil.id):
-        crud.create_pregunta(db, pil.id, "¿Recomendarías la empresa?", TipoPreguntaEnum.LIKERT, True, 1)
+        crud.create_pregunta(db, pil.id, "Â¿RecomendarÃ­as la empresa?", TipoPreguntaEnum.LIKERT, True, 1)
 
     # Cuestionario
     cuests = crud.list_cuestionarios(db, emp.id)
@@ -663,7 +696,7 @@ def seed_demo_survey(db: Session = Depends(get_db)):
     else:
         cuest = cuests[0]
 
-    # Asignación vigente — naive UTC para coherencia
+    # AsignaciÃ³n vigente â€” naive UTC para coherencia
     now = datetime.utcnow()
     fi = now - timedelta(hours=1)
     fc = now + timedelta(days=30)
@@ -676,10 +709,10 @@ def seed_demo_survey(db: Session = Depends(get_db)):
     return {"ok": True, "empresa_id": emp.id, "pilar_id": pil.id, "cuestionario_id": cuest.id, "asignacion_id": asg.id}
 
 # ======================================================
-# ENCUESTA — Pilares, Preguntas, Respuestas y Progreso
+# ENCUESTA â€” Pilares, Preguntas, Respuestas y Progreso
 # ======================================================
 
-# --- NUEVO: MODO SIMPLE (garantiza cuestionario+asignación automáticamente) ---
+# --- NUEVO: MODO SIMPLE (garantiza cuestionario+asignaciÃ³n automÃ¡ticamente) ---
 class SimpleBeginRequest(BaseModel):
     empresa_id: int
     anonimo: bool = False
@@ -691,14 +724,14 @@ def survey_simple_begin(
     current: Usuario = Depends(get_current_user),
 ):
     _ensure_company_access(current, data.empresa_id)
-    # Garantiza cuestionario publicado (auto) y asignación vigente (auto)
+    # Garantiza cuestionario publicado (auto) y asignaciÃ³n vigente (auto)
     try:
         asg = crud.get_or_create_auto_asignacion(db, empresa_id=data.empresa_id, anonimo=data.anonimo)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return SurveyBeginResponse(asignacion_id=asg.id)
 
-# --- Flujo clásico (requiere asignación existente) ---
+# --- Flujo clÃ¡sico (requiere asignaciÃ³n existente) ---
 @app.post("/survey/begin", response_model=SurveyBeginResponse)
 def survey_begin(
     data: SurveyBeginRequest,
@@ -708,7 +741,7 @@ def survey_begin(
     asg = _ensure_assignment_access(db, current, data.asignacion_id)
     # bloquear fuera de vigencia (naive UTC)
     if not crud.is_assignment_active(asg, now=datetime.utcnow()):
-        raise HTTPException(status_code=403, detail="Asignación fuera de vigencia")
+        raise HTTPException(status_code=403, detail="AsignaciÃ³n fuera de vigencia")
     return SurveyBeginResponse(asignacion_id=asg.id)
 
 @app.get("/survey/{asignacion_id}/progress", response_model=AssignmentProgress)
@@ -722,7 +755,7 @@ def survey_progress(
     pr = crud.compute_assignment_progress(db, asignacion_id, empleado_id)
     return AssignmentProgress(**pr)
 
-# lista pilares realmente presentes en el cuestionario de la asignación
+# lista pilares realmente presentes en el cuestionario de la asignaciÃ³n
 @app.get("/survey/{asignacion_id}/pillars", response_model=list[PilarRead])
 def survey_pillars(
     asignacion_id: int,
@@ -768,17 +801,17 @@ def survey_submit_answers(
 
     # bloquear fuera de vigencia (naive UTC)
     if not crud.is_assignment_active(asg, now=datetime.utcnow()):
-        raise HTTPException(status_code=403, detail="Asignación fuera de vigencia")
+        raise HTTPException(status_code=403, detail="AsignaciÃ³n fuera de vigencia")
 
-    # exigir empleado_id si NO es anónimo
+    # exigir empleado_id si NO es anÃ³nimo
     if not asg.anonimo and empleado_id is None:
-        raise HTTPException(status_code=400, detail="Se requiere empleado_id para esta asignación")
+        raise HTTPException(status_code=400, detail="Se requiere empleado_id para esta asignaciÃ³n")
 
     res = crud.submit_bulk_answers(db, asignacion_id, [a.model_dump() for a in payload.respuestas], empleado_id)
     return BulkAnswersResponse(ok=True, creadas=res.get("creadas", 0), actualizadas=res.get("actualizadas", 0))
 
 # ======================================================
-# ✅ Crear usuario simple (con bcrypt y RolEnum)
+# âœ… Crear usuario simple (con bcrypt y RolEnum)
 # ======================================================
 @app.post("/crear_usuario_simple")
 def crear_usuario_simple(
@@ -789,7 +822,7 @@ def crear_usuario_simple(
     db: Session = Depends(get_db)
 ):
     """
-    Crea un usuario directamente (sin autenticación, solo para pruebas)
+    Crea un usuario directamente (sin autenticaciÃ³n, solo para pruebas)
     - Hash con bcrypt (compatible con /auth/login)
     - Convierte 'rol' string a RolEnum
     """
@@ -800,7 +833,7 @@ def crear_usuario_simple(
     try:
         rol_enum = RolEnum[rol.upper()]
     except KeyError:
-        raise HTTPException(status_code=400, detail=f"Rol inválido: {rol}. Usa uno de: ADMIN_SISTEMA, ADMIN, ANALISTA, USUARIO")
+        raise HTTPException(status_code=400, detail=f"Rol invÃ¡lido: {rol}. Usa uno de: ADMIN_SISTEMA, ADMIN, ANALISTA, USUARIO")
 
     nuevo_usuario = models.Usuario(
         nombre=nombre,
@@ -815,8 +848,9 @@ def crear_usuario_simple(
     db.refresh(nuevo_usuario)
 
     return {
-        "mensaje": "✅ Usuario creado correctamente (bcrypt)",
+        "mensaje": "âœ… Usuario creado correctamente (bcrypt)",
         "id": nuevo_usuario.id,
         "email": nuevo_usuario.email,
         "rol": nuevo_usuario.rol
     }
+

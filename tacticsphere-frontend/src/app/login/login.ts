@@ -1,5 +1,5 @@
-import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+﻿import { Component, inject } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { finalize } from 'rxjs/operators';
@@ -9,7 +9,7 @@ import { AuthService } from '../auth.service';
 @Component({
   standalone: true,
   selector: 'app-login',
-  imports: [CommonModule, FormsModule, LucideAngularModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule, RouterLink],
   template: `
     <div class="ts-page flex min-h-screen items-center justify-center bg-neutral-100 py-16">
       <div class="w-full max-w-md space-y-6">
@@ -67,6 +67,10 @@ import { AuthService } from '../auth.service';
               <span>{{ loading ? 'Ingresando...' : 'Entrar' }}</span>
             </button>
 
+            <button type="button" class="ts-btn ts-btn--secondary w-full" routerLink="/home">
+              Volver al inicio
+            </button>
+
             <div
               *ngIf="error"
               class="flex items-start gap-2 rounded-md border border-error/20 bg-error/5 px-3 py-2 text-sm text-error"
@@ -95,12 +99,14 @@ export class LoginComponent {
   loading = false;
   error = '';
 
-  submit() {
+  submit(): void {
     this.error = '';
-    const email = this.email.trim();
+    const email = this.email.trim().toLowerCase();
     const password = this.password;
 
-    if (!email || !password || this.loading) return;
+    if (!email || !password || this.loading) {
+      return;
+    }
 
     this.loading = true;
 
@@ -108,10 +114,16 @@ export class LoginComponent {
       .login(email, password)
       .pipe(finalize(() => (this.loading = false)))
       .subscribe({
-        next: () => this.router.navigateByUrl('/'),
+        next: () => this.router.navigateByUrl(this.auth.getDefaultRoute() || '/results'),
         error: (e) => {
           console.error(e);
-          this.error = 'Credenciales inválidas';
+          if (e?.status === 403 && e.error?.detail) {
+            this.error = e.error.detail;
+          } else if (e?.status === 401) {
+            this.error = 'Credenciales inválidas';
+          } else {
+            this.error = 'No se pudo iniciar sesión. Inténtalo nuevamente.';
+          }
         },
       });
   }
