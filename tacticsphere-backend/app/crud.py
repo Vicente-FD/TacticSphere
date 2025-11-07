@@ -863,6 +863,15 @@ def export_audit_logs(
     )
     return db.scalars(stmt).all()
 
+
+def delete_audit_log(db: Session, log_id: int) -> bool:
+    record = db.get(AuditLog, log_id)
+    if not record:
+        return False
+    db.delete(record)
+    db.commit()
+    return True
+
 def compute_assignment_progress(
     db: Session,
     asignacion_id: int,

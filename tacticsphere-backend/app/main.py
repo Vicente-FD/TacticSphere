@@ -95,6 +95,8 @@ from .schemas import (
     LeadRead,
 
     AuditLogRead,
+    AuditDeleteRequest,
+    ReportExportRequest,
 
 )
 
@@ -1984,6 +1986,29 @@ def list_audit_logs(
     return logs
 
 
+@app.post("/audit/report-export", status_code=204)
+def log_report_export(
+    payload: ReportExportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    extra = {"report_type": payload.report_type}
+    if payload.notes:
+        extra["notes"] = payload.notes
+    audit_log(
+        db,
+        action=AuditActionEnum.REPORT_EXPORT,
+        current_user=current,
+        empresa_id=current.empresa_id,
+        entity_type="Report",
+        notes=f"Exportó dashboard {payload.report_type}",
+        extra=extra,
+        request=request,
+    )
+    return {"ok": True}
+
+
 
 @app.get("/audit/export")
 
@@ -2208,6 +2233,33 @@ def export_audit_logs(
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
 
     )
+
+
+@app.delete("/audit/{log_id}", status_code=204)
+def delete_audit_entry(
+    log_id: int,
+    payload: AuditDeleteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    if current.rol != RolEnum.ADMIN_SISTEMA:
+        raise HTTPException(status_code=403, detail="Solo ADMIN_SISTEMA puede eliminar auditorías")
+    if not verify_password(payload.password, current.password_hash):
+        raise HTTPException(status_code=403, detail="Contraseña inválida")
+    if not crud.delete_audit_log(db, log_id):
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    audit_log(
+        db,
+        action=AuditActionEnum.AUDIT_DELETE,
+        current_user=current,
+        empresa_id=current.empresa_id,
+        entity_type="AuditLog",
+        entity_id=log_id,
+        notes="Eliminó un registro de auditoría",
+        request=request,
+    )
+    return None
 
 
 # ======================================================

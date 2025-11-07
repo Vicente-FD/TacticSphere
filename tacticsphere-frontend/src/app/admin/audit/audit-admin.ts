@@ -6,6 +6,7 @@ import { LucideAngularModule } from 'lucide-angular';
 
 import { CompanyService } from '../../company.service';
 import { AuditService } from '../../services/audit.service';
+import { AuthService } from '../../auth.service';
 import { AuditLog, Empresa, RolEnum } from '../../types';
 
 type FilterValue = string | number | null;
@@ -104,6 +105,9 @@ type FilterValue = string | number | null;
           <div *ngIf="error" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
             {{ error }}
           </div>
+          <div *ngIf="message" class="rounded-md border border-success/30 bg-success/10 px-4 py-3 text-sm text-[#0b7a56]">
+            {{ message }}
+          </div>
 
           <div *ngIf="!loading && !logs.length" class="rounded-xl border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
             No se encontraron registros con los filtros actuales.
@@ -122,6 +126,7 @@ type FilterValue = string | number | null;
                   <th>Notas</th>
                   <th>IP</th>
                   <th>Ruta</th>
+                  <th *ngIf="isAdminSistema">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,6 +143,16 @@ type FilterValue = string | number | null;
                     <span class="text-neutral-400">{{ log.method }}</span>
                     <span class="ml-1">{{ log.path }}</span>
                   </td>
+                  <td *ngIf="isAdminSistema">
+                    <button
+                      type="button"
+                      class="ts-btn ts-btn--danger text-xs"
+                      (click)="deleteLog(log)"
+                      [disabled]="deletingId === log.id"
+                    >
+                      {{ deletingId === log.id ? 'Eliminando...' : 'Eliminar' }}
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -150,6 +165,7 @@ type FilterValue = string | number | null;
 export class AuditAdminComponent implements OnInit {
   private audit = inject(AuditService);
   private companiesApi = inject(CompanyService);
+  private auth = inject(AuthService);
 
   companies: Empresa[] = [];
   logs: AuditLog[] = [];
@@ -157,6 +173,9 @@ export class AuditAdminComponent implements OnInit {
   loading = false;
   exporting = false;
   error = '';
+  message = '';
+  deletingId: number | null = null;
+  readonly isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
 
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
   auditActions: string[] = [
@@ -180,6 +199,7 @@ export class AuditAdminComponent implements OnInit {
     'SURVEY_ANSWER_BULK',
     'REPORT_EXPORT',
     'AUDIT_EXPORT',
+    'AUDIT_DELETE',
   ];
 
   filters: {
@@ -239,9 +259,12 @@ export class AuditAdminComponent implements OnInit {
     });
   }
 
-  private loadLogs(): void {
+  private loadLogs(preserveMessage = false): void {
     this.loading = true;
     this.error = '';
+    if (!preserveMessage) {
+      this.message = '';
+    }
     this.audit
       .list(this.serializeFilters())
       .pipe(finalize(() => (this.loading = false)))
@@ -273,6 +296,32 @@ export class AuditAdminComponent implements OnInit {
         error: (err) => {
           console.error('Error exportando auditoría', err);
           this.error = err?.error?.detail ?? 'No fue posible exportar el registro.';
+        },
+      });
+  }
+
+  deleteLog(log: AuditLog): void {
+    if (!this.isAdminSistema) {
+      return;
+    }
+    const password = prompt(`Ingresa tu contraseña para eliminar el registro #${log.id}:`);
+    if (!password) {
+      return;
+    }
+    this.error = '';
+    this.message = '';
+    this.deletingId = log.id;
+    this.audit
+      .deleteLog(log.id, password)
+      .pipe(finalize(() => (this.deletingId = null)))
+      .subscribe({
+        next: () => {
+          this.message = 'Registro eliminado correctamente.';
+          this.loadLogs(true);
+        },
+        error: (err) => {
+          console.error('Error eliminando auditoría', err);
+          this.error = err?.error?.detail ?? 'No fue posible eliminar el registro.';
         },
       });
   }

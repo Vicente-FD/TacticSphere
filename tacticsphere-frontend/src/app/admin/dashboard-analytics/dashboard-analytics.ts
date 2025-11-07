@@ -28,6 +28,7 @@ import { CompanyService } from "../../company.service";
 import { EmployeeService } from "../../employee.service";
 import { SurveyService } from "../../survey.service";
 import { AuthService } from "../../auth.service";
+import { AuditService } from "../../services/audit.service";
 import { environment } from "../../../environments/environment";
 import {
   Asignacion,
@@ -107,6 +108,7 @@ export class DashboardAnalyticsComponent
   private companySvc = inject(CompanyService);
   private employeeSvc = inject(EmployeeService);
   private auth = inject(AuthService);
+  private auditSvc = inject(AuditService);
   private readonly role = this.auth.getRole();
   private readonly empresaId = this.auth.getEmpresaId();
   readonly isUser = this.role === "USUARIO";
@@ -816,6 +818,11 @@ export class DashboardAnalyticsComponent
 
       pdf.addImage(imgData, "PNG", 15, contentTop, drawWidth, drawHeight);
       pdf.save("tacticsphere-analytics.pdf");
+      try {
+        await firstValueFrom(this.auditSvc.logReportExport("dashboard-analytics"));
+      } catch (logErr) {
+        console.error("No se pudo registrar la auditoría de exportación", logErr);
+      }
     } catch (err) {
       console.error("Error exportando PDF analitico", err);
       this.errorSignal.set("No pudimos generar el PDF. Intenta nuevamente.");

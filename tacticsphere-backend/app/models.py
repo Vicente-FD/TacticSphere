@@ -63,6 +63,7 @@ class AuditActionEnum(str, Enum):
     REPORT_EXPORT = "REPORT_EXPORT"
     SETTINGS_CHANGE = "SETTINGS_CHANGE"
     AUDIT_EXPORT = "AUDIT_EXPORT"
+    AUDIT_DELETE = "AUDIT_DELETE"
 # -----------------------------
 # Empresa / Departamento / Empleado
 # -----------------------------

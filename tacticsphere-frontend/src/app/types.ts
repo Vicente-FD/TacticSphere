@@ -289,7 +289,8 @@ export type AuditAction =
   | 'SURVEY_ANSWER_BULK'
   | 'REPORT_EXPORT'
   | 'SETTINGS_CHANGE'
-  | 'AUDIT_EXPORT';
+  | 'AUDIT_EXPORT'
+  | 'AUDIT_DELETE';
 
 export interface AuditLog {
   id: number;

@@ -348,3 +348,12 @@ class AuditLogRead(BaseModel):
     extra: Optional[Dict] = None
     model_config = ConfigDict(from_attributes=True)
 
+
+class AuditDeleteRequest(BaseModel):
+    password: str
+
+
+class ReportExportRequest(BaseModel):
+    report_type: str
+    notes: Optional[str] = None
+

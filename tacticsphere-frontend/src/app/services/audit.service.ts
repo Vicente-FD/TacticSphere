@@ -25,6 +25,18 @@ export class AuditService {
     });
   }
 
+  logReportExport(reportType: string, notes?: string) {
+    const body: Record<string, string> = { report_type: reportType };
+    if (notes) body['notes'] = notes;
+    return this.http.post<{ ok: boolean }>(`${this.base}/audit/report-export`, body);
+  }
+
+  deleteLog(id: number, password: string) {
+    return this.http.request<void>('DELETE', `${this.base}/audit/${id}`, {
+      body: { password },
+    });
+  }
+
   private toParams(filters: AuditFilters): HttpParams {
     let params = new HttpParams();
     Object.entries(filters ?? {}).forEach(([key, value]) => {
