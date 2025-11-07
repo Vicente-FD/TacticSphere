@@ -20,6 +20,8 @@ from . import crud
 from .schemas import (
     # Auth
     LoginRequest, TokenResponse,
+    PasswordForgotRequest, PasswordForgotResponse,
+    PasswordResetConfirm, PasswordResetResponse,
     # Empresa / Depto
     EmpresaCreate, EmpresaRead,
     DepartamentoCreate, DepartamentoRead,
@@ -140,19 +142,46 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 def me(current: Usuario = Depends(get_current_user)):
     return current
 
+@app.post("/auth/password/forgot", response_model=PasswordForgotResponse)
+def forgot_password(payload: PasswordForgotRequest, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    user = crud.get_user_by_email(db, email)
+    if not user or not user.activo:
+        # Para evitar enumeración no revelamos estado
+        return PasswordForgotResponse(reset_token=None)
+    token, _ = crud.create_password_reset_token(db, user.id)
+    return PasswordForgotResponse(reset_token=token)
+
+@app.post("/auth/password/reset", response_model=PasswordResetResponse)
+def reset_password_with_token(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    token_record = crud.get_valid_password_reset_token(db, payload.token)
+    if not token_record:
+        raise HTTPException(status_code=400, detail="Token inv�lido o expirado")
+    try:
+        user = crud.set_password(db, token_record.user_id, payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    crud.mark_password_reset_token_used(db, token_record)
+    return PasswordResetResponse(ok=True)
+
 # Seed admin (solo dev)
 @app.post("/dev/seed-admin")
 def seed_admin(db: Session = Depends(get_db)):
     if crud.get_user_by_email(db, "admin@tacticsphere.com"):
         return {"ok": True, "msg": "admin ya existe"}
-    admin = crud.create_usuario(
-        db,
-        nombre="Admin Sistema",
-        email="admin@tacticsphere.com",
-        password="Admin123456!",
-        rol=RolEnum.ADMIN_SISTEMA,
-        empresa_id=None,
-    )
+    try:
+        admin = crud.create_usuario(
+            db,
+            nombre="Admin Sistema",
+            email="admin@tacticsphere.com",
+            password="Admin123456!",
+            rol=RolEnum.ADMIN_SISTEMA,
+            empresa_id=None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "admin_id": admin.id}
 
 # ======================================================
@@ -355,7 +384,10 @@ def create_user(
 
     if crud.get_user_by_email(db, data.email):
         raise HTTPException(status_code=400, detail="Email ya en uso")
-    return crud.create_usuario(db, data.nombre, data.email, data.password, data.rol, target_empresa_id)
+    try:
+        return crud.create_usuario(db, data.nombre, data.email, data.password, data.rol, target_empresa_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @app.patch("/users/{user_id}", response_model=UsuarioRead)
 def update_user(
@@ -407,7 +439,10 @@ def reset_password(
     elif current.rol != RolEnum.ADMIN_SISTEMA:
         raise HTTPException(status_code=403, detail="Permisos insuficientes")
 
-    u = crud.set_password(db, user_id, data.new_password)
+    try:
+        u = crud.set_password(db, user_id, data.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if not u:
         raise HTTPException(status_code=404, detail="Not Found")
     return u

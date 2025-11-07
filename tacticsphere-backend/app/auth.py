@@ -16,6 +16,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 SECRET_KEY = os.getenv("JWT_SECRET", "change-me")
 ALGORITHM = os.getenv("JWT_ALG", "HS256")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+MIN_PASSWORD_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
+
+def validate_password(password: str) -> None:
+    if password is None:
+        raise ValueError("La contraseña no puede estar vacía")
+    if len(password.strip()) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres.")
 
 def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)

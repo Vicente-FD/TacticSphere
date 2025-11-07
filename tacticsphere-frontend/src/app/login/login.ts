@@ -63,6 +63,12 @@ import { AuthService } from '../auth.service';
               </div>
             </label>
 
+            <div class="flex justify-end">
+              <a class="text-sm font-medium text-accent hover:text-accent/80" routerLink="/password/recuperar">
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
+
             <button type="submit" class="ts-btn w-full" [disabled]="loading || !email || !password">
               <span>{{ loading ? 'Ingresando...' : 'Entrar' }}</span>
             </button>

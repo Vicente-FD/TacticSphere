@@ -10,6 +10,10 @@ interface TokenResponse {
   token_type: string;
 }
 
+interface ForgotPasswordResponse {
+  reset_token: string | null;
+}
+
 type AuthStorage = {
   token?: string;
   rol?: RolEnum;
@@ -106,6 +110,19 @@ export class AuthService {
 
   isLoggedIn(): boolean {
     return !!this.getToken();
+  }
+
+  forgotPassword(email: string) {
+    return this.http.post<ForgotPasswordResponse>(`${environment.apiUrl}/auth/password/forgot`, {
+      email,
+    });
+  }
+
+  resetPassword(token: string, newPassword: string) {
+    return this.http.post<{ ok: boolean }>(`${environment.apiUrl}/auth/password/reset`, {
+      token,
+      new_password: newPassword,
+    });
   }
 
   // Storage helpers

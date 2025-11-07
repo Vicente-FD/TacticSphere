@@ -98,8 +98,9 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                     <input
                       class="ts-input"
                       [(ngModel)]="form.password"
-                      placeholder="•••••••"
+                      placeholder="Minimo 10 caracteres"
                       type="password"
+                      minlength=\"10\"
                     />
                   </label>
                   <label class="block space-y-2">
@@ -310,7 +311,8 @@ export class UsersComponent implements OnInit {
 
   isValidForm(): boolean {
     const f = this.form;
-    return Boolean(f.nombre.trim() && f.email.trim() && f.password.trim());
+    const pwd = f.password?.trim() ?? '';
+    return Boolean(f.nombre.trim() && f.email.trim() && pwd.length >= 10);
   }
 
   createUser(): void {

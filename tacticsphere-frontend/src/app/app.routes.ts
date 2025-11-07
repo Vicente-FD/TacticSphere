@@ -18,6 +18,10 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login').then((m) => m.LoginComponent),
   },
   {
+    path: 'password/recuperar',
+    loadComponent: () => import('./login/forgot-password').then((m) => m.ForgotPasswordComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () =>

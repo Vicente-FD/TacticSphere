@@ -1,9 +1,11 @@
 from typing import List, Optional, Dict, Tuple, Iterable
 from datetime import datetime, timedelta, timezone  # usamos naive UTC
+import secrets
+import hashlib
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_, or_
 
-from .auth import hash_password
+from .auth import hash_password, validate_password
 from .models import (
     Usuario,
     Empresa,
@@ -18,6 +20,7 @@ from .models import (
     ConsultingLead,
     RolEnum,
     TipoPreguntaEnum,
+    PasswordResetToken,
 )
 
 # ======================================================
@@ -35,6 +38,7 @@ def list_usuarios(db: Session, empresa_id: Optional[int] = None) -> List[Usuario
     return db.scalars(stmt).all()
 
 def create_usuario(db: Session, nombre: str, email: str, password: str, rol: RolEnum, empresa_id: Optional[int]):
+    validate_password(password)
     user = Usuario(
         nombre=nombre,
         email=email.lower(),
@@ -84,10 +88,59 @@ def set_password(db: Session, user_id: int, new_password: str) -> Optional[Usuar
     u = db.get(Usuario, user_id)
     if not u:
         return None
+    validate_password(new_password)
     u.password_hash = hash_password(new_password)
     db.commit()
     db.refresh(u)
     return u
+
+
+def create_password_reset_token(
+    db: Session,
+    user_id: int,
+    expires_minutes: int = 30,
+) -> Tuple[str, PasswordResetToken]:
+    # invalida tokens previos sin usar
+    existing = db.scalars(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user_id,
+            PasswordResetToken.used.is_(False),
+        )
+    ).all()
+    for token in existing:
+        token.used = True
+
+    plain_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
+
+    record = PasswordResetToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        used=False,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return plain_token, record
+
+
+def get_valid_password_reset_token(db: Session, plain_token: str) -> Optional[PasswordResetToken]:
+    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+    record = db.scalars(
+        select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+    ).first()
+    if not record or record.used:
+        return None
+    if record.expires_at < datetime.utcnow():
+        return None
+    return record
+
+
+def mark_password_reset_token_used(db: Session, record: PasswordResetToken) -> None:
+    record.used = True
+    db.commit()
 
 # ======================================================
 # EMPRESAS

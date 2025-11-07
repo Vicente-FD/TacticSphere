@@ -47,10 +47,23 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class PasswordForgotRequest(BaseModel):
+    email: EmailStr
+
+class PasswordForgotResponse(BaseModel):
+    reset_token: Optional[str] = None
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(min_length=10)
+
+class PasswordResetResponse(BaseModel):
+    ok: bool = True
+
 class UsuarioCreate(BaseModel):
     nombre: str
     email: str
-    password: str
+    password: str = Field(min_length=10)
     rol: RolEnum
     empresa_id: Optional[int] = None
 
@@ -63,7 +76,7 @@ class UsuarioUpdate(BaseModel):
     activo: Optional[bool] = None
 
 class UsuarioPasswordReset(BaseModel):
-    new_password: str
+    new_password: str = Field(min_length=10)
 
 class UsuarioRead(BaseModel):
     id: int
