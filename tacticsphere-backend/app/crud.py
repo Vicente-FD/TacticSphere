@@ -21,6 +21,8 @@ from .models import (
     RolEnum,
     TipoPreguntaEnum,
     PasswordResetToken,
+    AuditLog,
+    AuditActionEnum,
 )
 
 # ======================================================
@@ -750,6 +752,116 @@ def submit_bulk_answers(
 
     db.commit()
     return {"creadas": creadas, "actualizadas": actualizadas}
+
+
+# ======================================================
+# AUDITORÍA
+# ======================================================
+def _build_audit_query(
+    *,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    empresa_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    user_email: Optional[str] = None,
+    user_role: Optional[str] = None,
+    action: Optional[AuditActionEnum] = None,
+    entity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    scope_empresa_id: Optional[int] = None,
+):
+    stmt = select(AuditLog)
+    if scope_empresa_id is not None:
+        stmt = stmt.where(AuditLog.empresa_id == scope_empresa_id)
+    if empresa_id is not None:
+        stmt = stmt.where(AuditLog.empresa_id == empresa_id)
+    if user_id is not None:
+        stmt = stmt.where(AuditLog.user_id == user_id)
+    if user_email:
+        pattern = f"%{user_email.lower()}%"
+        stmt = stmt.where(func.lower(AuditLog.user_email).like(pattern))
+    if user_role:
+        stmt = stmt.where(AuditLog.user_role == user_role)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    if entity_type:
+        stmt = stmt.where(func.lower(AuditLog.entity_type) == entity_type.lower())
+    if date_from:
+        stmt = stmt.where(AuditLog.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(AuditLog.created_at <= date_to)
+    if search:
+        pattern = f"%{search.lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(AuditLog.notes).like(pattern),
+                func.lower(AuditLog.user_email).like(pattern),
+                func.lower(AuditLog.entity_type).like(pattern),
+                func.lower(AuditLog.path).like(pattern),
+            )
+        )
+    return stmt.order_by(AuditLog.created_at.desc())
+
+
+def list_audit_logs(
+    db: Session,
+    *,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    empresa_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    user_email: Optional[str] = None,
+    user_role: Optional[str] = None,
+    action: Optional[AuditActionEnum] = None,
+    entity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    scope_empresa_id: Optional[int] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> List[AuditLog]:
+    stmt = _build_audit_query(
+        date_from=date_from,
+        date_to=date_to,
+        empresa_id=empresa_id,
+        user_id=user_id,
+        user_email=user_email,
+        user_role=user_role,
+        action=action,
+        entity_type=entity_type,
+        search=search,
+        scope_empresa_id=scope_empresa_id,
+    )
+    stmt = stmt.offset(offset).limit(limit)
+    return db.scalars(stmt).all()
+
+
+def export_audit_logs(
+    db: Session,
+    *,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    empresa_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    user_email: Optional[str] = None,
+    user_role: Optional[str] = None,
+    action: Optional[AuditActionEnum] = None,
+    entity_type: Optional[str] = None,
+    search: Optional[str] = None,
+    scope_empresa_id: Optional[int] = None,
+) -> List[AuditLog]:
+    stmt = _build_audit_query(
+        date_from=date_from,
+        date_to=date_to,
+        empresa_id=empresa_id,
+        user_id=user_id,
+        user_email=user_email,
+        user_role=user_role,
+        action=action,
+        entity_type=entity_type,
+        search=search,
+        scope_empresa_id=scope_empresa_id,
+    )
+    return db.scalars(stmt).all()
 
 def compute_assignment_progress(
     db: Session,

@@ -68,6 +68,13 @@ import { AuthService } from '../../auth.service';
               >Usuarios</a
             >
             <a
+              *ngIf="isAdminSistema"
+              class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
+              routerLink="/admin/auditoria"
+              routerLinkActive="bg-[#f6f6f6] text-ink"
+              >Registro de auditoría</a
+            >
+            <a
               *ngIf="canSeeSurvey"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/survey"
@@ -103,6 +110,7 @@ export class ShellComponent {
   readonly currentYear = new Date().getFullYear();
   readonly canManageAdmin = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA']);
   readonly canSeeSurvey = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA', 'ANALISTA']);
+  readonly isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
   readonly defaultRoute = this.auth.getDefaultRoute() || '/results';
 
   logout(): void {

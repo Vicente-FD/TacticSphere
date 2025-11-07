@@ -1,10 +1,10 @@
 # app/schemas.py
 from __future__ import annotations
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator, EmailStr
 
-from .models import RolEnum, TipoPreguntaEnum
+from .models import RolEnum, TipoPreguntaEnum, AuditActionEnum
 
 # ======================================================
 # BÁSICOS
@@ -326,3 +326,25 @@ class AssignmentProgress(BaseModel):
     progreso: float       # 0..1 (puntaje global)
     completion: float     # 0..1 (participación global)
     por_pilar: List[PillarProgress]
+
+
+class AuditLogRead(BaseModel):
+    id: int
+    created_at: datetime
+    user_id: Optional[int] = None
+    user_email: Optional[str] = None
+    user_role: Optional[RolEnum] = None
+    empresa_id: Optional[int] = None
+    action: AuditActionEnum
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    notes: Optional[str] = None
+    ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    method: Optional[str] = None
+    path: Optional[str] = None
+    diff_before: Optional[Dict] = None
+    diff_after: Optional[Dict] = None
+    extra: Optional[Dict] = None
+    model_config = ConfigDict(from_attributes=True)
+

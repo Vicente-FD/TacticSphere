@@ -1,6 +1,7 @@
 ﻿import { Routes } from '@angular/router';
 import { authGuard } from './auth.guard';
 import { roleGuard } from './role.guard';
+import { adminSistemaGuard } from './admin-sistema.guard';
 import { RolEnum } from './types';
 
 export const routes: Routes = [
@@ -87,6 +88,14 @@ export const routes: Routes = [
             path: 'users',
             loadComponent: () =>
               import('./admin/users/users').then((m) => m.UsersComponent),
+          },
+          {
+            path: 'auditoria',
+            canActivate: [adminSistemaGuard],
+            loadComponent: () =>
+              import('./admin/audit/audit-admin').then(
+                (m) => m.AuditAdminComponent,
+              ),
           },
         ],
       },

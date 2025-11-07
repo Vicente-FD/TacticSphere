@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import (
     Integer, String, Boolean, Enum as SAEnum, ForeignKey,
-    Text, DateTime, UniqueConstraint, Index
+    Text, DateTime, UniqueConstraint, Index, JSON
 )
 
 from .database import Base
@@ -33,6 +33,36 @@ class SemaforoEnum(str, Enum):
     AMARILLO = "AMARILLO"
     VERDE = "VERDE"
 
+
+class AuditActionEnum(str, Enum):
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    USER_CREATE = "USER_CREATE"
+    USER_UPDATE = "USER_UPDATE"
+    USER_DELETE = "USER_DELETE"
+    USER_PASSWORD_RESET = "USER_PASSWORD_RESET"
+    COMPANY_CREATE = "COMPANY_CREATE"
+    COMPANY_UPDATE = "COMPANY_UPDATE"
+    COMPANY_DELETE = "COMPANY_DELETE"
+    DEPARTMENT_CREATE = "DEPARTMENT_CREATE"
+    DEPARTMENT_UPDATE = "DEPARTMENT_UPDATE"
+    DEPARTMENT_DELETE = "DEPARTMENT_DELETE"
+    EMPLOYEE_CREATE = "EMPLOYEE_CREATE"
+    EMPLOYEE_UPDATE = "EMPLOYEE_UPDATE"
+    EMPLOYEE_DELETE = "EMPLOYEE_DELETE"
+    PILLAR_CREATE = "PILLAR_CREATE"
+    PILLAR_UPDATE = "PILLAR_UPDATE"
+    PILLAR_DELETE = "PILLAR_DELETE"
+    QUESTION_CREATE = "QUESTION_CREATE"
+    QUESTION_UPDATE = "QUESTION_UPDATE"
+    QUESTION_DELETE = "QUESTION_DELETE"
+    ASSIGNMENT_CREATE = "ASSIGNMENT_CREATE"
+    ASSIGNMENT_UPDATE = "ASSIGNMENT_UPDATE"
+    ASSIGNMENT_DELETE = "ASSIGNMENT_DELETE"
+    SURVEY_ANSWER_BULK = "SURVEY_ANSWER_BULK"
+    REPORT_EXPORT = "REPORT_EXPORT"
+    SETTINGS_CHANGE = "SETTINGS_CHANGE"
+    AUDIT_EXPORT = "AUDIT_EXPORT"
 # -----------------------------
 # Empresa / Departamento / Empleado
 # -----------------------------
@@ -326,6 +356,7 @@ class Usuario(Base):
     reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(
         "PasswordResetToken", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
+    audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="user")
 
 
 class PasswordResetToken(Base):
@@ -341,3 +372,31 @@ class PasswordResetToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     user: Mapped["Usuario"] = relationship("Usuario", back_populates="reset_tokens")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    user_role: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    empresa_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    action: Mapped[AuditActionEnum] = mapped_column(
+        SAEnum(AuditActionEnum, name="audit_action_enum"), nullable=False, index=True
+    )
+    entity_type: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    path: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    method: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    diff_before: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    diff_after: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    user: Mapped[Optional["Usuario"]] = relationship("Usuario", back_populates="audit_logs")

@@ -260,3 +260,48 @@ export interface Lead {
   email: string;
   created_at: string; // ISO
 }
+
+export type AuditAction =
+  | 'LOGIN'
+  | 'LOGOUT'
+  | 'USER_CREATE'
+  | 'USER_UPDATE'
+  | 'USER_DELETE'
+  | 'USER_PASSWORD_RESET'
+  | 'COMPANY_CREATE'
+  | 'COMPANY_UPDATE'
+  | 'COMPANY_DELETE'
+  | 'DEPARTMENT_CREATE'
+  | 'DEPARTMENT_UPDATE'
+  | 'DEPARTMENT_DELETE'
+  | 'EMPLOYEE_CREATE'
+  | 'EMPLOYEE_UPDATE'
+  | 'EMPLOYEE_DELETE'
+  | 'PILLAR_CREATE'
+  | 'PILLAR_UPDATE'
+  | 'PILLAR_DELETE'
+  | 'QUESTION_CREATE'
+  | 'QUESTION_UPDATE'
+  | 'QUESTION_DELETE'
+  | 'ASSIGNMENT_CREATE'
+  | 'ASSIGNMENT_UPDATE'
+  | 'ASSIGNMENT_DELETE'
+  | 'SURVEY_ANSWER_BULK'
+  | 'REPORT_EXPORT'
+  | 'SETTINGS_CHANGE'
+  | 'AUDIT_EXPORT';
+
+export interface AuditLog {
+  id: number;
+  created_at: string;
+  empresa_id?: number | null;
+  user_email?: string | null;
+  user_role?: RolEnum | string | null;
+  action: AuditAction | string;
+  entity_type?: string | null;
+  entity_id?: number | null;
+  notes?: string | null;
+  ip?: string | null;
+  method?: string | null;
+  path?: string | null;
+}
