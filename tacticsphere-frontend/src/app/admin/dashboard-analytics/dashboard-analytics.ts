@@ -180,6 +180,7 @@ export class DashboardAnalyticsComponent
   selectedEmployeeId: number | null = null;
   selectedPillar: number | "ALL" = "ALL";
   employeeSearch = "";
+  showFilters = false;
   private didInitialResize = false;
 
   ///////////////////////////
@@ -753,6 +754,10 @@ export class DashboardAnalyticsComponent
 
   onEmployeeSearchChange(term: string): void {
     this.employeeSearch = term ?? "";
+  }
+
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
   }
 
   refreshCurrentFilter(): void {

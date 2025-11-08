@@ -19,7 +19,24 @@
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" class="ts-btn ts-btn--ghost" (click)="toggleFilters()">
+          {{ showFilters ? 'Ocultar filtros' : 'Mostrar filtros' }}
+        </button>
+        <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
+          Actualizar datos
+        </button>
+        <button
+          class="ts-btn"
+          type="button"
+          (click)="exportPdf()"
+          [disabled]="loading() || exporting() || !insights().length"
+        >
+          {{ exporting() ? "Generando PDF..." : "Exportar PDF" }}
+        </button>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5" *ngIf="showFilters">
         <label class="block space-y-2" *ngIf="scopeOptions.length">
           <span class="ts-label">Ambito</span>
           <select
@@ -81,20 +98,6 @@
             (ngModelChange)="onEmployeeSearchChange($event)"
           />
         </label>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-3">
-        <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
-          Actualizar datos
-        </button>
-        <button
-          class="ts-btn"
-          type="button"
-          (click)="exportPdf()"
-          [disabled]="loading() || exporting() || !insights().length"
-        >
-          {{ exporting() ? "Generando PDF..." : "Exportar PDF" }}
-        </button>
       </div>
 
       <div *ngIf="info()" class="rounded-2xl border border-border bg-[#f6f6f6] px-4 py-3 text-sm text-muted">
