@@ -11,7 +11,7 @@ interface TokenResponse {
 }
 
 interface ForgotPasswordResponse {
-  reset_token: string | null;
+  ok: boolean;
 }
 
 type AuthStorage = {
@@ -115,13 +115,6 @@ export class AuthService {
   forgotPassword(email: string) {
     return this.http.post<ForgotPasswordResponse>(`${environment.apiUrl}/auth/password/forgot`, {
       email,
-    });
-  }
-
-  resetPassword(token: string, newPassword: string) {
-    return this.http.post<{ ok: boolean }>(`${environment.apiUrl}/auth/password/reset`, {
-      token,
-      new_password: newPassword,
     });
   }
 

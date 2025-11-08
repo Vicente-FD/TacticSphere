@@ -8,6 +8,8 @@ import {
   Usuario,
   UsuarioCreate,
   UsuarioUpdate,
+  UsuarioPasswordReset,
+  PasswordChangeRequest,
 } from './types';
 
 @Injectable({ providedIn: 'root' })
@@ -58,10 +60,14 @@ export class UserService {
    * Cambia la contraseña del usuario.
    * POST /users/{id}/password  { new_password }
    */
-  setPassword(id: number, newPassword: string): Observable<Usuario> {
-    return this.http.post<Usuario>(`${this.base}/users/${id}/password`, {
+  setPassword(id: number, newPassword: string, requestId?: number | null): Observable<Usuario> {
+    const payload: UsuarioPasswordReset = {
       new_password: newPassword,
-    });
+    };
+    if (requestId != null) {
+      payload.request_id = requestId;
+    }
+    return this.http.post<Usuario>(`${this.base}/users/${id}/password`, payload);
   }
 
   /**
@@ -69,5 +75,16 @@ export class UserService {
    */
   toggleActive(u: Usuario): Observable<Usuario> {
     return this.update(u.id, { activo: !u.activo });
+  }
+
+  /**
+   * Lista las solicitudes de cambio de contraseña (solo Admin Sistema).
+   */
+  listPasswordChangeRequests(includeResolved = false): Observable<PasswordChangeRequest[]> {
+    if (includeResolved) {
+      const params = new HttpParams().set('include_resolved', 'true');
+      return this.http.get<PasswordChangeRequest[]>(`${this.base}/password-change-requests`, { params });
+    }
+    return this.http.get<PasswordChangeRequest[]>(`${this.base}/password-change-requests`);
   }
 }

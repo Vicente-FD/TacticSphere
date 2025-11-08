@@ -23,18 +23,24 @@ type FilterValue = string | number | null;
             <h1 class="ts-title">Registro de auditoría</h1>
             <p class="ts-subtitle">Monitorea las acciones clave realizadas dentro de la plataforma.</p>
           </div>
-          <button
-            type="button"
-            class="ts-btn ts-btn--positive"
-            (click)="exportCsv()"
-            [disabled]="exporting || loading"
-          >
-            <lucide-icon name="Download" class="h-4 w-4"></lucide-icon>
-            {{ exporting ? 'Exportando...' : 'Exportar CSV' }}
-          </button>
+          <div class="flex flex-wrap gap-3">
+            <button type="button" class="ts-btn ts-btn--ghost gap-2" (click)="toggleFilters()">
+              <lucide-icon name="SlidersHorizontal" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+              <span>{{ showFilters ? 'Ocultar filtros' : 'Mostrar filtros' }}</span>
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--positive"
+              (click)="exportCsv()"
+              [disabled]="exporting || loading"
+            >
+              <lucide-icon name="Download" class="h-4 w-4"></lucide-icon>
+              {{ exporting ? 'Exportando...' : 'Exportar CSV' }}
+            </button>
+          </div>
         </div>
 
-        <div class="ts-card space-y-4">
+        <div class="ts-card space-y-4" *ngIf="showFilters">
           <form class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" (ngSubmit)="applyFilters()">
             <label class="space-y-2">
               <span class="ts-label">Fecha desde</span>
@@ -175,6 +181,7 @@ export class AuditAdminComponent implements OnInit {
   error = '';
   message = '';
   deletingId: number | null = null;
+  showFilters = false;
   readonly isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
 
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
@@ -227,6 +234,10 @@ export class AuditAdminComponent implements OnInit {
   ngOnInit(): void {
     this.loadCompanies();
     this.loadLogs();
+  }
+
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
   }
 
   companyName(id: number | null | undefined): string {

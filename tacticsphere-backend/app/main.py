@@ -50,8 +50,6 @@ from .schemas import (
 
     PasswordForgotRequest, PasswordForgotResponse,
 
-    PasswordResetConfirm, PasswordResetResponse,
-
     # Empresa / Depto
 
     EmpresaCreate, EmpresaRead,
@@ -60,7 +58,7 @@ from .schemas import (
 
     # Usuarios
 
-    UsuarioCreate, UsuarioRead, UsuarioUpdate, UsuarioPasswordReset,
+    UsuarioCreate, UsuarioRead, UsuarioUpdate, UsuarioPasswordReset, PasswordChangeRequestRead,
 
     # Empleados
 
@@ -308,50 +306,13 @@ def forgot_password(payload: PasswordForgotRequest, db: Session = Depends(get_db
 
     user = crud.get_user_by_email(db, email)
 
-    if not user or not user.activo:
+    if user and user.activo:
 
-        # Para evitar enumeración no revelamos estado
+        crud.create_password_change_request(db, user)
 
-        return PasswordForgotResponse(reset_token=None)
+    # Para evitar enumeraci?n no revelamos estado
 
-    token, _ = crud.create_password_reset_token(db, user.id)
-
-    return PasswordForgotResponse(reset_token=token)
-
-
-
-@app.post("/auth/password/reset", response_model=PasswordResetResponse)
-def reset_password_with_token(payload: PasswordResetConfirm, request: Request, db: Session = Depends(get_db)):
-    token_record = crud.get_valid_password_reset_token(db, payload.token)
-
-    if not token_record:
-
-        raise HTTPException(status_code=400, detail="Token inv?lido o expirado")
-
-    try:
-
-        user = crud.set_password(db, token_record.user_id, payload.new_password)
-
-    except ValueError as exc:
-
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    if not user:
-
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    crud.mark_password_reset_token_used(db, token_record)
-    audit_log(
-        db,
-        action=AuditActionEnum.USER_PASSWORD_RESET,
-        current_user=user,
-        empresa_id=user.empresa_id,
-        entity_type="Usuario",
-        entity_id=user.id,
-        notes="Restablecimiento de contraseña vía token",
-        request=request,
-    )
-    return PasswordResetResponse(ok=True)
+    return PasswordForgotResponse(ok=True)
 
 
 # Seed admin (solo dev)
@@ -907,6 +868,22 @@ def reset_password(
 
 
 
+    request_record = None
+
+    if data.request_id is not None:
+
+        request_record = crud.get_password_change_request(db, data.request_id)
+
+        if not request_record:
+
+            raise HTTPException(status_code=404, detail="Solicitud de cambio no encontrada")
+
+        if request_record.user_id != user_id:
+
+            raise HTTPException(status_code=400, detail="La solicitud no corresponde a este usuario")
+
+
+
     if current.rol == RolEnum.ADMIN:
 
         if u.empresa_id != current.empresa_id:
@@ -925,6 +902,21 @@ def reset_password(
         raise HTTPException(status_code=400, detail=str(exc))
     if not u:
         raise HTTPException(status_code=404, detail="Not Found")
+
+    if request_record:
+
+        crud.resolve_password_change_request(
+
+            db,
+            request_record.id,
+            user_id=user_id,
+            resolved_by_id=current.id,
+        )
+
+    note_msg = f"Restableció la contraseña de {u.email}"
+    if request_record:
+        note_msg += f" (solicitud #{request_record.id})"
+
     audit_log(
         db,
         action=AuditActionEnum.USER_PASSWORD_RESET,
@@ -932,7 +924,7 @@ def reset_password(
         empresa_id=u.empresa_id,
         entity_type="Usuario",
         entity_id=user_id,
-        notes=f"Restableció la contraseña de {u.email}",
+        notes=note_msg,
         request=request,
     )
     return u
@@ -1004,6 +996,26 @@ def delete_user(
     )
 
     return None
+
+
+
+@app.get("/password-change-requests", response_model=list[PasswordChangeRequestRead])
+
+def list_password_change_requests_endpoint(
+
+    include_resolved: bool = Query(False),
+
+    db: Session = Depends(get_db),
+
+    current: Usuario = Depends(get_current_user),
+
+):
+
+    if current.rol != RolEnum.ADMIN_SISTEMA:
+
+        raise HTTPException(status_code=403, detail="Permisos insuficientes")
+
+    return crud.list_password_change_requests(db, include_resolved=include_resolved)
 
 
 

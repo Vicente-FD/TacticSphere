@@ -1,13 +1,15 @@
-import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core';
+﻿import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { LucideAngularModule } from 'lucide-angular';
+import { finalize } from 'rxjs/operators';
 
 import { CompanyService } from '../../company.service';
 import { UserService } from '../../user.service';
+import { AuthService } from '../../auth.service';
 
-import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
+import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from '../../types';
 
 @Component({
   standalone: true,
@@ -32,114 +34,131 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
           </div>
         </div>
 
+        <div class="flex flex-wrap gap-3">
+          <button
+            type="button"
+            class="ts-btn ts-btn--positive gap-2"
+            (click)="toggleCreateCard()"
+          >
+            <lucide-icon name="UserPlus" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+            <span>{{ showCreateCard ? 'Cerrar creación' : 'Crear usuario' }}</span>
+          </button>
+          <button
+            type="button"
+            class="ts-btn ts-btn--ghost gap-2"
+            (click)="toggleFiltersCard()"
+          >
+            <lucide-icon name="SlidersHorizontal" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+            <span>Filtros</span>
+          </button>
+        </div>
+
         <div class="space-y-6">
-          <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
-            <div class="ts-card space-y-4">
-              <div class="flex items-center gap-3">
-                <lucide-icon name="Building2" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
-                <div>
-                  <h2 class="text-lg font-semibold text-ink">Filtrar por empresa</h2>
-                  <p class="text-sm text-neutral-400">Muestra solo los usuarios de una organización específica.</p>
-                </div>
+          <div *ngIf="showCreateCard" class="ts-card space-y-5">
+            <div class="flex items-center gap-3">
+              <lucide-icon name="UserPlus" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <div>
+                <h2 class="text-lg font-semibold text-ink">Crear usuario</h2>
+                <p class="text-sm text-neutral-400">Proporciona las credenciales iniciales y asigna el rol adecuado.</p>
               </div>
-
-              <label class="block space-y-2">
-                <span class="ts-label">Empresa</span>
-                <select
-                  class="ts-select"
-                  [(ngModel)]="selectedEmpresaId"
-                  (change)="loadUsers()"
-                  [disabled]="loadingCompanies"
-                >
-                  <option [ngValue]="null">Todas las empresas</option>
-                  <option *ngFor="let e of empresas()" [ngValue]="e.id">{{ e.nombre }}</option>
-                </select>
-              </label>
-
-              <ngx-skeleton-loader
-                *ngIf="loadingCompanies"
-                count="3"
-                [theme]="{ height: '16px', marginBottom: '12px', borderRadius: '6px' }"
-              ></ngx-skeleton-loader>
             </div>
 
-            <div class="ts-card space-y-5">
-              <div class="flex items-center gap-3">
-                <lucide-icon name="UserPlus" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
-                <div>
-                  <h2 class="text-lg font-semibold text-ink">Crear usuario</h2>
-                  <p class="text-sm text-neutral-400">Proporciona las credenciales iniciales y asigna el rol adecuado.</p>
+            <div class="space-y-4">
+              <label class="block space-y-2">
+                <span class="ts-label">Nombre</span>
+                <input class="ts-input" [(ngModel)]="form.nombre" placeholder="Nombre completo" />
+              </label>
+
+              <label class="block space-y-2">
+                <span class="ts-label">Email</span>
+                <div
+                  class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2 transition-all duration-120 ease-smooth focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20"
+                >
+                  <lucide-icon name="Mail" class="h-4 w-4 text-neutral-400" strokeWidth="1.75"></lucide-icon>
+                  <input
+                    class="flex-1 border-none bg-transparent p-0 text-base text-ink placeholder:text-neutral-300 focus:outline-none"
+                    [(ngModel)]="form.email"
+                    placeholder="email@dominio.com"
+                  />
                 </div>
-              </div>
+              </label>
 
-              <div class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-2">
                 <label class="block space-y-2">
-                  <span class="ts-label">Nombre</span>
-                  <input class="ts-input" [(ngModel)]="form.nombre" placeholder="Nombre completo" />
+                  <span class="ts-label">Contraseña temporal</span>
+                  <input
+                    class="ts-input"
+                    [(ngModel)]="form.password"
+                    placeholder="Mínimo 10 caracteres"
+                    type="password"
+                    minlength="10"
+                  />
                 </label>
-
                 <label class="block space-y-2">
-                  <span class="ts-label">Email</span>
-                  <div
-                    class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2 transition-all duration-120 ease-smooth focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20"
-                  >
-                    <lucide-icon name="Mail" class="h-4 w-4 text-neutral-400" strokeWidth="1.75"></lucide-icon>
-                    <input
-                      class="flex-1 border-none bg-transparent p-0 text-base text-ink placeholder:text-neutral-300 focus:outline-none"
-                      [(ngModel)]="form.email"
-                      placeholder="email@dominio.com"
-                    />
-                  </div>
-                </label>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                  <label class="block space-y-2">
-                    <span class="ts-label">Contraseña temporal</span>
-                    <input
-                      class="ts-input"
-                      [(ngModel)]="form.password"
-                      placeholder="Minimo 10 caracteres"
-                      type="password"
-                      minlength=\"10\"
-                    />
-                  </label>
-                  <label class="block space-y-2">
-                    <span class="ts-label">Rol</span>
-                    <select class="ts-select" [(ngModel)]="form.rol">
-                      <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label class="block space-y-2">
-                  <span class="ts-label">Empresa</span>
-                  <select class="ts-select" [(ngModel)]="form.empresa_id">
-                    <option [ngValue]="null">Sin empresa</option>
-                    <option *ngFor="let e of empresas()" [ngValue]="e.id">{{ e.nombre }}</option>
+                  <span class="ts-label">Rol</span>
+                  <select class="ts-select" [(ngModel)]="form.rol">
+                    <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
                   </select>
                 </label>
               </div>
 
-              <button
-                class="ts-btn ts-btn--positive w-full md:w-auto"
-                (click)="createUser()"
-                [disabled]="creatingUser || !isValidForm()"
-              >
-                <lucide-icon
-                  *ngIf="!creatingUser"
-                  name="ShieldCheck"
-                  class="h-4 w-4"
-                  strokeWidth="1.75"
-                ></lucide-icon>
-                <lucide-icon
-                  *ngIf="creatingUser"
-                  name="Loader2"
-                  class="h-4 w-4 animate-spin"
-                  strokeWidth="1.75"
-                ></lucide-icon>
-                <span>{{ creatingUser ? 'Creando...' : 'Crear usuario' }}</span>
-              </button>
+              <label class="block space-y-2">
+                <span class="ts-label">Empresa</span>
+                <select class="ts-select" [(ngModel)]="form.empresa_id">
+                  <option [ngValue]="null">Sin empresa</option>
+                  <option *ngFor="let e of empresas()" [ngValue]="e.id">{{ e.nombre }}</option>
+                </select>
+              </label>
             </div>
+
+            <button
+              class="ts-btn ts-btn--positive w-full md:w-auto"
+              (click)="createUser()"
+              [disabled]="creatingUser || !isValidForm()"
+            >
+              <lucide-icon
+                *ngIf="!creatingUser"
+                name="ShieldCheck"
+                class="h-4 w-4"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <lucide-icon
+                *ngIf="creatingUser"
+                name="Loader2"
+                class="h-4 w-4 animate-spin"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <span>{{ creatingUser ? 'Creando...' : 'Crear usuario' }}</span>
+            </button>
+          </div>
+
+          <div *ngIf="showFiltersCard" class="ts-card space-y-4">
+            <div class="flex items-center gap-3">
+              <lucide-icon name="Building2" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <div>
+                <h2 class="text-lg font-semibold text-ink">Filtrar por empresa</h2>
+                <p class="text-sm text-neutral-400">Muestra solo los usuarios de una organización específica.</p>
+              </div>
+            </div>
+
+            <label class="block space-y-2">
+              <span class="ts-label">Empresa</span>
+              <select
+                class="ts-select"
+                [(ngModel)]="selectedEmpresaId"
+                (change)="loadUsers()"
+                [disabled]="loadingCompanies"
+              >
+                <option [ngValue]="null">Todas las empresas</option>
+                <option *ngFor="let e of empresas()" [ngValue]="e.id">{{ e.nombre }}</option>
+              </select>
+            </label>
+
+            <ngx-skeleton-loader
+              *ngIf="loadingCompanies"
+              count="3"
+              [theme]="{ height: '16px', marginBottom: '12px', borderRadius: '6px' }"
+            ></ngx-skeleton-loader>
           </div>
 
           <div class="ts-card space-y-5">
@@ -158,91 +177,99 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
             </ng-container>
 
             <ng-container *ngIf="!loadingUsers && users().length; else emptyUsers">
-              <table class="ts-table w-full table-fixed">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Rol</th>
-                    <th>Empresa</th>
-                    <th>Activo</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let u of users()">
-                    <td class="text-xs uppercase tracking-wide text-neutral-400">#{{ u.id }}</td>
-                    <td class="font-medium text-ink">{{ u.nombre }}</td>
-                    <td class="text-sm text-neutral-500 break-words">{{ u.email }}</td>
-                    <td>
-                      <select
-                        class="ts-select w-full max-w-[12rem]"
-                        [ngModel]="u.rol"
-                        (ngModelChange)="changeRole(u, $event)"
-                        [disabled]="updatingRoleId === u.id"
-                      >
-                        <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
-                      </select>
-                    </td>
-                    <td class="text-sm text-neutral-500 break-words">{{ empresaName(u.empresa_id) }}</td>
-                    <td>
-                      <label class="flex items-center gap-2 text-sm text-neutral-500">
-                    <input
-                      type="checkbox"
-                      class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
-                      [checked]="u.activo"
-                      (change)="toggleActive(u)"
-                      [disabled]="togglingActiveId === u.id || u.rol === 'ADMIN_SISTEMA'"
-                    />
-                    <span>{{ u.activo ? 'Sí' : 'No' }}</span>
-                  </label>
-                </td>
-                <td>
-                      <div class="flex flex-wrap gap-2">
+              <div class="overflow-x-auto">
+                <table class="ts-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Email</th>
+                      <th>Rol</th>
+                      <th>Empresa</th>
+                      <th>Estado</th>
+                      <th class="text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let u of users()">
+                      <td>
+                        <div class="font-semibold text-ink">{{ u.nombre }}</div>
+                        <div class="text-xs uppercase tracking-[0.08em] text-neutral-400">ID: {{ u.id }}</div>
+                      </td>
+                      <td class="text-sm text-neutral-500">{{ u.email }}</td>
+                      <td>
+                        <select
+                          class="ts-select"
+                          [(ngModel)]="u.rol"
+                          [ngModelOptions]="{ standalone: true }"
+                          (change)="changeRole(u, u.rol)"
+                          [disabled]="updatingRoleId === u.id"
+                        >
+                          <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
+                        </select>
+                      </td>
+                      <td>{{ empresaName(u.empresa_id) }}</td>
+                      <td>
                         <button
-                          class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
-                          (click)="resetPassword(u)"
-                          [disabled]="resettingId === u.id"
+                          class="ts-chip"
+                          [class.bg-success/10]="u.activo"
+                          [class.bg-error/10]="!u.activo"
+                          (click)="toggleActive(u)"
+                          [disabled]="togglingActiveId === u.id"
                         >
                           <lucide-icon
-                            *ngIf="resettingId !== u.id"
-                            name="KeyRound"
+                            [name]="u.activo ? 'Check' : 'X'"
                             class="h-4 w-4"
                             strokeWidth="1.75"
                           ></lucide-icon>
-                          <lucide-icon
-                            *ngIf="resettingId === u.id"
-                            name="Loader2"
-                            class="h-4 w-4 animate-spin"
-                            strokeWidth="1.75"
-                          ></lucide-icon>
-                          <span>Reset pass</span>
+                          {{ u.activo ? 'Activo' : 'Inactivo' }}
                         </button>
-                        <button
-                          class="ts-btn ts-btn--danger"
-                          (click)="deleteUser(u)"
-                          [disabled]="deletingId === u.id || u.rol === 'ADMIN_SISTEMA'"
-                        >
-                          <lucide-icon
-                            *ngIf="deletingId !== u.id"
-                            name="Trash2"
-                            class="h-4 w-4"
-                            strokeWidth="1.75"
-                          ></lucide-icon>
-                          <lucide-icon
-                            *ngIf="deletingId === u.id"
-                            name="Loader2"
-                            class="h-4 w-4 animate-spin"
-                            strokeWidth="1.75"
-                          ></lucide-icon>
-                          <span>Eliminar</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td>
+                      <td>
+                        <div class="flex flex-wrap gap-2 justify-end">
+                          <button
+                            class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
+                            (click)="resetPassword(u)"
+                            [disabled]="resettingId === u.id"
+                          >
+                            <lucide-icon
+                              *ngIf="resettingId !== u.id"
+                              name="KeyRound"
+                              class="h-4 w-4"
+                              strokeWidth="1.75"
+                            ></lucide-icon>
+                            <lucide-icon
+                              *ngIf="resettingId === u.id"
+                              name="Loader2"
+                              class="h-4 w-4 animate-spin"
+                              strokeWidth="1.75"
+                            ></lucide-icon>
+                            <span>Cambiar contraseña</span>
+                          </button>
+                          <button
+                            class="ts-btn ts-btn--danger"
+                            (click)="deleteUser(u)"
+                            [disabled]="deletingId === u.id || u.rol === 'ADMIN_SISTEMA'"
+                          >
+                            <lucide-icon
+                              *ngIf="deletingId !== u.id"
+                              name="Trash2"
+                              class="h-4 w-4"
+                              strokeWidth="1.75"
+                            ></lucide-icon>
+                            <lucide-icon
+                              *ngIf="deletingId === u.id"
+                              name="Loader2"
+                              class="h-4 w-4 animate-spin"
+                              strokeWidth="1.75"
+                            ></lucide-icon>
+                            <span>Eliminar</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </ng-container>
 
             <ng-template #emptyUsers>
@@ -253,6 +280,82 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
               </div>
             </ng-template>
           </div>
+
+          <div *ngIf="isAdminSistema" class="ts-card space-y-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+              <lucide-icon name="BellRing" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <div>
+                <h2 class="text-lg font-semibold text-ink">Solicitudes de cambio de contraseña</h2>
+                <p class="text-sm text-neutral-400">
+                  Atiende las solicitudes enviadas desde la pantalla de recuperación.
+                </p>
+              </div>
+            </div>
+          </div>
+
+            <ng-container *ngIf="passwordRequests().length; else noRequests">
+              <div class="overflow-x-auto">
+                <table class="ts-table">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Email</th>
+                      <th>Empresa</th>
+                      <th>Solicitada</th>
+                      <th class="text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let req of passwordRequests()">
+                      <td>
+                        <div class="font-semibold text-ink">{{ req.user?.nombre ?? req.user_nombre }}</div>
+                        <div class="text-xs uppercase tracking-wide text-neutral-400">
+                          {{ req.user?.rol ?? 'PENDIENTE' }}
+                        </div>
+                      </td>
+                      <td class="text-sm text-neutral-500">{{ req.user?.email ?? req.user_email }}</td>
+                      <td>{{ empresaName(req.user?.empresa_id ?? req.empresa_id ?? null) }}</td>
+                      <td class="text-sm text-neutral-500">{{ req.created_at | date: 'short' }}</td>
+                      <td class="text-right">
+                        <button
+                          class="ts-btn ts-btn--positive"
+                          (click)="handlePasswordRequest(req)"
+                          [disabled]="resolvingRequestId === req.id"
+                        >
+                          <lucide-icon
+                            *ngIf="resolvingRequestId !== req.id"
+                            name="KeyRound"
+                            class="h-4 w-4"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <lucide-icon
+                            *ngIf="resolvingRequestId === req.id"
+                            name="Loader2"
+                            class="h-4 w-4 animate-spin"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <span>Atender</span>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ng-container>
+          </div>
+
+          <ng-template #noRequests>
+            <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 p-6 text-center">
+              <p class="text-sm text-neutral-400">
+                {{
+                  loadingPasswordRequests
+                    ? 'Cargando solicitudes pendientes...'
+                    : 'No hay solicitudes pendientes en este momento.'
+                }}
+              </p>
+            </div>
+          </ng-template>
         </div>
       </div>
     </div>
@@ -261,20 +364,27 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
 export class UsersComponent implements OnInit {
   private companies = inject(CompanyService);
   private usersApi = inject(UserService);
+  private auth = inject(AuthService);
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   users: WritableSignal<Usuario[]> = signal<Usuario[]>([]);
+  passwordRequests: WritableSignal<PasswordChangeRequest[]> = signal<PasswordChangeRequest[]>([]);
   selectedEmpresaId: number | null = null;
 
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
 
   loadingCompanies = true;
   loadingUsers = true;
+  loadingPasswordRequests = false;
   creatingUser = false;
   updatingRoleId: number | null = null;
   togglingActiveId: number | null = null;
   resettingId: number | null = null;
   deletingId: number | null = null;
+  resolvingRequestId: number | null = null;
+  isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
+  showCreateCard = false;
+  showFiltersCard = false;
 
   form: UsuarioCreate = {
     nombre: '',
@@ -287,6 +397,33 @@ export class UsersComponent implements OnInit {
   ngOnInit(): void {
     this.loadCompanies();
     this.loadUsers();
+    this.initializeAdminData();
+  }
+
+  toggleCreateCard(): void {
+    this.showCreateCard = !this.showCreateCard;
+  }
+
+  toggleFiltersCard(): void {
+    this.showFiltersCard = !this.showFiltersCard;
+  }
+
+  private initializeAdminData(): void {
+    this.auth
+      .ensureMe()
+      .pipe(
+        finalize(() => {
+          this.isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
+          if (this.isAdminSistema) {
+            this.loadPasswordRequests();
+          } else {
+            this.passwordRequests.set([]);
+          }
+        })
+      )
+      .subscribe({
+        error: (error) => console.warn('No fue posible refrescar /me', error),
+      });
   }
 
   private loadCompanies(): void {
@@ -302,10 +439,28 @@ export class UsersComponent implements OnInit {
     this.loadingUsers = true;
     this.usersApi
       .list(this.selectedEmpresaId ?? undefined)
+      .pipe(finalize(() => (this.loadingUsers = false)))
       .subscribe({
         next: (rows) => this.users.set(rows ?? []),
         error: (error) => console.error('Error cargando usuarios', error),
-        complete: () => (this.loadingUsers = false),
+      });
+  }
+
+  loadPasswordRequests(): void {
+    if (!this.isAdminSistema) {
+      return;
+    }
+    this.loadingPasswordRequests = true;
+    this.usersApi
+      .listPasswordChangeRequests()
+      .pipe(finalize(() => (this.loadingPasswordRequests = false)))
+      .subscribe({
+        next: (rows) => {
+          this.passwordRequests.set(rows ?? []);
+        },
+        error: (error) => {
+          console.error('Error cargando solicitudes de contraseña', error);
+        },
       });
   }
 
@@ -349,6 +504,7 @@ export class UsersComponent implements OnInit {
     });
   }
 
+
   toggleActive(u: Usuario): void {
     if (u.rol === 'ADMIN_SISTEMA' || this.togglingActiveId) return;
     this.togglingActiveId = u.id;
@@ -373,7 +529,7 @@ export class UsersComponent implements OnInit {
     this.usersApi.setPassword(u.id, pwd).subscribe({
       next: () => {},
       error: (error) => {
-        console.error('Error reseteando contraseña', error);
+        console.error('Error reseteando contraseÃ±a', error);
         this.resettingId = null;
       },
       complete: () => {
@@ -382,9 +538,29 @@ export class UsersComponent implements OnInit {
     });
   }
 
+  handlePasswordRequest(req: PasswordChangeRequest): void {
+    if (this.resolvingRequestId) return;
+    const targetEmail = req.user?.email ?? req.user_email;
+    const pwd = prompt(`Nueva contraseña para ${targetEmail} (solicitud #${req.id}):`, '');
+    if (!pwd) return;
+    this.resolvingRequestId = req.id;
+    this.usersApi.setPassword(req.user_id, pwd, req.id).subscribe({
+      next: () => {
+        this.loadPasswordRequests();
+      },
+      error: (error) => {
+        console.error('Error completando solicitud de contraseÃ±a', error);
+        this.resolvingRequestId = null;
+      },
+      complete: () => {
+        this.resolvingRequestId = null;
+      },
+    });
+  }
+
   deleteUser(u: Usuario): void {
     if (u.rol === 'ADMIN_SISTEMA') return;
-    if (!confirm(`¿Eliminar usuario ${u.email}?`)) return;
+    if (!confirm(`Â¿Eliminar usuario ${u.email}?`)) return;
     this.deletingId = u.id;
     this.usersApi.delete(u.id).subscribe({
       next: () => this.loadUsers(),
@@ -404,3 +580,4 @@ export class UsersComponent implements OnInit {
     return e?.nombre ?? `#${id}`;
   }
 }
+

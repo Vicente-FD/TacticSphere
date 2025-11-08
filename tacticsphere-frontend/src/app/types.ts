@@ -69,6 +69,21 @@ export interface UsuarioUpdate {
 
 export interface UsuarioPasswordReset {
   new_password: string;
+  request_id?: number | null;
+}
+
+export interface PasswordChangeRequest {
+  id: number;
+  user_id: number;
+  user_email: string;
+  user_nombre: string;
+  empresa_id?: number | null;
+  created_at: string;
+  resolved: boolean;
+  resolved_at?: string | null;
+  resolved_by_id?: number | null;
+  user?: Usuario | null;
+  resolved_by?: Usuario | null;
 }
 
 // ===== Empleados =====

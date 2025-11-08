@@ -51,13 +51,6 @@ class PasswordForgotRequest(BaseModel):
     email: EmailStr
 
 class PasswordForgotResponse(BaseModel):
-    reset_token: Optional[str] = None
-
-class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str = Field(min_length=10)
-
-class PasswordResetResponse(BaseModel):
     ok: bool = True
 
 class UsuarioCreate(BaseModel):
@@ -75,9 +68,6 @@ class UsuarioUpdate(BaseModel):
     empresa_id: Optional[int] = None
     activo: Optional[bool] = None
 
-class UsuarioPasswordReset(BaseModel):
-    new_password: str = Field(min_length=10)
-
 class UsuarioRead(BaseModel):
     id: int
     nombre: str
@@ -85,6 +75,24 @@ class UsuarioRead(BaseModel):
     rol: RolEnum
     empresa_id: Optional[int] = None
     activo: bool
+    model_config = ConfigDict(from_attributes=True)
+
+class UsuarioPasswordReset(BaseModel):
+    new_password: str = Field(min_length=10)
+    request_id: Optional[int] = None
+
+class PasswordChangeRequestRead(BaseModel):
+    id: int
+    user_id: int
+    user_email: str
+    user_nombre: str
+    empresa_id: Optional[int] = None
+    created_at: datetime
+    resolved: bool
+    resolved_at: Optional[datetime] = None
+    resolved_by_id: Optional[int] = None
+    user: Optional[UsuarioRead] = None
+    resolved_by: Optional[UsuarioRead] = None
     model_config = ConfigDict(from_attributes=True)
 
 # ======================================================

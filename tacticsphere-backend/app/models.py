@@ -354,25 +354,44 @@ class Usuario(Base):
         Integer, ForeignKey("empresas.id", ondelete="SET NULL"), nullable=True, index=True
     )
     empresa: Mapped[Optional["Empresa"]] = relationship("Empresa", back_populates="usuarios")
-    reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(
-        "PasswordResetToken", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    password_change_requests: Mapped[List["PasswordChangeRequest"]] = relationship(
+        "PasswordChangeRequest",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        foreign_keys="PasswordChangeRequest.user_id",
+    )
+    password_change_resolutions: Mapped[List["PasswordChangeRequest"]] = relationship(
+        "PasswordChangeRequest",
+        back_populates="resolved_by",
+        foreign_keys="PasswordChangeRequest.resolved_by_id",
     )
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="user")
 
 
-class PasswordResetToken(Base):
-    __tablename__ = "password_reset_tokens"
+class PasswordChangeRequest(Base):
+    __tablename__ = "password_change_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    user_email: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_nombre: Mapped[str] = mapped_column(String(200), nullable=False)
+    empresa_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
-    user: Mapped["Usuario"] = relationship("Usuario", back_populates="reset_tokens")
+    user: Mapped["Usuario"] = relationship(
+        "Usuario", foreign_keys=[user_id], back_populates="password_change_requests"
+    )
+    resolved_by: Mapped[Optional["Usuario"]] = relationship(
+        "Usuario", foreign_keys=[resolved_by_id], back_populates="password_change_resolutions"
+    )
 
 
 class AuditLog(Base):

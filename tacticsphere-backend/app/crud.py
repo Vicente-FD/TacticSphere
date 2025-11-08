@@ -1,8 +1,6 @@
 from typing import List, Optional, Dict, Tuple, Iterable
 from datetime import datetime, timedelta, timezone  # usamos naive UTC
-import secrets
-import hashlib
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, func, and_, or_
 
 from .auth import hash_password, validate_password
@@ -20,7 +18,7 @@ from .models import (
     ConsultingLead,
     RolEnum,
     TipoPreguntaEnum,
-    PasswordResetToken,
+    PasswordChangeRequest,
     AuditLog,
     AuditActionEnum,
 )
@@ -97,52 +95,74 @@ def set_password(db: Session, user_id: int, new_password: str) -> Optional[Usuar
     return u
 
 
-def create_password_reset_token(
-    db: Session,
-    user_id: int,
-    expires_minutes: int = 30,
-) -> Tuple[str, PasswordResetToken]:
-    # invalida tokens previos sin usar
+def create_password_change_request(db: Session, user: Usuario) -> PasswordChangeRequest:
     existing = db.scalars(
-        select(PasswordResetToken).where(
-            PasswordResetToken.user_id == user_id,
-            PasswordResetToken.used.is_(False),
+        select(PasswordChangeRequest).where(
+            PasswordChangeRequest.user_id == user.id,
+            PasswordChangeRequest.resolved.is_(False),
         )
-    ).all()
-    for token in existing:
-        token.used = True
+    ).first()
+    now = datetime.utcnow()
+    if existing:
+        existing.created_at = now
+        existing.user_email = user.email
+        existing.user_nombre = user.nombre
+        existing.empresa_id = user.empresa_id
+        db.commit()
+        db.refresh(existing)
+        return existing
 
-    plain_token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
-    expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
-
-    record = PasswordResetToken(
-        user_id=user_id,
-        token_hash=token_hash,
-        expires_at=expires_at,
-        used=False,
+    record = PasswordChangeRequest(
+        user_id=user.id,
+        user_email=user.email,
+        user_nombre=user.nombre,
+        empresa_id=user.empresa_id,
+        created_at=now,
+        resolved=False,
     )
     db.add(record)
     db.commit()
     db.refresh(record)
-    return plain_token, record
-
-
-def get_valid_password_reset_token(db: Session, plain_token: str) -> Optional[PasswordResetToken]:
-    token_hash = hashlib.sha256(plain_token.encode()).hexdigest()
-    record = db.scalars(
-        select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
-    ).first()
-    if not record or record.used:
-        return None
-    if record.expires_at < datetime.utcnow():
-        return None
     return record
 
 
-def mark_password_reset_token_used(db: Session, record: PasswordResetToken) -> None:
-    record.used = True
+def list_password_change_requests(db: Session, include_resolved: bool = False) -> List[PasswordChangeRequest]:
+    stmt = (
+        select(PasswordChangeRequest)
+        .options(
+            joinedload(PasswordChangeRequest.user),
+            joinedload(PasswordChangeRequest.resolved_by),
+        )
+        .order_by(PasswordChangeRequest.created_at.desc())
+    )
+    if not include_resolved:
+        stmt = stmt.where(PasswordChangeRequest.resolved.is_(False))
+    return db.scalars(stmt).all()
+
+
+def get_password_change_request(db: Session, request_id: int) -> Optional[PasswordChangeRequest]:
+    return db.get(PasswordChangeRequest, request_id)
+
+
+def resolve_password_change_request(
+    db: Session,
+    request_id: int,
+    *,
+    user_id: Optional[int] = None,
+    resolved_by_id: Optional[int] = None,
+) -> Optional[PasswordChangeRequest]:
+    record = db.get(PasswordChangeRequest, request_id)
+    if not record:
+        return None
+    if user_id is not None and record.user_id != user_id:
+        return None
+    record.resolved = True
+    record.resolved_at = datetime.utcnow()
+    if resolved_by_id is not None:
+        record.resolved_by_id = resolved_by_id
     db.commit()
+    db.refresh(record)
+    return record
 
 # ======================================================
 # EMPRESAS
