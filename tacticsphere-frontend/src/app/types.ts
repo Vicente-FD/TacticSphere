@@ -92,6 +92,8 @@ export interface Empleado {
   empresa_id: number;
   departamento_id?: number | null;
   nombre: string;
+  apellidos?: string | null;
+  rut?: string | null;
   email?: string | null;
   cargo?: string | null;
 }
@@ -99,6 +101,8 @@ export interface Empleado {
 export interface EmpleadoCreate {
   empresa_id: number;
   nombre: string;
+  apellidos?: string | null;
+  rut?: string | null;
   email?: string | null;
   cargo?: string | null;
   departamento_id?: number | null;
@@ -106,6 +110,8 @@ export interface EmpleadoCreate {
 
 export interface EmpleadoUpdate {
   nombre?: string;
+  apellidos?: string | null;
+  rut?: string | null;
   email?: string | null;
   cargo?: string | null;
   departamento_id?: number | null;
@@ -216,9 +222,19 @@ export interface SurveyQuestionRead {
   respuesta_actual?: string | null;
 }
 
+export interface LikertLevel {
+  valor: number;
+  nombre: string;
+  etiqueta: string;
+  descripcion: string;
+  caracteristicas: string;
+  interpretacion_itil: string;
+}
+
 export interface PillarQuestionsResponse {
   pilar_id: number;
   pilar_nombre: string;
+  likert_levels?: LikertLevel[];
   preguntas: SurveyQuestionRead[];
 }
 

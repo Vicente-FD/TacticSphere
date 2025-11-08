@@ -41,6 +41,7 @@ from .models import (
 from .auth import verify_password, create_access_token, get_current_user, require_roles
 
 from . import crud
+from .likert_levels import LIKERT_LEVELS
 
 from .schemas import (
 
@@ -570,22 +571,52 @@ def delete_department(
 # ======================================================
 
 @app.get("/companies/{empresa_id}/employees", response_model=list[EmpleadoRead])
-
 def list_employees(
-
     empresa_id: int,
-
     departamento_id: Optional[int] = Query(None),
-
+    search: Optional[str] = Query(None, min_length=1),
     db: Session = Depends(get_db),
-
     current: Usuario = Depends(get_current_user),
-
 ):
-
     _ensure_company_access(current, empresa_id)
 
-    return crud.list_empleados(db, empresa_id=empresa_id, departamento_id=departamento_id)
+    return crud.list_empleados(
+        db,
+        empresa_id=empresa_id,
+        departamento_id=departamento_id,
+        search=search,
+    )
+
+
+@app.get("/employees/search", response_model=list[EmpleadoRead])
+def search_employees(
+    query: str = Query(..., min_length=2),
+    empresa_id: Optional[int] = Query(None),
+    limit: int = Query(20, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    target_empresa = empresa_id
+
+    if current.rol == RolEnum.ADMIN:
+        target_empresa = current.empresa_id
+    elif current.rol in (RolEnum.ANALISTA, RolEnum.USUARIO):
+        target_empresa = current.empresa_id
+
+    if target_empresa is not None:
+        _ensure_company_access(current, target_empresa)
+    elif current.rol != RolEnum.ADMIN_SISTEMA:
+        target_empresa = current.empresa_id
+        if target_empresa is None:
+            raise HTTPException(status_code=403, detail="No puedes buscar empleados sin empresa asignada.")
+
+    employees = crud.list_empleados(
+        db,
+        empresa_id=target_empresa,
+        search=query,
+        limit=limit,
+    )
+    return employees
 
 
 
@@ -619,6 +650,8 @@ def create_employee(
         db,
         empresa_id=empresa_id,
         nombre=data.nombre,
+        apellidos=data.apellidos,
+        rut=data.rut,
         email=data.email,
         cargo=data.cargo,
         departamento_id=data.departamento_id,
@@ -631,7 +664,13 @@ def create_employee(
         entity_type="Empleado",
         entity_id=empleado.id,
         notes=f"Creó empleado {empleado.nombre}",
-        diff_after={"id": empleado.id, "nombre": empleado.nombre, "email": empleado.email},
+        diff_after={
+            "id": empleado.id,
+            "nombre": empleado.nombre,
+            "apellidos": empleado.apellidos,
+            "rut": empleado.rut,
+            "email": empleado.email,
+        },
         request=request,
     )
     return empleado
@@ -668,6 +707,8 @@ def update_employee(
 
     before = {
         "nombre": emp.nombre,
+        "apellidos": emp.apellidos,
+        "rut": emp.rut,
         "email": emp.email,
         "cargo": emp.cargo,
         "departamento_id": emp.departamento_id,
@@ -676,6 +717,8 @@ def update_employee(
         db,
         empleado_id=empleado_id,
         nombre=data.nombre,
+        apellidos=data.apellidos,
+        rut=data.rut,
         email=data.email,
         cargo=data.cargo,
         departamento_id=data.departamento_id,
@@ -689,10 +732,12 @@ def update_employee(
         empresa_id=emp.empresa_id,
         entity_type="Empleado",
         entity_id=empleado_id,
-        notes=f"Actualizó empleado {updated.nombre}",
+        notes=f"Actualizo empleado {updated.nombre}",
         diff_before=before,
         diff_after={
             "nombre": updated.nombre,
+            "apellidos": updated.apellidos,
+            "rut": updated.rut,
             "email": updated.email,
             "cargo": updated.cargo,
             "departamento_id": updated.departamento_id,
@@ -1844,7 +1889,12 @@ def survey_pillar_questions(
 
     } for q in preguntas]
 
-    return PillarQuestionsResponse(pilar_id=pil.id, pilar_nombre=pil.nombre, preguntas=items)
+    return PillarQuestionsResponse(
+        pilar_id=pil.id,
+        pilar_nombre=pil.nombre,
+        likert_levels=LIKERT_LEVELS,
+        preguntas=items,
+    )
 
 
 

@@ -118,6 +118,8 @@ class Empleado(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     nombre: Mapped[str] = mapped_column(String(200), nullable=False)
+    apellidos: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    rut: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
     cargo: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
 

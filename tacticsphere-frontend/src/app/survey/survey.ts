@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable, of } from 'rxjs';
@@ -15,6 +15,7 @@ import {
   Pilar,
   PillarProgress,
   PillarQuestionsResponse,
+  LikertLevel,
   RespuestaCreate,
   SurveyQuestionRead,
   Asignacion,
@@ -30,7 +31,7 @@ import { AssignmentsService } from '../assignments.service';
   selector: 'app-survey',
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="ts-page">
+    <div class="ts-page pb-28">
       <div class="ts-container space-y-6">
         <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div class="space-y-1">
@@ -70,84 +71,228 @@ import { AssignmentsService } from '../assignments.service';
             <div class="space-y-1">
               <h2 class="text-xl font-semibold text-ink">Datos del encuestado</h2>
               <p class="text-sm text-neutral-400">
-                Selecciona la empresa, crea o edita colaboradores y define quien respondera la encuesta.
+                Ingresa colaboradores o buscalos por nombre, correo o RUT.
               </p>
             </div>
 
-            <div class="grid gap-4 lg:grid-cols-12">
-              <label class="block space-y-2 lg:col-span-6">
-                <span class="ts-label">Empresa</span>
-                <select
-                  class="ts-select"
-                  [(ngModel)]="formEmp.empresa_id"
-                  name="empresa_id"
-                  (change)="onEmpresaChange()"
-                >
-                  <option [ngValue]="0">Seleccionar...</option>
-                  <option *ngFor="let e of empresas" [ngValue]="e.id">{{ e.nombre }}</option>
-                </select>
-              </label>
+            <div class="grid gap-6 xl:grid-cols-[minmax(0,_0.6fr)_minmax(0,_0.4fr)]">
+              <div class="space-y-4">
+                <div class="grid gap-4 lg:grid-cols-2">
+                  <label class="block space-y-2">
+                    <span class="ts-label">Empresa</span>
+                    <select
+                      class="ts-select"
+                      [(ngModel)]="formEmp.empresa_id"
+                      name="empresa_id"
+                      (change)="onEmpresaChange()"
+                    >
+                      <option [ngValue]="0">Seleccionar...</option>
+                      <option *ngFor="let e of empresas" [ngValue]="e.id">{{ e.nombre }}</option>
+                    </select>
+                  </label>
 
-              <label class="block space-y-2 lg:col-span-6">
-                <span class="ts-label">Departamento</span>
-                <select
-                  class="ts-select"
-                  [(ngModel)]="formEmp.departamento_id"
-                  name="departamento_id"
-                  [disabled]="!formEmp.empresa_id"
-                >
-                  <option [ngValue]="null">Ninguno</option>
-                  <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
-                </select>
-              </label>
+                  <label class="block space-y-2">
+                    <span class="ts-label">Departamento</span>
+                    <select
+                      class="ts-select"
+                      [(ngModel)]="formEmp.departamento_id"
+                      name="departamento_id"
+                      [disabled]="!formEmp.empresa_id"
+                    >
+                      <option [ngValue]="null">Ninguno</option>
+                      <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
+                    </select>
+                  </label>
 
-              <label class="block space-y-2 lg:col-span-6">
-                <span class="ts-label">Nombre</span>
-                <input class="ts-input" [(ngModel)]="formEmp.nombre" name="emp_nombre" />
-              </label>
+                  <label class="block space-y-2">
+                    <span class="ts-label">Nombre</span>
+                    <input class="ts-input" [(ngModel)]="formEmp.nombre" name="emp_nombre" />
+                  </label>
 
-              <label class="block space-y-2 lg:col-span-6">
-                <span class="ts-label">Email (opcional)</span>
-                <input class="ts-input" [(ngModel)]="formEmp.email" name="emp_email" />
-              </label>
+                  <label class="block space-y-2">
+                    <span class="ts-label">Apellidos</span>
+                    <input class="ts-input" [(ngModel)]="formEmp.apellidos" name="emp_apellidos" />
+                  </label>
 
-              <label class="block space-y-2 lg:col-span-6">
-                <span class="ts-label">Cargo (opcional)</span>
-                <input class="ts-input" [(ngModel)]="formEmp.cargo" name="emp_cargo" />
-              </label>
+                  <label class="block space-y-2">
+                    <span class="ts-label">RUT</span>
+                    <input class="ts-input" [(ngModel)]="formEmp.rut" name="emp_rut" placeholder="12.345.678-9" />
+                  </label>
 
-              <div class="lg:col-span-12 flex flex-wrap gap-3">
-                <button
-                  class="ts-btn ts-btn--positive"
-                  (click)="crearEmpleado()"
-                  [disabled]="creatingEmp || !formEmp.empresa_id || !formEmp.nombre"
-                >
-                  {{ creatingEmp ? 'Creando...' : 'Crear empleado' }}
-                </button>
-                <button
-                  class="ts-btn ts-btn--secondary"
-                  (click)="buscarEmpleados()"
-                  [disabled]="loadingEmployees || !formEmp.empresa_id"
-                >
-                  {{ loadingEmployees ? 'Buscando...' : 'Buscar empleados' }}
-                </button>
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-100/60 px-3 py-2 text-sm text-neutral-600"
-                  *ngIf="empleadoId"
-                >
-                  <span>Empleado seleccionado:</span>
-                  <span class="font-semibold text-ink">
-                    #{{ empleadoId }}
-                    <ng-container *ngIf="selectedEmployee">— {{ selectedEmployee.nombre }}</ng-container>
-                  </span>
+                  <label class="block space-y-2">
+                    <span class="ts-label">Email (opcional)</span>
+                    <input class="ts-input" [(ngModel)]="formEmp.email" name="emp_email" />
+                  </label>
+
+                  <label class="block space-y-2 lg:col-span-2">
+                    <span class="ts-label">Cargo (opcional)</span>
+                    <input class="ts-input" [(ngModel)]="formEmp.cargo" name="emp_cargo" />
+                  </label>
+                </div>
+
+                <div class="flex flex-wrap gap-3">
                   <button
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-500 transition hover:border-accent/40 hover:text-accent"
-                    (click)="limpiarSeleccionEmpleado()"
+                    class="ts-btn ts-btn--positive w-full sm:w-auto px-6 py-3 text-base"
+                    (click)="ingresarEmpleado()"
+                    [disabled]="creatingEmp || !formEmp.empresa_id || !formEmp.nombre || !formEmp.apellidos"
                   >
-                    Quitar
+                    {{ creatingEmp ? 'Ingresando...' : 'Ingresar empleado' }}
                   </button>
                 </div>
+
+                <div
+                  *ngIf="selectedEmployee as emp"
+                  class="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600 shadow-sm"
+                >
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+                        Empleado seleccionado
+                      </p>
+                      <p class="text-lg font-semibold text-ink">
+                        {{ emp.nombre }} {{ emp.apellidos || '' }}
+                      </p>
+                      <p class="text-xs text-neutral-500">
+                        ID #{{ emp.id }} - RUT: {{ emp.rut || '--' }}
+                      </p>
+                      <p class="text-xs text-neutral-500">
+                        {{ emp.email || 'Sin correo' }} - {{ emp.cargo || 'Sin cargo' }}
+                      </p>
+                    </div>
+                    <button class="ts-btn ts-btn--ghost" type="button" (click)="limpiarSeleccionEmpleado()">
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <span class="ts-label">Buscar colaboradores</span>
+                      <p class="text-xs text-neutral-500">
+                        Busca por nombre, correo o RUT. Si no seleccionas empresa, usaremos tu alcance actual.
+                      </p>
+                    </div>
+                    <span class="ts-chip" *ngIf="employees.length">{{ employees.length }} coincidencias</span>
+                  </div>
+                  <div class="relative">
+                    <input
+                      type="search"
+                      class="ts-input pr-28"
+                      placeholder="Ej: maria@empresa.com o 12.345.678-9"
+                      [(ngModel)]="searchTerm"
+                      (ngModelChange)="onSearchTermChange($event)"
+                      (keyup.enter)="forceEmployeeSearch()"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+                      (click)="forceEmployeeSearch()"
+                    >
+                      Buscar
+                    </button>
+                  </div>
+                </div>
+
+                <ng-container *ngIf="employees.length; else searchState">
+                  <div class="space-y-3">
+                    <div
+                      class="rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-accent/40 hover:shadow-card"
+                      *ngFor="let emp of employees"
+                      [ngClass]="{ 'border-accent shadow-card': selectedEmployee?.id === emp.id }"
+                    >
+                      <div class="flex flex-wrap justify-between gap-3">
+                        <div>
+                          <p class="text-base font-semibold text-ink">
+                            {{ emp.nombre }} {{ emp.apellidos || '' }}
+                          </p>
+                          <p class="text-sm text-neutral-500">
+                            {{ emp.email || 'Sin correo registrado' }} - {{ emp.cargo || 'Sin cargo' }}
+                          </p>
+                        </div>
+                        <div class="text-right text-sm text-neutral-500">
+                          <p>ID #{{ emp.id }}</p>
+                          <p>RUT: {{ emp.rut || '--' }}</p>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                          class="ts-btn ts-btn--secondary"
+                          type="button"
+                          (click)="seleccionarEmpleado(emp)"
+                          [disabled]="selectedEmployee?.id === emp.id"
+                        >
+                          {{ selectedEmployee?.id === emp.id ? 'Seleccionado' : 'Usar en encuesta' }}
+                        </button>
+                        <button
+                          class="ts-btn ts-btn--ghost"
+                          type="button"
+                          *ngIf="editId !== emp.id"
+                          (click)="iniciarEdicion(emp)"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          class="ts-btn ts-btn--ghost"
+                          type="button"
+                          *ngIf="editId === emp.id"
+                          (click)="cancelarEdicion()"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+
+                      <div class="mt-4 grid gap-3 md:grid-cols-2" *ngIf="editId === emp.id">
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">Nombre</span>
+                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.nombre" />
+                        </label>
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">Apellidos</span>
+                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.apellidos" />
+                        </label>
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">RUT</span>
+                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.rut" />
+                        </label>
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">Email</span>
+                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.email" />
+                        </label>
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">Cargo</span>
+                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.cargo" />
+                        </label>
+                        <label class="block space-y-1 text-sm">
+                          <span class="text-neutral-500">Departamento</span>
+                          <select class="ts-select text-sm" [(ngModel)]="editBuffer.departamento_id">
+                            <option [ngValue]="null">Ninguno</option>
+                            <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
+                          </select>
+                        </label>
+                        <div class="md:col-span-2 flex flex-wrap gap-2">
+                          <button class="ts-btn ts-btn--positive" type="button" (click)="guardarEdicion(emp)">
+                            Guardar cambios
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
+                <ng-template #searchState>
+                  <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 px-4 py-3 text-sm text-neutral-500">
+                    <ng-container *ngIf="loadingEmployees">Buscando colaboradores...</ng-container>
+                    <ng-container *ngIf="!loadingEmployees && hasEmployeeSearch">
+                      No encontramos coincidencias para "{{ searchTerm }}".
+                    </ng-container>
+                    <ng-container *ngIf="!loadingEmployees && !hasEmployeeSearch">
+                      Ingresa un termino para comenzar la busqueda.
+                    </ng-container>
+                  </div>
+                </ng-template>
               </div>
             </div>
           </div>
@@ -198,202 +343,6 @@ import { AssignmentsService } from '../assignments.service';
           </div>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-2">
-          <div class="ts-card space-y-4">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-ink">Resultados</h2>
-              <span class="ts-chip">{{ employees.length }} encontrados</span>
-            </div>
-
-            <ng-container *ngIf="employees.length; else noEmployees">
-              <div class="overflow-x-auto rounded-xl border border-neutral-200">
-                <table class="ts-table min-w-[56rem]">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Nombre</th>
-                      <th>Email</th>
-                      <th>Cargo</th>
-                      <th>Depto</th>
-                      <th class="text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      *ngFor="let emp of employees"
-                      [ngClass]="{ 'bg-accent/5': selectedEmployee?.id === emp.id }"
-                    >
-                      <td class="font-medium text-ink">#{{ emp.id }}</td>
-                      <td>
-                        <ng-container *ngIf="editId !== emp.id; else editNombre">
-                          {{ emp.nombre }}
-                        </ng-container>
-                        <ng-template #editNombre>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.nombre" />
-                        </ng-template>
-                      </td>
-                      <td>
-                        <ng-container *ngIf="editId !== emp.id; else editEmail">
-                          {{ emp.email || '--' }}
-                        </ng-container>
-                        <ng-template #editEmail>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.email" />
-                        </ng-template>
-                      </td>
-                      <td>
-                        <ng-container *ngIf="editId !== emp.id; else editCargo">
-                          {{ emp.cargo || '--' }}
-                        </ng-container>
-                        <ng-template #editCargo>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.cargo" />
-                        </ng-template>
-                      </td>
-                      <td>
-                        <ng-container *ngIf="editId !== emp.id; else editDepto">
-                          {{ emp.departamento_id || '--' }}
-                        </ng-container>
-                        <ng-template #editDepto>
-                          <select class="ts-select text-sm" [(ngModel)]="editBuffer.departamento_id">
-                            <option [ngValue]="null">Ninguno</option>
-                            <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
-                          </select>
-                        </ng-template>
-                      </td>
-                      <td>
-                        <div class="flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            class="inline-flex items-center rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-accent/60"
-                            (click)="seleccionarEmpleado(emp)"
-                            [disabled]="selectedEmployee?.id === emp.id"
-                            [attr.aria-pressed]="selectedEmployee?.id === emp.id"
-                          >
-                            {{
-                              selectedEmployee?.id === emp.id
-                                ? 'Seleccionado'
-                                : 'Usar en encuesta'
-                            }}
-                          </button>
-                          <button
-                            *ngIf="editId !== emp.id"
-                            class="inline-flex items-center rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:border-accent/40 hover:text-accent"
-                            (click)="iniciarEdicion(emp)"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            *ngIf="editId === emp.id"
-                            class="inline-flex items-center rounded-md bg-success px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-success/90"
-                            (click)="guardarEdicion(emp)"
-                          >
-                            Guardar
-                          </button>
-                          <button
-                            *ngIf="editId === emp.id"
-                            class="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-700"
-                            (click)="cancelarEdicion()"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </ng-container>
-
-            <ng-template #noEmployees>
-              <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 p-6 text-sm text-neutral-500">
-                Todavia no hay empleados listados para esta empresa. Busca o crea uno para continuar.
-              </div>
-            </ng-template>
-          </div>
-
-          <div class="ts-card space-y-6">
-            <div class="space-y-1">
-              <h2 class="text-xl font-semibold text-ink">Iniciar o continuar encuesta</h2>
-              <p class="text-sm text-neutral-400">
-                Selecciona una asignacion vigente y, si corresponde, indica el empleado que respondera.
-              </p>
-            </div>
-
-            <div class="grid gap-4 md:grid-cols-[minmax(0,_0.6fr)_minmax(0,_0.4fr)]">
-              <label class="block space-y-2">
-                <span class="ts-label">Asignacion (vigentes)</span>
-                <select
-                  class="ts-select"
-                  [(ngModel)]="asignacionId"
-                  name="asignacionSelect"
-                  (change)="onAssignmentChange()"
-                  [disabled]="!activeAssignments.length"
-                >
-                  <option [ngValue]="null">Seleccionar...</option>
-                  <option *ngFor="let a of activeAssignments" [ngValue]="a.id">
-                    #{{ a.id }} - Cuest {{ a.cuestionario_id }} - {{ a.alcance_tipo }}
-                  </option>
-                </select>
-                <span class="text-xs text-neutral-400" *ngIf="!activeAssignments.length">
-                  No hay asignaciones vigentes para esta empresa.
-                </span>
-              </label>
-
-              <label class="block space-y-2">
-                <span class="ts-label">Empleado ID (opcional)</span>
-                <input
-                  class="ts-input"
-                  type="number"
-                  [(ngModel)]="empleadoId"
-                  (ngModelChange)="onEmpleadoIdInput($event)"
-                  name="empleadoId"
-                />
-              </label>
-            </div>
-
-            <div class="flex items-center justify-end">
-              <button
-                class="ts-btn ts-btn--positive w-full md:w-auto"
-                (click)="begin()"
-                [disabled]="loadingBegin || (!asignacionId && !formEmp.empresa_id)"
-              >
-                {{ loadingBegin ? 'Cargando...' : 'Iniciar / Continuar' }}
-              </button>
-            </div>
-
-            <div
-              *ngIf="selectedAssignment"
-              class="rounded-xl border border-neutral-200 bg-neutral-100/60 p-4 text-sm text-neutral-600"
-            >
-              <div class="flex flex-wrap items-center gap-3">
-                <span class="font-semibold text-ink">Asignacion #{{ selectedAssignment.id }}</span>
-                <span
-                  class="ts-badge"
-                  [ngClass]="{
-                    'bg-success/10 text-success': isActive(selectedAssignment),
-                    'bg-error/10 text-error': !isActive(selectedAssignment)
-                  }"
-                >
-                  {{ isActive(selectedAssignment) ? 'ACTIVA' : 'FUERA DE FECHA' }}
-                </span>
-              </div>
-              <div class="mt-3 grid gap-2 text-sm">
-                <span>Cuestionario: {{ selectedAssignment.cuestionario_id }}</span>
-                <span>
-                  Alcance:
-                  {{ selectedAssignment.alcance_tipo
-                  }}{{ selectedAssignment.alcance_id ? ' #' + selectedAssignment.alcance_id : '' }}
-                </span>
-                <span>Anonimato: {{ selectedAssignment.anonimo ? 'Si' : 'No' }}</span>
-                <span>
-                  Vigencia:
-                  {{ selectedAssignment.fecha_inicio | date: 'yyyy-MM-dd HH:mm' }} ->
-                  {{ selectedAssignment.fecha_cierre | date: 'yyyy-MM-dd HH:mm' }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <ng-container *ngIf="progress as pr; else noProgress">
           <div class="ts-card space-y-6">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -403,24 +352,7 @@ import { AssignmentsService } from '../assignments.service';
                   Selecciona un pilar y responde las preguntas pendientes.
                 </p>
               </div>
-              <div class="flex flex-wrap items-center gap-3">
-                <div class="ts-chip">{{ pr.respondidas }} / {{ pr.total }} respondidas</div>
-                <button
-                  class="ts-btn ts-btn--positive md:w-auto"
-                  (click)="submitPilar()"
-                  [disabled]="loadingSubmit || !hasQuestions"
-                >
-                  {{ loadingSubmit ? 'Guardando...' : 'Guardar respuestas' }}
-                </button>
-                <button
-                  *ngIf="canFinalize"
-                  class="ts-btn ts-btn--positive md:w-auto"
-                  (click)="submitFullSurvey()"
-                  [disabled]="loadingFinalSubmit"
-                >
-                  {{ loadingFinalSubmit ? 'Enviando...' : 'Enviar formulario completo' }}
-                </button>
-              </div>
+              <div class="ts-chip">{{ pr.respondidas }} / {{ pr.total }} respondidas</div>
             </div>
 
             <div class="grid gap-6 lg:grid-cols-[minmax(0,_0.3fr)_minmax(0,_1fr)]">
@@ -456,6 +388,35 @@ import { AssignmentsService } from '../assignments.service';
                 <h3 class="text-xl font-semibold text-ink">
                   {{ questions?.pilar_nombre || 'Selecciona un pilar' }}
                 </h3>
+                <div *ngIf="likertLevels.length" class="rounded-xl border border-neutral-200 bg-neutral-50 p-4 space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-semibold text-ink">Escala de madurez (1 = Inicial - 5 = Innovador)</p>
+                      <p class="text-xs text-neutral-500">Aplica para todas las preguntas tipo Likert.</p>
+                    </div>
+                    <button class="ts-btn ts-btn--ghost" type="button" (click)="toggleLikertInfo()">
+                      {{ showLikertInfo ? 'Minimizar' : 'Mostrar' }}
+                    </button>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-2" *ngIf="showLikertInfo">
+                    <div
+                      *ngFor="let level of likertLevels"
+                      class="rounded-lg border border-neutral-200 bg-white p-3 text-sm text-neutral-600"
+                    >
+                      <div class="flex items-center justify-between text-ink">
+                        <span class="font-semibold">{{ level.valor }} - {{ level.nombre }}</span>
+                        <span class="text-xs text-neutral-500">{{ level.etiqueta }}</span>
+                      </div>
+                      <p class="mt-2">{{ level.descripcion }}</p>
+                      <p class="mt-1 text-xs text-neutral-500">
+                        Caracteristicas: {{ level.caracteristicas }}
+                      </p>
+                      <p class="mt-1 text-xs text-neutral-500">
+                        ITIL v4: {{ level.interpretacion_itil }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 <ng-container *ngIf="hasQuestions; else noPreguntas">
                   <div
@@ -467,7 +428,7 @@ import { AssignmentsService } from '../assignments.service';
                       <div *ngSwitchCase="'LIKERT'" class="flex flex-wrap gap-3">
                         <label
                           *ngFor="let v of likert"
-                          class="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:border-accent/40"
+                          class="inline-flex items-start gap-3 rounded-md border border-neutral-200 px-3 py-2 text-left text-sm text-neutral-600 transition hover:border-accent/40"
                         >
                           <input
                             type="radio"
@@ -477,7 +438,12 @@ import { AssignmentsService } from '../assignments.service';
                             [(ngModel)]="answers[q.id]"
                             required
                           />
-                          <span>{{ v }}</span>
+                          <span>
+                            <span class="font-semibold text-ink">{{ formatLikertLabel(v) }}</span>
+                            <span class="block text-xs text-neutral-500" *ngIf="formatLikertSubtitle(v)">
+                              {{ formatLikertSubtitle(v) }}
+                            </span>
+                          </span>
                         </label>
                       </div>
                       <div *ngSwitchCase="'SI_NO'" class="flex flex-wrap gap-3">
@@ -522,6 +488,23 @@ import { AssignmentsService } from '../assignments.service';
                       Tipo: {{ q.tipo }} - Obligatoria: {{ q.es_obligatoria ? 'Si' : 'No' }}
                     </div>
                   </div>
+
+                  <div class="mt-6 flex flex-wrap gap-3">
+                    <button
+                      class="ts-btn ts-btn--positive"
+                      (click)="submitPilar()"
+                      [disabled]="loadingSubmit || !hasQuestions"
+                    >
+                      {{ loadingSubmit ? 'Guardando...' : 'Guardar respuestas' }}
+                    </button>
+                    <button
+                      class="ts-btn ts-btn--secondary"
+                      (click)="submitFullSurvey()"
+                      [disabled]="!canFinalize || loadingFinalSubmit"
+                    >
+                      {{ loadingFinalSubmit ? 'Enviando...' : 'Enviar encuesta' }}
+                    </button>
+                  </div>
                 </ng-container>
 
                 <ng-template #noPreguntas>
@@ -536,9 +519,47 @@ import { AssignmentsService } from '../assignments.service';
 
         <ng-template #noProgress>
           <div class="ts-card-muted text-sm text-neutral-500">
-            Selecciona una empresa, elige una asignacion vigente e inicia la encuesta para visualizar el progreso y las preguntas.
+            Selecciona una empresa e ingresa o busca un colaborador. La encuesta se preparara automaticamente cuando exista una asignacion vigente.
           </div>
         </ng-template>
+      </div>
+    </div>
+
+    <div
+      *ngIf="progress"
+      class="survey-progress-bar border-t border-neutral-200 bg-white/95"
+    >
+      <div class="ts-container flex flex-wrap items-center gap-4 py-3">
+        <div>
+          <p class="text-sm font-semibold text-ink">Avance del cuestionario</p>
+          <p class="text-xs text-neutral-500">
+            {{ progress?.respondidas || 0 }} respondidas - {{ pendingQuestions }} pendientes
+          </p>
+        </div>
+        <div class="flex min-w-[12rem] flex-1 items-center gap-3">
+          <div class="h-2 flex-1 rounded-full bg-neutral-200">
+            <div
+              class="h-full rounded-full bg-accent transition-all duration-160 ease-smooth"
+              [style.width.%]="(progress?.progreso || 0) * 100"
+            ></div>
+          </div>
+          <span class="text-sm font-semibold text-ink">
+            {{ ((progress?.progreso || 0) * 100) | number: '1.0-0' }}%
+          </span>
+        </div>
+        <button
+          class="ts-btn ts-btn--positive"
+          (click)="submitFullSurvey()"
+          [disabled]="!canFinalize || loadingFinalSubmit"
+        >
+          {{
+            loadingFinalSubmit
+              ? 'Enviando...'
+              : canFinalize
+              ? 'Enviar encuesta'
+              : 'Completa todos los pilares'
+          }}
+        </button>
       </div>
     </div>
   `,
@@ -550,7 +571,7 @@ import { AssignmentsService } from '../assignments.service';
     `,
   ],
 })
-export class SurveyComponent implements OnInit {
+export class SurveyComponent implements OnInit, OnDestroy {
   asignacionId: number | null = null;
   empleadoId: number | null = null;
   selectedEmployee: Empleado | null = null;
@@ -562,14 +583,21 @@ export class SurveyComponent implements OnInit {
   questions: PillarQuestionsResponse | null = null;
   answers: Record<number, string | null> = {};
   likert: string[] = ['1', '2', '3', '4', '5'];
+  likertLevels: LikertLevel[] = [];
+  private likertLevelsMap: Record<number, LikertLevel> = {};
+  showLikertInfo = true;
 
   empresas: Empresa[] = [];
   departamentos: Departamento[] = [];
   employees: Empleado[] = [];
+  searchTerm = '';
+  hasEmployeeSearch = false;
   loadingEmployees = false;
   formEmp: EmpleadoCreate = {
     empresa_id: 0,
     nombre: '',
+    apellidos: '',
+    rut: '',
     email: '',
     cargo: '',
     departamento_id: null,
@@ -592,6 +620,8 @@ export class SurveyComponent implements OnInit {
 
   private beginRetried = false;
   private ensuringAssignment = false;
+  private autoBeginHandle: ReturnType<typeof setTimeout> | null = null;
+  private searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private survey: SurveyService,
@@ -607,6 +637,11 @@ export class SurveyComponent implements OnInit {
         this.error = 'No se pudieron cargar las empresas.';
       },
     });
+  }
+
+  ngOnDestroy(): void {
+    this.cancelAutoBegin();
+    this.cancelSearchDebounce();
   }
 
   private parseDate(value: string | null | undefined): Date | null {
@@ -639,40 +674,40 @@ export class SurveyComponent implements OnInit {
     }
 
     const empresaId = this.formEmp.empresa_id;
-    this.company.listDepartments(empresaId).subscribe({
-      next: (deps) => (this.departamentos = deps ?? []),
-      error: () => {
-        this.departamentos = [];
-      },
-    });
-
+    this.loadDepartmentsForCompany(empresaId);
     this.refreshAssignments(empresaId);
   }
 
   private resetCompanyState(): void {
     this.departamentos = [];
     this.employees = [];
+    this.searchTerm = '';
+    this.hasEmployeeSearch = false;
+    this.loadingEmployees = false;
     this.assignments = [];
     this.activeAssignments = [];
     this.selectedAssignment = null;
     this.asignacionId = null;
     this.empleadoId = null;
     this.selectedEmployee = null;
-    this.progress = null;
-    this.progressMap = {};
-    this.sidebarPillars = [];
-    this.currentPilar = null;
-    this.questions = null;
-    this.answers = {};
+    this.cancelSearchDebounce();
+    this.cancelAutoBegin();
+    this.clearSurveyData();
     this.message = '';
     this.error = '';
     this.beginRetried = false;
   }
 
-  crearEmpleado(): void {
-    if (!this.formEmp.empresa_id || !this.formEmp.nombre.trim()) {
-      this.error = 'Empresa y nombre son obligatorios';
+  ingresarEmpleado(): void {
+    if (!this.formEmp.empresa_id || !this.formEmp.nombre.trim() || !this.formEmp.apellidos?.trim()) {
+      this.error = 'Empresa, nombre y apellidos son obligatorios';
       return;
+    }
+
+    this.formEmp.nombre = this.formEmp.nombre.trim();
+    this.formEmp.apellidos = (this.formEmp.apellidos ?? '').trim();
+    if (this.formEmp.rut) {
+      this.formEmp.rut = this.formEmp.rut.trim();
     }
 
     this.clearFeedback();
@@ -682,7 +717,10 @@ export class SurveyComponent implements OnInit {
         this.creatingEmp = false;
         this.empleadoId = emp.id;
         this.selectedEmployee = emp;
-        this.message = `Empleado creado (#${emp.id})`;
+        this.clearSurveyData();
+        const fullName = [emp.nombre, emp.apellidos].filter((v) => !!v).join(' ');
+        this.message = `Empleado ingresado (#${emp.id})${fullName ? ` - ${fullName}` : ''}`;
+        this.triggerAutoBeginIfReady();
       },
       error: (err) => {
         this.creatingEmp = false;
@@ -691,40 +729,89 @@ export class SurveyComponent implements OnInit {
     });
   }
 
-  buscarEmpleados(): void {
-    if (!this.formEmp.empresa_id) {
-      this.error = 'Selecciona una empresa para buscar empleados';
+  onSearchTermChange(value: string): void {
+    this.searchTerm = value;
+    this.cancelSearchDebounce();
+    if (!value?.trim()) {
+      this.employees = [];
+      this.hasEmployeeSearch = false;
+      return;
+    }
+    this.searchDebounce = setTimeout(() => {
+      this.searchDebounce = null;
+      this.buscarEmpleados();
+    }, 400);
+  }
+
+  forceEmployeeSearch(): void {
+    this.cancelSearchDebounce();
+    this.buscarEmpleados(this.searchTerm, true);
+  }
+
+  buscarEmpleados(term?: string, manualTrigger = false): void {
+    const rawValue = term ?? this.searchTerm;
+    const query = rawValue?.trim() ?? '';
+    const empresaFiltro = this.formEmp.empresa_id || this.selectedAssignment?.empresa_id || null;
+
+    if (!query && empresaFiltro == null) {
+      if (manualTrigger) {
+        this.error = 'Ingresa un termino de busqueda o selecciona una empresa.';
+      }
       return;
     }
 
     this.clearFeedback();
+    this.hasEmployeeSearch = true;
     this.loadingEmployees = true;
-    this.employee
-      .listByCompany(this.formEmp.empresa_id, this.formEmp.departamento_id ?? undefined)
-      .subscribe({
-        next: (list) => {
-          this.employees = list ?? [];
-          this.selectedEmployee =
-            this.empleadoId != null ? this.employees.find((e) => e.id === this.empleadoId) ?? null : null;
-          this.loadingEmployees = false;
-        },
-        error: (err) => {
-          this.loadingEmployees = false;
-          this.error = err?.error?.detail ?? 'No se pudieron listar empleados';
-        },
-      });
+
+    const request$ = empresaFiltro
+      ? this.employee.listByCompany(
+          empresaFiltro,
+          this.formEmp.departamento_id ?? undefined,
+          query || undefined
+        )
+      : this.employee.search(query);
+
+    request$.subscribe({
+      next: (list) => {
+        this.employees = list ?? [];
+        if (this.empleadoId != null) {
+          const match = this.employees.find((e) => e.id === this.empleadoId);
+          this.selectedEmployee = match ?? this.selectedEmployee;
+        }
+        this.loadingEmployees = false;
+      },
+      error: (err) => {
+        this.loadingEmployees = false;
+        this.error = err?.error?.detail ?? 'No se pudieron listar empleados';
+      },
+    });
   }
 
   seleccionarEmpleado(emp: Empleado): void {
     this.clearFeedback();
+    const companyChanged = !this.formEmp.empresa_id || this.formEmp.empresa_id !== emp.empresa_id;
+    if (companyChanged) {
+      this.formEmp.empresa_id = emp.empresa_id;
+      this.loadDepartmentsForCompany(emp.empresa_id);
+      this.refreshAssignments(emp.empresa_id);
+    }
+    this.formEmp.departamento_id = emp.departamento_id ?? null;
+
+    this.selectedEmployee = emp;
+    this.clearSurveyData();
     this.onEmpleadoIdInput(emp.id);
-    const nombre = emp.nombre ? ` - ${emp.nombre}` : '';
-    this.message = `Empleado seleccionado: #${emp.id}${nombre}`;
+    const nombreCompleto = [emp.nombre, emp.apellidos].filter((v) => !!v).join(' ');
+    const etiqueta = nombreCompleto ? ` - ${nombreCompleto}` : '';
+    this.message = `Empleado seleccionado: #${emp.id}${etiqueta}`;
+    this.triggerAutoBeginIfReady();
   }
 
   limpiarSeleccionEmpleado(): void {
     this.empleadoId = null;
     this.selectedEmployee = null;
+    this.clearSurveyData();
+    this.cancelAutoBegin();
     this.clearFeedback();
   }
 
@@ -751,6 +838,8 @@ export class SurveyComponent implements OnInit {
 
     const payload = {
       nombre: this.editBuffer.nombre ?? emp.nombre,
+      apellidos: this.editBuffer.apellidos ?? emp.apellidos,
+      rut: this.editBuffer.rut ?? emp.rut,
       email: this.editBuffer.email ?? emp.email,
       cargo: this.editBuffer.cargo ?? emp.cargo,
       departamento_id: this.editBuffer.departamento_id ?? emp.departamento_id,
@@ -761,6 +850,9 @@ export class SurveyComponent implements OnInit {
         const idx = this.employees.findIndex((e) => e.id === emp.id);
         if (idx >= 0) {
           this.employees[idx] = updated;
+        }
+        if (this.selectedEmployee?.id === emp.id) {
+          this.selectedEmployee = updated;
         }
         this.cancelarEdicion();
         this.message = 'Empleado actualizado';
@@ -777,9 +869,10 @@ export class SurveyComponent implements OnInit {
       this.asignacionId != null
         ? this.assignments.find((a) => a.id === this.asignacionId) ?? null
         : null;
+    this.triggerAutoBeginIfReady();
   }
 
-  begin(): void {
+  begin(autoTriggered = false): void {
     if (this.loadingBegin) {
       return;
     }
@@ -787,14 +880,18 @@ export class SurveyComponent implements OnInit {
     if (!this.asignacionId) {
       if (this.formEmp.empresa_id) {
         this.beginRetried = false;
-        this.ensureAssignmentAndBegin();
-      } else {
-        this.error = 'Debes seleccionar una asignación';
+        this.ensureAssignmentAndBegin(false, autoTriggered);
+      } else if (!autoTriggered) {
+        this.error = 'Debes seleccionar una asignacion';
       }
       return;
     }
 
-    this.clearFeedback();
+    if (autoTriggered) {
+      this.error = '';
+    } else {
+      this.clearFeedback();
+    }
     this.loadingBegin = true;
 
     this.survey.begin(this.asignacionId, this.empleadoId).subscribe({
@@ -805,13 +902,13 @@ export class SurveyComponent implements OnInit {
       error: (err) => {
         this.loadingBegin = false;
         if (err?.status === 403) {
-          this.error = err?.error?.detail ?? 'Asignación fuera de vigencia';
+          this.error = err?.error?.detail ?? 'Asignacion fuera de vigencia';
           this.beginRetried = false;
         } else if (err?.status === 404 && !this.beginRetried) {
           this.beginRetried = true;
-          this.ensureAssignmentAndBegin(true);
+          this.ensureAssignmentAndBegin(true, autoTriggered);
         } else if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
-          this.error = 'Esta asignación requiere Empleado ID. Selecciónalo o ingrésalo antes de continuar.';
+          this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de continuar.';
           this.beginRetried = false;
         } else {
           this.error = err?.error?.detail ?? 'No se pudo iniciar la encuesta';
@@ -821,7 +918,7 @@ export class SurveyComponent implements OnInit {
     });
   }
 
-  private ensureAssignmentAndBegin(retry = false): void {
+  private ensureAssignmentAndBegin(retry = false, autoTriggered = false): void {
     if (this.ensuringAssignment) {
       return;
     }
@@ -835,7 +932,7 @@ export class SurveyComponent implements OnInit {
     }
 
     this.ensuringAssignment = true;
-    const retryAttempt = retry || this.beginRetried;
+    const retryAttempt = retry || this.beginRetried || autoTriggered;
 
     this.ensureAssignment(empresaId).subscribe({
       next: (assignmentId) => {
@@ -844,7 +941,7 @@ export class SurveyComponent implements OnInit {
         if (!assignmentId) {
           this.loadingBegin = false;
           this.beginRetried = false;
-          this.error = 'No se pudo preparar una asignación activa para esta empresa.';
+          this.error = 'No se pudo preparar una asignacion activa para esta empresa.';
           return;
         }
 
@@ -853,14 +950,14 @@ export class SurveyComponent implements OnInit {
         this.loadingBegin = false;
 
         if (retryAttempt) {
-          this.begin();
+          this.begin(autoTriggered);
         }
       },
       error: (err) => {
         this.ensuringAssignment = false;
         this.loadingBegin = false;
         this.beginRetried = false;
-        this.error = err?.error?.detail ?? 'No se pudo preparar la asignación';
+        this.error = err?.error?.detail ?? 'No se pudo preparar la asignacion';
       },
     });
   }
@@ -994,6 +1091,7 @@ export class SurveyComponent implements OnInit {
     this.survey.getPillarQuestions(this.asignacionId, p.pilar_id, this.empleadoId).subscribe({
       next: (pq) => {
         this.questions = pq;
+        this.setLikertLevels(pq.likert_levels);
         const mapAnswers: Record<number, string | null> = {};
         pq.preguntas.forEach((q: SurveyQuestionRead) => {
           if (q.respuesta_actual != null) {
@@ -1042,9 +1140,9 @@ export class SurveyComponent implements OnInit {
       error: (err) => {
         this.loadingSubmit = false;
         if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
-          this.error = 'Esta asignación requiere Empleado ID. Selecciónalo o ingrésalo antes de guardar.';
+          this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de guardar.';
         } else if (err?.status === 403) {
-          this.error = 'Asignación fuera de vigencia';
+          this.error = 'Asignacion fuera de vigencia';
         } else {
           this.error = err?.error?.detail ?? 'No se pudo guardar';
         }
@@ -1070,9 +1168,9 @@ export class SurveyComponent implements OnInit {
       error: (err) => {
         this.loadingFinalSubmit = false;
         if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
-          this.error = 'Esta asignación requiere Empleado ID. Selecciónalo o ingrésalo antes de enviar.';
+          this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de enviar.';
         } else if (err?.status === 403) {
-          this.error = 'Asignación fuera de vigencia';
+          this.error = 'Asignacion fuera de vigencia';
         } else {
           this.error = err?.error?.detail ?? 'No se pudo enviar el formulario completo';
         }
@@ -1085,11 +1183,114 @@ export class SurveyComponent implements OnInit {
   }
 
   get canFinalize(): boolean {
-    return !!this.progress && this.progress.total > 0 && this.progress.respondidas >= this.progress.total;
+    return this.allPillarsComplete && (this.progress?.total ?? 0) > 0;
+  }
+
+  get pendingQuestions(): number {
+    if (!this.progress) {
+      return 0;
+    }
+    return Math.max(this.progress.total - this.progress.respondidas, 0);
+  }
+
+  private get allPillarsComplete(): boolean {
+    if (!this.progress?.por_pilar?.length) {
+      return false;
+    }
+    return this.progress.por_pilar.every((p) => p.total === 0 || p.respondidas >= p.total);
   }
 
   private clearFeedback(): void {
     this.message = '';
     this.error = '';
   }
+
+  private clearSurveyData(): void {
+    this.progress = null;
+    this.progressMap = {};
+    this.sidebarPillars = [];
+    this.currentPilar = null;
+    this.questions = null;
+    this.answers = {};
+    this.likertLevels = [];
+    this.likertLevelsMap = {};
+    this.showLikertInfo = true;
+  }
+
+  private loadDepartmentsForCompany(empresaId: number): void {
+    this.company.listDepartments(empresaId).subscribe({
+      next: (deps) => (this.departamentos = deps ?? []),
+      error: () => {
+        this.departamentos = [];
+      },
+    });
+  }
+
+  private setLikertLevels(levels: LikertLevel[] | undefined): void {
+    if (!levels?.length) {
+      this.likertLevels = [];
+      this.likertLevelsMap = {};
+      return;
+    }
+    this.likertLevels = levels;
+    const map: Record<number, LikertLevel> = {};
+    levels.forEach((lvl) => (map[lvl.valor] = lvl));
+    this.likertLevelsMap = map;
+  }
+
+  formatLikertLabel(value: string): string {
+    const lvl = this.likertLevelsMap[Number(value)];
+    return lvl ? `${value} - ${lvl.nombre}` : value;
+  }
+
+  formatLikertSubtitle(value: string): string {
+    const lvl = this.likertLevelsMap[Number(value)];
+    return lvl?.etiqueta ?? '';
+  }
+
+  toggleLikertInfo(): void {
+    this.showLikertInfo = !this.showLikertInfo;
+  }
+
+  private cancelSearchDebounce(): void {
+    if (this.searchDebounce) {
+      clearTimeout(this.searchDebounce);
+      this.searchDebounce = null;
+    }
+  }
+
+  private cancelAutoBegin(): void {
+    if (this.autoBeginHandle) {
+      clearTimeout(this.autoBeginHandle);
+      this.autoBeginHandle = null;
+    }
+  }
+
+  private triggerAutoBeginIfReady(): void {
+    if (!this.shouldAutoBegin() || this.loadingBegin || this.ensuringAssignment) {
+      return;
+    }
+    this.cancelAutoBegin();
+    this.autoBeginHandle = setTimeout(() => {
+      this.autoBeginHandle = null;
+      this.begin(true);
+    }, 300);
+  }
+
+  private shouldAutoBegin(): boolean {
+    const empresaId = this.formEmp.empresa_id || this.selectedAssignment?.empresa_id || null;
+    if (!empresaId) {
+      return false;
+    }
+    if (this.selectedAssignment?.anonimo) {
+      return !!(this.asignacionId || this.activeAssignments.length);
+    }
+    return this.empleadoId != null;
+  }
 }
+
+
+
+
+
+

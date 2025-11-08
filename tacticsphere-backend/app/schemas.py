@@ -102,12 +102,16 @@ class PasswordChangeRequestRead(BaseModel):
 class EmpleadoCreate(BaseModel):
     empresa_id: int
     nombre: str
+    apellidos: Optional[str] = None
+    rut: Optional[str] = None
     email: Optional[str] = None
     cargo: Optional[str] = None
     departamento_id: Optional[int] = None
 
 class EmpleadoUpdate(BaseModel):
     nombre: Optional[str] = None
+    apellidos: Optional[str] = None
+    rut: Optional[str] = None
     email: Optional[str] = None
     cargo: Optional[str] = None
     departamento_id: Optional[int] = None
@@ -117,6 +121,8 @@ class EmpleadoRead(BaseModel):
     empresa_id: int
     departamento_id: Optional[int] = None
     nombre: str
+    apellidos: Optional[str] = None
+    rut: Optional[str] = None
     email: Optional[str] = None
     cargo: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
@@ -304,7 +310,16 @@ class SurveyQuestionRead(BaseModel):
 class PillarQuestionsResponse(BaseModel):
     pilar_id: int
     pilar_nombre: str
+    likert_levels: Optional[List["LikertLevel"]] = None
     preguntas: List[SurveyQuestionRead]
+
+class LikertLevel(BaseModel):
+    valor: int
+    nombre: str
+    etiqueta: str
+    descripcion: str
+    caracteristicas: str
+    interpretacion_itil: str
 
 # --- Envío masivo de respuestas, por pilar ---
 class BulkAnswersRequest(BaseModel):

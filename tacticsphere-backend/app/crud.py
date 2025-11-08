@@ -227,18 +227,39 @@ def delete_departamento(db: Session, dep_id: int) -> bool:
 # EMPLEADOS
 # ======================================================
 
-def list_empleados(db: Session, empresa_id: Optional[int] = None, departamento_id: Optional[int] = None) -> List[Empleado]:
+def list_empleados(
+    db: Session,
+    empresa_id: Optional[int] = None,
+    departamento_id: Optional[int] = None,
+    search: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Empleado]:
     stmt = select(Empleado)
     if empresa_id is not None:
         stmt = stmt.where(Empleado.empresa_id == empresa_id)
     if departamento_id is not None:
         stmt = stmt.where(Empleado.departamento_id == departamento_id)
+    if search:
+        pattern = f"%{search.lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Empleado.nombre).like(pattern),
+                func.lower(Empleado.apellidos).like(pattern),
+                func.lower(Empleado.email).like(pattern),
+                func.lower(Empleado.rut).like(pattern),
+            )
+        )
+    stmt = stmt.order_by(Empleado.nombre.asc(), Empleado.apellidos.asc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return db.scalars(stmt).all()
 
 def create_empleado(
     db: Session,
     empresa_id: int,
     nombre: str,
+    apellidos: Optional[str] = None,
+    rut: Optional[str] = None,
     email: Optional[str] = None,
     cargo: Optional[str] = None,
     departamento_id: Optional[int] = None,
@@ -246,6 +267,8 @@ def create_empleado(
     emp = Empleado(
         empresa_id=empresa_id,
         nombre=nombre,
+        apellidos=apellidos,
+        rut=rut,
         email=email,
         cargo=cargo,
         departamento_id=departamento_id,
@@ -259,6 +282,8 @@ def update_empleado(
     db: Session,
     empleado_id: int,
     nombre: Optional[str] = None,
+    apellidos: Optional[str] = None,
+    rut: Optional[str] = None,
     email: Optional[str] = None,
     cargo: Optional[str] = None,
     departamento_id: Optional[int] = None,
@@ -268,6 +293,10 @@ def update_empleado(
         return None
     if nombre is not None:
         emp.nombre = nombre
+    if apellidos is not None:
+        emp.apellidos = apellidos
+    if rut is not None:
+        emp.rut = rut
     if email is not None:
         emp.email = email
     if cargo is not None:

@@ -16,13 +16,28 @@ export class EmployeeService {
    * Lista empleados por empresa (opcionalmente filtrado por departamento).
    * GET /companies/{empresa_id}/employees?departamento_id=
    */
-  listByCompany(empresaId: number, departamentoId?: number | null): Observable<Empleado[]> {
+  listByCompany(
+    empresaId: number,
+    departamentoId?: number | null,
+    search?: string
+  ): Observable<Empleado[]> {
     let params = new HttpParams();
     if (departamentoId != null) {
       params = params.set('departamento_id', String(departamentoId));
     }
+    if (search && search.trim().length) {
+      params = params.set('search', search.trim());
+    }
     return this.http.get<Empleado[]>(`${this.api}/companies/${empresaId}/employees`, { params });
     // El token se agrega automáticamente por el interceptor.
+  }
+
+  search(query: string, empresaId?: number | null): Observable<Empleado[]> {
+    let params = new HttpParams().set('query', query);
+    if (empresaId != null) {
+      params = params.set('empresa_id', String(empresaId));
+    }
+    return this.http.get<Empleado[]>(`${this.api}/employees/search`, { params });
   }
 
   /**
