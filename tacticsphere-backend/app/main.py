@@ -828,6 +828,8 @@ def update_user(
     u = db.get(Usuario, user_id)
     if not u:
         raise HTTPException(status_code=404, detail="Not Found")
+    if u.rol == RolEnum.ADMIN_SISTEMA and data.activo is False:
+        raise HTTPException(status_code=400, detail="No se puede desactivar un ADMIN_SISTEMA")
     before = {
         "nombre": u.nombre,
         "email": u.email,
@@ -955,6 +957,9 @@ def delete_user(
     if not u:
 
         raise HTTPException(status_code=404, detail="Not Found")
+    if u.rol == RolEnum.ADMIN_SISTEMA:
+        raise HTTPException(status_code=400, detail="No se puede eliminar un ADMIN_SISTEMA")
+
 
 
 

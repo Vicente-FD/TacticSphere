@@ -188,17 +188,17 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                     <td class="text-sm text-neutral-500 break-words">{{ empresaName(u.empresa_id) }}</td>
                     <td>
                       <label class="flex items-center gap-2 text-sm text-neutral-500">
-                        <input
-                          type="checkbox"
-                          class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
-                          [checked]="u.activo"
-                          (change)="toggleActive(u)"
-                          [disabled]="togglingActiveId === u.id"
-                        />
-                        <span>{{ u.activo ? 'Sí' : 'No' }}</span>
-                      </label>
-                    </td>
-                    <td>
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
+                      [checked]="u.activo"
+                      (change)="toggleActive(u)"
+                      [disabled]="togglingActiveId === u.id || u.rol === 'ADMIN_SISTEMA'"
+                    />
+                    <span>{{ u.activo ? 'Sí' : 'No' }}</span>
+                  </label>
+                </td>
+                <td>
                       <div class="flex flex-wrap gap-2">
                         <button
                           class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
@@ -222,7 +222,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate } from '../../types';
                         <button
                           class="ts-btn ts-btn--danger"
                           (click)="deleteUser(u)"
-                          [disabled]="deletingId === u.id"
+                          [disabled]="deletingId === u.id || u.rol === 'ADMIN_SISTEMA'"
                         >
                           <lucide-icon
                             *ngIf="deletingId !== u.id"
@@ -350,7 +350,7 @@ export class UsersComponent implements OnInit {
   }
 
   toggleActive(u: Usuario): void {
-    if (this.togglingActiveId) return;
+    if (u.rol === 'ADMIN_SISTEMA' || this.togglingActiveId) return;
     this.togglingActiveId = u.id;
     this.usersApi.toggleActive(u).subscribe({
       next: (updated) => {
@@ -383,6 +383,7 @@ export class UsersComponent implements OnInit {
   }
 
   deleteUser(u: Usuario): void {
+    if (u.rol === 'ADMIN_SISTEMA') return;
     if (!confirm(`¿Eliminar usuario ${u.email}?`)) return;
     this.deletingId = u.id;
     this.usersApi.delete(u.id).subscribe({
