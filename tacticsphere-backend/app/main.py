@@ -1925,6 +1925,81 @@ def analytics_dashboard(
     return DashboardAnalyticsResponse(**data)
 
 
+@app.get("/analytics/responses/export")
+def analytics_responses_export(
+    empresa_id: int = Query(...),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    departamento_ids: Optional[List[int]] = Query(None),
+    empleado_ids: Optional[List[int]] = Query(None),
+    pilar_ids: Optional[List[int]] = Query(None),
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    _ensure_company_access(current, empresa_id)
+    rows = crud.list_responses_for_export(
+        db,
+        empresa_id=empresa_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        departamento_ids=departamento_ids,
+        empleado_ids=empleado_ids,
+        pilar_ids=pilar_ids,
+    )
+
+    headers = [
+        "respuesta_id",
+        "fecha_respuesta",
+        "asignacion_id",
+        "alcance_tipo",
+        "alcance_id",
+        "pregunta_id",
+        "pregunta_enunciado",
+        "pilar_id",
+        "pilar_nombre",
+        "empleado_id",
+        "empleado_nombre",
+        "departamento_nombre",
+        "valor",
+    ]
+
+    def iter_rows():
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(headers)
+        yield buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        for row in rows:
+            writer.writerow(
+                [
+                    row["respuesta_id"],
+                    row["fecha_respuesta"],
+                    row["asignacion_id"],
+                    row["alcance_tipo"],
+                    row["alcance_id"],
+                    row["pregunta_id"],
+                    row["pregunta_enunciado"],
+                    row["pilar_id"],
+                    row["pilar_nombre"],
+                    row["empleado_id"],
+                    row["empleado_nombre"],
+                    row["departamento_nombre"],
+                    row["valor"],
+                ]
+            )
+            yield buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate(0)
+
+    filename = f"respuestas-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+    return StreamingResponse(
+        iter_rows(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/survey/{asignacion_id}/answers", response_model=BulkAnswersResponse)
 
 def survey_submit_answers(

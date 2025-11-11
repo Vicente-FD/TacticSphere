@@ -42,5 +42,28 @@ export class AnalyticsService {
       params: httpParams,
     });
   }
-}
 
+  exportResponsesCsv(params: AnalyticsQueryParams): Observable<Blob> {
+    let httpParams = new HttpParams().set('empresa_id', params.companyId);
+    if (params.dateFrom) {
+      httpParams = httpParams.set('fecha_desde', params.dateFrom);
+    }
+    if (params.dateTo) {
+      httpParams = httpParams.set('fecha_hasta', params.dateTo);
+    }
+    (params.departmentIds ?? []).forEach((id) => {
+      httpParams = httpParams.append('departamento_ids', String(id));
+    });
+    (params.employeeIds ?? []).forEach((id) => {
+      httpParams = httpParams.append('empleado_ids', String(id));
+    });
+    (params.pillarIds ?? []).forEach((id) => {
+      httpParams = httpParams.append('pilar_ids', String(id));
+    });
+
+    return this.http.get(`${this.api}/analytics/responses/export`, {
+      params: httpParams,
+      responseType: 'blob',
+    });
+  }
+}

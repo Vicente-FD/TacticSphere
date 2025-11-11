@@ -44,6 +44,17 @@ const echartsWithTheme = echarts as unknown as {
   getTheme?: (name: string) => unknown;
 };
 
+const TS_COLORS = {
+  primary: "#3B82F6",
+  positive: "#22C55E",
+  warning: "#EAB308",
+  danger: "#EF4444",
+  text: "#1E293B",
+  background: "#F8FAFC",
+  gridLine: "rgba(148,163,184,0.3)",
+};
+const AREA_FILL = "rgba(59,130,246,0.15)";
+
 if (!echartsWithTheme.getTheme?.(TS_MONO_THEME)) {
   try {
     echartsWithTheme.registerTheme(TS_MONO_THEME, tsMonoTheme);
@@ -89,6 +100,7 @@ export class DashboardAnalyticsComponent
   private errorSignal = signal<string>("");
   private infoSignal = signal<string>("");
   private exportingSignal = signal<boolean>(false);
+  private exportingCsvSignal = signal<boolean>(false);
   private filterSignal = signal<AnalyticsQueryParams | null>(null);
   private likertLevelsSignal = signal<LikertLevel[]>([]);
 
@@ -100,6 +112,7 @@ export class DashboardAnalyticsComponent
   error = this.errorSignal.asReadonly();
   info = this.infoSignal.asReadonly();
   exporting = this.exportingSignal.asReadonly();
+  exportingCsv = this.exportingCsvSignal.asReadonly();
 
   selectedCompanyId: number | null = null;
   selectedDepartmentId: number | null = null;
@@ -297,6 +310,9 @@ export class DashboardAnalyticsComponent
     const data = pillars.map((item) => ({ value: this.round(item.percent), pillarId: item.pillar_id }));
     const selected = this.selectedPillar;
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -305,12 +321,20 @@ export class DashboardAnalyticsComponent
           return `${first.name}: ${this.formatNumber(first.value)}%`;
         },
       },
-      grid: { left: 180, right: 48, bottom: 32, top: 24 },
-      xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
+      grid: { left: 180, right: 48, bottom: 32, top: 32, containLabel: true },
+      color: [TS_COLORS.primary],
+      xAxis: {
+        type: "value",
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
       yAxis: {
         type: "category",
         data: categories,
-        axisLabel: { fontWeight: 600, color: "#111827" },
+        axisLabel: { fontWeight: 600, color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       series: [
         {
@@ -321,12 +345,18 @@ export class DashboardAnalyticsComponent
             itemStyle: {
               color:
                 selected !== "ALL" && item.pillarId === selected
-                  ? "#2563EB"
-                  : "#94A3B8",
+                  ? TS_COLORS.primary
+                  : "rgba(148,163,184,0.8)",
             },
           })),
           barWidth: 24,
-          label: { show: true, position: "right", formatter: "{c}%", fontWeight: 600 },
+          label: {
+            show: true,
+            position: "right",
+            formatter: "{c}%",
+            fontWeight: 600,
+            color: TS_COLORS.text,
+          },
         },
       ],
     };
@@ -336,6 +366,9 @@ export class DashboardAnalyticsComponent
     const pillars = this.analytics()?.pillars ?? [];
     if (!pillars.length) return this.emptyChartOption("Sin balance registrado", "radar");
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 900,
+      animationEasing: "cubicOut",
       tooltip: {
         trigger: "item",
         formatter: (params: any) => {
@@ -349,9 +382,9 @@ export class DashboardAnalyticsComponent
         indicator: pillars.map((pillar) => ({ name: pillar.pillar_name, max: 100 })),
         radius: "70%",
         splitNumber: 4,
-        splitLine: { lineStyle: { color: "#CBD5F5" } },
-        splitArea: { areaStyle: { color: ["rgba(99,102,241,0.16)", "rgba(99,102,241,0.05)"] } },
-        axisName: { color: "#1F2937", fontWeight: 600 },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        splitArea: { areaStyle: { color: [AREA_FILL, "rgba(59,130,246,0.05)"] } },
+        axisName: { color: TS_COLORS.text, fontWeight: 600 },
       },
       series: [
         {
@@ -360,9 +393,9 @@ export class DashboardAnalyticsComponent
             {
               value: pillars.map((pillar) => this.round(pillar.percent)),
               name: "Promedio",
-              areaStyle: { color: "rgba(59,130,246,0.28)" },
-              lineStyle: { color: "#2563EB", width: 2 },
-              itemStyle: { color: "#2563EB" },
+              areaStyle: { color: AREA_FILL },
+              lineStyle: { color: TS_COLORS.primary, width: 2 },
+              itemStyle: { color: TS_COLORS.primary },
             },
           ],
         },
@@ -391,6 +424,9 @@ export class DashboardAnalyticsComponent
         .filter((item): item is { value: [number, number, number]; pillarId: number; departmentId: number | null } => !!item)
     );
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
       tooltip: {
         formatter: (params: any) => {
           const value = params.data?.value as [number, number, number];
@@ -402,16 +438,18 @@ export class DashboardAnalyticsComponent
           )}%`;
         },
       },
-      grid: { left: 180, right: 32, top: 48, bottom: 80 },
+      grid: { left: 180, right: 32, top: 48, bottom: 80, containLabel: true },
       xAxis: {
         type: "category",
         data: pillars.map((p) => p.pillar_name),
-        axisLabel: { interval: 0, rotate: 20, fontWeight: 600 },
+        axisLabel: { interval: 0, rotate: 20, fontWeight: 600, color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       yAxis: {
         type: "category",
         data: departments.map((d) => d.department_name),
-        axisLabel: { fontWeight: 600 },
+        axisLabel: { fontWeight: 600, color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       visualMap: {
         min: 0,
@@ -419,6 +457,8 @@ export class DashboardAnalyticsComponent
         orient: "horizontal",
         left: "center",
         bottom: 10,
+        textStyle: { color: TS_COLORS.text },
+        inRange: { color: ["#E0F2FE", TS_COLORS.primary] },
       },
       series: [
         {
@@ -436,7 +476,13 @@ export class DashboardAnalyticsComponent
     );
     if (!distributions.length) return this.emptyChartOption("Sin datos de distribucion");
     const categories = distributions.map((item) => item.pillar_name);
-    const levelColors = ["#991b1b", "#ca8a04", "#facc15", "#22c55e", "#2563eb"];
+    const levelColors = [
+      TS_COLORS.danger,
+      TS_COLORS.warning,
+      "#FACC15",
+      TS_COLORS.positive,
+      TS_COLORS.primary,
+    ];
     const series = [1, 2, 3, 4, 5].map((level, idx) => {
       const levelIndex = level - 1;
       return {
@@ -463,6 +509,9 @@ export class DashboardAnalyticsComponent
         `${this.formatNumber(params?.data?.pctGe4 ?? params?.data?.value ?? 0)}% ≥4`,
     };
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 900,
+      animationEasing: "cubicOut",
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -481,10 +530,21 @@ export class DashboardAnalyticsComponent
         left: 16,
         right: 16,
         orient: "horizontal",
+        textStyle: { color: TS_COLORS.text },
       },
       grid: { left: 140, right: 32, bottom: 32, top: 80, containLabel: true },
-      xAxis: { type: "category", data: categories, axisLabel: { interval: 0, rotate: 20 } },
-      yAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
+      xAxis: {
+        type: "category",
+        data: categories,
+        axisLabel: { interval: 0, rotate: 20, color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
+        type: "value",
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
       series: series as unknown as EChartsOption["series"],
     };
   }
@@ -507,8 +567,8 @@ export class DashboardAnalyticsComponent
         type: "line",
         data: globalSeries,
         smooth: true,
-        lineStyle: { width: 3, color: "#3A8FFF" },
-        areaStyle: { color: "rgba(59,130,246,0.12)" },
+        lineStyle: { width: 3, color: TS_COLORS.primary },
+        areaStyle: { color: AREA_FILL },
       },
     ];
     if (pillarSeries) {
@@ -517,16 +577,32 @@ export class DashboardAnalyticsComponent
         type: "line",
         data: pillarSeries,
         smooth: true,
-        lineStyle: { width: 2, color: "#F97316" },
+        lineStyle: { width: 2, color: TS_COLORS.positive },
         connectNulls: true,
       });
     }
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 900,
+      animationEasing: "cubicOut",
       tooltip: { trigger: "axis" },
-      legend: { data: series.map((item) => item.name) },
-      grid: { left: 64, right: 32, bottom: 48, top: 48 },
-      xAxis: { type: "category", data: categories, boundaryGap: false },
-      yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
+      legend: { data: series.map((item) => item.name), textStyle: { color: TS_COLORS.text } },
+      grid: { left: 64, right: 32, bottom: 48, top: 48, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: categories,
+        boundaryGap: false,
+        axisLabel: { color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
       series,
     };
   }
@@ -535,6 +611,9 @@ export class DashboardAnalyticsComponent
     const employees = this.analytics()?.employees ?? [];
     if (!employees.length) return this.emptyChartOption("Sin datos de empleados");
     return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
       tooltip: {
         formatter: (params: any) => {
           const point = employees[params.dataIndex];
@@ -543,13 +622,20 @@ export class DashboardAnalyticsComponent
         },
       },
       xAxis: { type: "category", data: employees.map((emp) => emp.name), show: false },
-      yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
+      yAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
       series: [
         {
           type: "scatter",
           symbolSize: 14,
           data: employees.map((emp) => this.round(emp.percent)),
-          itemStyle: { color: "#2563EB" },
+          itemStyle: { color: TS_COLORS.primary },
         },
       ],
     };
@@ -557,6 +643,35 @@ export class DashboardAnalyticsComponent
 
   exportPdfUrlDisabled(): boolean {
     return this.loading() || this.exporting() || !this.analytics();
+  }
+
+  exportCsv(): void {
+    if (this.exportingCsv()) return;
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      this.errorSignal.set("Selecciona una empresa para exportar.");
+      return;
+    }
+    this.exportingCsvSignal.set(true);
+    this.analyticsSvc.exportResponsesCsv(filter).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `tacticsphere-respuestas-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        console.error("Export CSV failed", err);
+        this.errorSignal.set(err?.error?.detail ?? "No pudimos exportar el CSV. Intenta nuevamente.");
+      },
+      complete: () => {
+        this.exportingCsvSignal.set(false);
+      },
+    });
   }
 
   async exportPdf(): Promise<void> {

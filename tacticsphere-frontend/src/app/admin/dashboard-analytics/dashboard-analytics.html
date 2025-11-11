@@ -24,6 +24,14 @@
         <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
           Actualizar datos
         </button>
+        <button
+          class="ts-btn ts-btn--outline"
+          type="button"
+          (click)="exportCsv()"
+          [disabled]="loading() || exportingCsv() || !analytics()"
+        >
+          {{ exportingCsv() ? 'Exportando CSV...' : 'Exportar CSV' }}
+        </button>
         <button class="ts-btn" type="button" (click)="exportPdf()" [disabled]="exportPdfUrlDisabled()">
           {{ exporting() ? 'Generando PDF...' : 'Exportar PDF' }}
         </button>
@@ -32,7 +40,13 @@
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6" *ngIf="showFilters">
         <label class="block space-y-2 xl:col-span-2">
           <span class="ts-label">Empresa</span>
-          <select class="ts-select" [(ngModel)]="selectedCompanyId" (ngModelChange)="onCompanyChange($event)" [disabled]="isUser">
+          <select
+            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
+            [(ngModel)]="selectedCompanyId"
+            (ngModelChange)="onCompanyChange($event)"
+            [disabled]="isUser"
+            panelClass="ts-select-panel"
+          >
             <option [ngValue]="null">Selecciona empresa...</option>
             <option *ngFor="let company of companies(); trackBy: trackById" [ngValue]="company.id">{{ company.nombre }}</option>
           </select>
@@ -50,7 +64,12 @@
 
         <label class="block space-y-2">
           <span class="ts-label">Departamento</span>
-          <select class="ts-select" [(ngModel)]="selectedDepartmentId" (ngModelChange)="onDepartmentChange($event)">
+          <select
+            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
+            [(ngModel)]="selectedDepartmentId"
+            (ngModelChange)="onDepartmentChange($event)"
+            panelClass="ts-select-panel"
+          >
             <option [ngValue]="null">Todos los departamentos</option>
             <option *ngFor="let dept of departments(); trackBy: trackById" [ngValue]="dept.id">{{ dept.nombre }}</option>
           </select>
@@ -58,7 +77,12 @@
 
         <label class="block space-y-2">
           <span class="ts-label">Pilar</span>
-          <select class="ts-select" [(ngModel)]="selectedPillar" (ngModelChange)="onPillarChange($event)">
+          <select
+            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
+            [(ngModel)]="selectedPillar"
+            (ngModelChange)="onPillarChange($event)"
+            panelClass="ts-select-panel"
+          >
             <option [ngValue]="'ALL'">Todos los pilares</option>
             <option *ngFor="let pillar of pillarOptions(); trackBy: trackByIndex" [ngValue]="pillar.pillar_id">
               {{ pillar.pillar_name }}
@@ -68,7 +92,12 @@
 
         <label class="block space-y-2 xl:col-span-2">
           <span class="ts-label">Empleado</span>
-          <select class="ts-select" [(ngModel)]="selectedEmployeeId" (ngModelChange)="onEmployeeChange($event)">
+          <select
+            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
+            [(ngModel)]="selectedEmployeeId"
+            (ngModelChange)="onEmployeeChange($event)"
+            panelClass="ts-select-panel"
+          >
             <option [ngValue]="null">Todos los empleados</option>
             <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp.id">
               {{ emp.nombre }} (ID {{ emp.id }})

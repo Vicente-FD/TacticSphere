@@ -1529,6 +1529,81 @@ def compute_dashboard_analytics(
     }
 
 
+def list_responses_for_export(
+    db: Session,
+    empresa_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    departamento_ids: Optional[List[int]] = None,
+    empleado_ids: Optional[List[int]] = None,
+    pilar_ids: Optional[List[int]] = None,
+) -> List[Dict[str, object]]:
+    """Collects raw responses for CSV export honoring the same filters as analytics."""
+    dept_filter = [int(x) for x in (departamento_ids or []) if x is not None]
+    emp_filter = [int(x) for x in (empleado_ids or []) if x is not None]
+    pillar_filter = [int(x) for x in (pilar_ids or []) if x is not None]
+
+    stmt = (
+        select(
+            Respuesta.id.label("respuesta_id"),
+            Respuesta.fecha_respuesta,
+            Asignacion.id.label("asignacion_id"),
+            Asignacion.alcance_tipo,
+            Asignacion.alcance_id,
+            Pregunta.id.label("pregunta_id"),
+            Pregunta.enunciado.label("pregunta_enunciado"),
+            Pilar.id.label("pilar_id"),
+            Pilar.nombre.label("pilar_nombre"),
+            Empleado.id.label("empleado_id"),
+            Empleado.nombre.label("empleado_nombre"),
+            Departamento.nombre.label("departamento_nombre"),
+            Respuesta.valor,
+        )
+        .join(Asignacion, Respuesta.asignacion_id == Asignacion.id)
+        .join(Pregunta, Respuesta.pregunta_id == Pregunta.id)
+        .join(Pilar, Pregunta.pilar_id == Pilar.id)
+        .outerjoin(Empleado, Respuesta.empleado_id == Empleado.id)
+        .outerjoin(Departamento, Empleado.departamento_id == Departamento.id)
+        .where(Asignacion.empresa_id == empresa_id)
+    )
+
+    if fecha_desde:
+        start_dt = datetime.combine(fecha_desde, datetime.min.time())
+        stmt = stmt.where(Respuesta.fecha_respuesta >= start_dt)
+    if fecha_hasta:
+        end_dt = datetime.combine(fecha_hasta + timedelta(days=1), datetime.min.time())
+        stmt = stmt.where(Respuesta.fecha_respuesta < end_dt)
+    if pillar_filter:
+        stmt = stmt.where(Pregunta.pilar_id.in_(pillar_filter))
+    if emp_filter:
+        stmt = stmt.where(Respuesta.empleado_id.in_(emp_filter))
+    if dept_filter:
+        stmt = stmt.where(Empleado.departamento_id.in_(dept_filter))
+
+    stmt = stmt.order_by(Respuesta.fecha_respuesta.desc(), Respuesta.id.desc())
+    rows = db.execute(stmt).mappings().all()
+    result: List[Dict[str, object]] = []
+    for row in rows:
+        result.append(
+            {
+                "respuesta_id": row["respuesta_id"],
+                "fecha_respuesta": row["fecha_respuesta"],
+                "asignacion_id": row["asignacion_id"],
+                "alcance_tipo": row["alcance_tipo"],
+                "alcance_id": row["alcance_id"],
+                "pregunta_id": row["pregunta_id"],
+                "pregunta_enunciado": row["pregunta_enunciado"],
+                "pilar_id": row["pilar_id"],
+                "pilar_nombre": row["pilar_nombre"],
+                "empleado_id": row["empleado_id"],
+                "empleado_nombre": row["empleado_nombre"],
+                "departamento_nombre": row["departamento_nombre"],
+                "valor": row["valor"],
+            }
+        )
+    return result
+
+
 # ======================================================
 # CONSULTING LEADS
 # ======================================================
