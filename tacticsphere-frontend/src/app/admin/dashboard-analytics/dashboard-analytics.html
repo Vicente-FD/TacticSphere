@@ -128,7 +128,7 @@
           (employeeClick)="onLikertEmployeeClick($event)"
         ></app-likert-buckets>
 
-        <div class="ts-card space-y-3 min-w-0 animate-subtleUp">
+        <div class="ts-card space-y-3 min-w-0 animate-subtleUp" *ngIf="shouldShowFilterSummary()">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-ink">Resumen del filtro actual</h2>
             <p class="text-sm text-muted">Aplicado a todos los graficos y KPIs.</p>
@@ -148,6 +148,7 @@
               class="block h-[26rem] w-full animate-fadeIn"
               [theme]="'tsMono'"
               [options]="barPillarOption()"
+              [initOpts]="chartInitOpts"
               [autoResize]="true"
               (chartClick)="onPillarBarClick($event)"
             ></echarts>
@@ -162,6 +163,7 @@
               class="block h-[26rem] w-full animate-fadeIn"
               [theme]="'tsMono'"
               [options]="radarBalanceOption()"
+              [initOpts]="chartInitOpts"
               [autoResize]="true"
             ></echarts>
           </div>
@@ -177,6 +179,7 @@
               class="block h-[28rem] w-full animate-fadeIn"
               [theme]="'tsMono'"
               [options]="heatmapOption()"
+              [initOpts]="chartInitOpts"
               [autoResize]="true"
               (chartClick)="onHeatmapClick($event)"
             ></echarts>
@@ -191,6 +194,7 @@
               class="block h-[28rem] w-full animate-fadeIn"
               [theme]="'tsMono'"
               [options]="distributionOption()"
+              [initOpts]="chartInitOpts"
               [autoResize]="true"
             ></echarts>
           </div>
@@ -205,6 +209,7 @@
             class="block h-[28rem] w-full animate-fadeIn"
             [theme]="'tsMono'"
             [options]="timelineOption()"
+            [initOpts]="chartInitOpts"
             [autoResize]="true"
           ></echarts>
         </div>
@@ -258,6 +263,7 @@
             class="block h-[26rem] w-full animate-fadeIn"
             [theme]="'tsMono'"
             [options]="employeeScatterOption()"
+            [initOpts]="chartInitOpts"
             [autoResize]="true"
           ></echarts>
         </div>

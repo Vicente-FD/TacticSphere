@@ -2,7 +2,7 @@
   <div class="likert-buckets__header">
     <div>
       <p class="likert-buckets__eyebrow">Estadios Likert</p>
-      <p class="likert-buckets__subtitle">Distribución de colaboradores por nivel actual.</p>
+      <p class="likert-buckets__subtitle">Distribucion de colaboradores por nivel actual.</p>
     </div>
     <span class="likert-buckets__badge">
       {{ totalEmployeesCount }} empleado{{ totalEmployeesCount === 1 ? '' : 's' }}
@@ -17,12 +17,10 @@
         [style.--bucket-color]="bucket.color"
       >
         <header class="likert-card__header">
+          <span class="likert-card__dot" [style.background]="bucket.color"></span>
           <div class="likert-card__title">
-            <span class="likert-card__dot" [style.background]="bucket.color"></span>
-            <div>
-              <p class="likert-card__name">{{ bucket.label }}</p>
-              <p class="likert-card__subtitle">{{ bucket.subtitle }}</p>
-            </div>
+            <p class="likert-card__name">{{ bucket.label }}</p>
+            <p class="likert-card__subtitle">{{ bucket.subtitle }}</p>
           </div>
           <div class="likert-card__count">
             <span class="likert-card__count-number">{{ bucket.employees.length }}</span>
@@ -37,7 +35,7 @@
             <li *ngFor="let employee of bucket.employees; trackBy: trackByEmployee">
               <button class="likert-card__employee" type="button" (click)="handleEmployeeClick(employee.id)">
                 <span class="likert-card__employee-name">{{ formatEmployeeIdentity(employee) }}</span>
-                <span class="likert-card__chevron" aria-hidden="true">→</span>
+                <span class="likert-card__chevron" aria-hidden="true">&rarr;</span>
               </button>
             </li>
           </ul>

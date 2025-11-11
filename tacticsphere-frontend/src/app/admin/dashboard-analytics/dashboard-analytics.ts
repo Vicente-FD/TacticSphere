@@ -1,8 +1,10 @@
 import {
   AfterViewChecked,
   AfterViewInit,
+  ChangeDetectionStrategy,
   Component,
   HostListener,
+  NgZone,
   OnDestroy,
   OnInit,
   QueryList,
@@ -16,11 +18,11 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { HttpClient } from "@angular/common/http";
 import { NgxEchartsDirective, NgxEchartsModule } from "ngx-echarts";
-import * as echarts from "echarts";
 import { EChartsOption } from "echarts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Subscription, firstValueFrom } from "rxjs";
+import { Subject, Subscription, firstValueFrom } from "rxjs";
+import { debounceTime } from "rxjs/operators";
 
 import { AnalyticsService, AnalyticsQueryParams } from "../../analytics.service";
 import { CompanyService } from "../../company.service";
@@ -45,10 +47,24 @@ import {
 } from "./likert-buckets/likert-buckets.component";
 
 const TS_MONO_THEME = "tsMono";
-const echartsWithTheme = echarts as unknown as {
-  registerTheme: (name: string, theme: unknown) => void;
-  getTheme?: (name: string) => unknown;
+let echartsReady = false;
+const ensureEchartsTheme = async (): Promise<void> => {
+  if (echartsReady) return;
+  const echartsModule = await import("echarts");
+  const echartsWithTheme = echartsModule as unknown as {
+    registerTheme: (name: string, theme: unknown) => void;
+    getTheme?: (name: string) => unknown;
+  };
+  if (!echartsWithTheme.getTheme?.(TS_MONO_THEME)) {
+    try {
+      echartsWithTheme.registerTheme(TS_MONO_THEME, tsMonoTheme);
+    } catch {
+      // ignore if already registered
+    }
+  }
+  echartsReady = true;
 };
+void ensureEchartsTheme();
 
 const TS_COLORS = {
   primary: "#3B82F6",
@@ -60,14 +76,6 @@ const TS_COLORS = {
   gridLine: "rgba(148,163,184,0.3)",
 };
 const AREA_FILL = "rgba(59,130,246,0.15)";
-
-if (!echartsWithTheme.getTheme?.(TS_MONO_THEME)) {
-  try {
-    echartsWithTheme.registerTheme(TS_MONO_THEME, tsMonoTheme);
-  } catch {
-    // ignore if already registered
-  }
-}
 
 interface KpiCard {
   label: string;
@@ -81,6 +89,7 @@ interface KpiCard {
   selector: "app-dashboard-analytics",
   imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent],
   templateUrl: "./dashboard-analytics.html",
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardAnalyticsComponent
   implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked
@@ -91,6 +100,7 @@ export class DashboardAnalyticsComponent
   private employeeSvc = inject(EmployeeService);
   private auth = inject(AuthService);
   private auditSvc = inject(AuditService);
+  private zone = inject(NgZone);
 
   @ViewChildren(NgxEchartsDirective) charts!: QueryList<NgxEchartsDirective>;
 
@@ -109,6 +119,8 @@ export class DashboardAnalyticsComponent
   private exportingCsvSignal = signal<boolean>(false);
   private filterSignal = signal<AnalyticsQueryParams | null>(null);
   private likertLevelsSignal = signal<LikertLevel[]>([]);
+  private filterUpdates$ = new Subject<AnalyticsQueryParams>();
+  private analyticsCache = new Map<string, DashboardAnalyticsResponse>();
 
   analytics = this.analyticsSignal.asReadonly();
   companies = this.companiesSignal.asReadonly();
@@ -128,12 +140,13 @@ export class DashboardAnalyticsComponent
   dateTo: string | null = null;
   employeeSearch = "";
   showFilters = false;
-  private resizeTimer: any;
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private subscriptions: Subscription[] = [];
   private logoDataUrl: string | null = null;
   private currentUserName: string | null = null;
   private currentUserEmail: string | null = null;
   private userLoaded = false;
+  readonly chartInitOpts = { renderer: "canvas" as const };
 
   readonly filteredEmployees = computed(() => {
     const search = this.employeeSearch.trim().toLowerCase();
@@ -206,6 +219,8 @@ export class DashboardAnalyticsComponent
     return { scope: "company" };
   });
 
+  readonly shouldShowFilterSummary = computed(() => this.likertBucketsFilter().scope === "employee");
+
   readonly kpiCards = computed<KpiCard[]>(() => {
     const data = this.analytics();
     const kpis = data?.kpis;
@@ -252,8 +267,15 @@ export class DashboardAnalyticsComponent
   private readonly filterEffect = effect(() => {
     const filter = this.filterSignal();
     if (!filter) return;
-    this.fetchAnalytics(filter);
+    this.filterUpdates$.next(filter);
   });
+
+  constructor() {
+    const filterSub = this.filterUpdates$
+      .pipe(debounceTime(150))
+      .subscribe((filter) => this.fetchAnalytics(filter));
+    this.subscriptions.push(filterSub);
+  }
 
   ngOnInit(): void {
     this.loadCompanies();
@@ -274,9 +296,20 @@ export class DashboardAnalyticsComponent
   ngOnDestroy(): void {
     this.filterEffect.destroy();
     this.subscriptions.forEach((sub) => sub.unsubscribe());
+    this.filterUpdates$.complete();
     if (this.resizeTimer) {
       clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
     }
+    this.zone.runOutsideAngular(() => {
+      this.charts?.forEach((chart) => {
+        try {
+          (chart as any)?.dispose?.();
+        } catch {
+          // ignore chart dispose errors
+        }
+      });
+    });
   }
 
   toggleFilters(): void {
@@ -505,7 +538,7 @@ export class DashboardAnalyticsComponent
           if (!value) return "";
           const dept = departments[value[1]];
           const pillar = pillars[value[0]];
-          return `${dept?.department_name ?? "Departamento"} · ${pillar?.pillar_name ?? "Pilar"}: ${this.formatNumber(
+          return `${dept?.department_name ?? "Departamento"} Â· ${pillar?.pillar_name ?? "Pilar"}: ${this.formatNumber(
             value[2]
           )}%`;
         },
@@ -693,7 +726,7 @@ export class DashboardAnalyticsComponent
           const point = employees[params.dataIndex];
           const label = this.formatLikertLabel(point.level);
           const identity = identityMap.get(point.id) ?? { nombre: point.name ?? `Empleado ${point.id}` };
-          return `${this.formatEmployeeIdentity(identity, point.name)}<br/>${this.formatNumber(point.percent)}% ? ${label}`;
+          return `${this.formatEmployeeIdentity(identity, point.name)}<br/>${this.formatNumber(point.percent)}% Â· ${label}`;
         },
       },
       xAxis: {
@@ -836,6 +869,14 @@ export class DashboardAnalyticsComponent
       this.loadingSignal.set(false);
       return;
     }
+    const cacheKey = this.buildCacheKey(filter);
+    if (this.analyticsCache.has(cacheKey)) {
+      const cached = this.analyticsCache.get(cacheKey)!;
+      this.analyticsSignal.set(cached);
+      this.likertLevelsSignal.set(cached.likert_levels ?? []);
+      this.loadingSignal.set(false);
+      return;
+    }
     this.loadingSignal.set(true);
     this.errorSignal.set("");
     this.infoSignal.set("");
@@ -843,6 +884,7 @@ export class DashboardAnalyticsComponent
       .getDashboardAnalytics(filter)
       .subscribe({
         next: (response) => {
+          this.analyticsCache.set(cacheKey, response);
           this.analyticsSignal.set(response);
           this.likertLevelsSignal.set(response.likert_levels ?? []);
           this.loadingSignal.set(false);
@@ -920,6 +962,17 @@ export class DashboardAnalyticsComponent
     this.filterSignal.set(filter);
   }
 
+  private buildCacheKey(filter: AnalyticsQueryParams): string {
+    return JSON.stringify({
+      companyId: filter.companyId,
+      dateFrom: filter.dateFrom ?? null,
+      dateTo: filter.dateTo ?? null,
+      departmentIds: filter.departmentIds ?? [],
+      employeeIds: filter.employeeIds ?? [],
+      pillarIds: filter.pillarIds ?? [],
+    });
+  }
+
   private resolveCompanyName(id: number | null | undefined): string {
     if (id == null) return "Empresa";
     const company = this.companiesSignal().find((item) => item.id === id);
@@ -977,20 +1030,30 @@ export class DashboardAnalyticsComponent
     return [
       `Generado: ${generatedAt.toLocaleString()}`,
       `Usuario: ${this.currentUserName ?? "--"} (${this.currentUserEmail ?? "--"})`,
-      `Filtros: ${this.filterSummary().join(" · ")}`,
+      `Filtros: ${this.filterSummary().join(" Â· ")}`,
     ];
   }
 
   private resizeAllCharts(): void {
-    this.charts?.forEach((chart) => chart.resize());
+    this.zone.runOutsideAngular(() => {
+      this.charts?.forEach((chart) => {
+        try {
+          chart.resize();
+        } catch {
+          // ignore resize issues
+        }
+      });
+    });
   }
 
   @HostListener("window:resize")
   onWindowResize(): void {
-    if (this.resizeTimer) {
-      clearTimeout(this.resizeTimer);
-    }
-    this.resizeTimer = setTimeout(() => this.resizeAllCharts(), 120);
+    this.zone.runOutsideAngular(() => {
+      if (this.resizeTimer) {
+        clearTimeout(this.resizeTimer);
+      }
+      this.resizeTimer = setTimeout(() => this.resizeAllCharts(), 150);
+    });
   }
 
   private formatNumber(value: number | null | undefined): string {

@@ -1,4 +1,5 @@
 import {
+  ChangeDetectionStrategy,
   Component,
   OnInit,
   computed,
@@ -59,6 +60,7 @@ interface PillarTrendSerie {
   standalone: true,
   selector: 'app-dashboards',
   imports: [CommonModule, FormsModule, NgxEchartsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ts-page">
       <div class="ts-container space-y-6">
@@ -102,7 +104,7 @@ interface PillarTrendSerie {
                   (ngModelChange)="onCompanyChange($event)"
                 >
                   <option [ngValue]="null">selecciona empresa.</option>
-                  <option *ngFor="let company of companies()" [ngValue]="company.id">
+                  <option *ngFor="let company of companies(); trackBy: trackById" [ngValue]="company.id">
                     {{ company.nombre }}
                   </option>
                 </select>
@@ -116,7 +118,7 @@ interface PillarTrendSerie {
                   (ngModelChange)="onDepartmentChange($event)"
                 >
                   <option [ngValue]="null">Selecciona departamento…</option>
-                  <option *ngFor="let dep of departments()" [ngValue]="dep.id">
+                  <option *ngFor="let dep of departments(); trackBy: trackById" [ngValue]="dep.id">
                     {{ dep.nombre }}
                   </option>
                 </select>
@@ -130,7 +132,7 @@ interface PillarTrendSerie {
                   (ngModelChange)="onEmployeeChange($event)"
                 >
                   <option [ngValue]="null">Selecciona empleado…</option>
-                  <option *ngFor="let emp of employees()" [ngValue]="emp.id">
+                  <option *ngFor="let emp of employees(); trackBy: trackById" [ngValue]="emp.id">
                     {{ formatEmployeeIdentity(emp) }}
                   </option>
                 </select>
@@ -254,7 +256,7 @@ interface PillarTrendSerie {
                           </h3>
                           <ul class="mt-2 space-y-2">
                             <li
-                              *ngFor="let item of ranking.best; let index = index"
+                              *ngFor="let item of ranking.best; let index = index; trackBy: trackByRanking"
                               class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
                             >
                               <span class="text-sm font-medium text-ink">
@@ -273,7 +275,7 @@ interface PillarTrendSerie {
                           </h3>
                           <ul class="mt-2 space-y-2">
                             <li
-                              *ngFor="let item of ranking.worst; let index = index"
+                              *ngFor="let item of ranking.worst; let index = index; trackBy: trackByRanking"
                               class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2"
                             >
                               <span class="text-sm font-medium text-ink">
@@ -320,7 +322,7 @@ interface PillarTrendSerie {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr *ngFor="let insight of insights()">
+                      <tr *ngFor="let insight of insights(); trackBy: trackByAssignment">
                         <td class="align-top">
                           <div class="font-medium text-ink">#{{ insight.Asignacion.id }}</div>
                           <div class="text-xs text-neutral-400">
@@ -362,7 +364,7 @@ interface PillarTrendSerie {
                         <td class="align-top text-sm">
                           <div class="space-y-2">
                             <div
-                              *ngFor="let pp of (insight.progress?.por_pilar ?? [])"
+                              *ngFor="let pp of (insight.progress?.por_pilar ?? []); trackBy: trackByPillar"
                               class="rounded-lg border border-neutral-200 px-3 py-2"
                             >
                               <div class="flex items-center justify-between text-xs text-neutral-400 uppercase tracking-[0.12em]">
@@ -451,6 +453,15 @@ export class DashboardsComponent implements OnInit {
     const rut = record?.rut?.trim();
     return rut ? `${displayName} - ${rut}` : displayName;
   }
+
+  trackById = (_: number, item: { id?: number | null }) => item?.id ?? _;
+
+  trackByRanking = (_: number, item: { label?: string | null }) => item?.label ?? _;
+
+  trackByAssignment = (_: number, insight: AssignmentInsight) => insight.Asignacion.id;
+
+  trackByPillar = (_: number, pillar: PillarProgress) =>
+    pillar?.pilar_id ?? pillar?.pilar_nombre ?? _;
 
   totalAssignments = computed(() => this.insights().length);
 

@@ -73,9 +73,9 @@
 }
 
 .likert-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   gap: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid #f1f5f9;
@@ -83,8 +83,9 @@
 
 .likert-card__title {
   display: flex;
-  gap: 0.65rem;
+  flex-direction: column;
   min-width: 0;
+  padding-right: 0.75rem;
 }
 
 .likert-card__dot {
