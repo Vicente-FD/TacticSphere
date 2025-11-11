@@ -1,6 +1,6 @@
 # app/main.py
 
-from typing import Optional
+from typing import Optional, List
 
 import csv
 
@@ -20,7 +20,7 @@ import os, time
 
 import hashlib
 
-from datetime import datetime, timedelta  # usamos naive UTC para coherencia
+from datetime import datetime, timedelta, date  # usamos naive UTC para coherencia
 
 from pydantic import BaseModel  # â¬ï¸ para SimpleBeginRequest
 
@@ -78,6 +78,9 @@ from .schemas import (
     # Asignaciones
 
     AsignacionCreate, AsignacionRead,
+
+    # Analytics
+    DashboardAnalyticsResponse,
 
     # Encuesta
 
@@ -1896,6 +1899,30 @@ def survey_pillar_questions(
         preguntas=items,
     )
 
+
+
+@app.get("/analytics/dashboard", response_model=DashboardAnalyticsResponse)
+def analytics_dashboard(
+    empresa_id: int = Query(...),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    departamento_ids: Optional[List[int]] = Query(None),
+    empleado_ids: Optional[List[int]] = Query(None),
+    pilar_ids: Optional[List[int]] = Query(None),
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    _ensure_company_access(current, empresa_id)
+    data = crud.compute_dashboard_analytics(
+        db,
+        empresa_id=empresa_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        departamento_ids=departamento_ids,
+        empleado_ids=empleado_ids,
+        pilar_ids=pilar_ids,
+    )
+    return DashboardAnalyticsResponse(**data)
 
 
 @app.post("/survey/{asignacion_id}/answers", response_model=BulkAnswersResponse)

@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Tuple, Iterable
-from datetime import datetime, timedelta, timezone  # usamos naive UTC
+from datetime import datetime, timedelta, timezone, date  # usamos naive UTC
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, func, and_, or_
 
@@ -22,6 +22,7 @@ from .models import (
     AuditLog,
     AuditActionEnum,
 )
+from .likert_levels import LIKERT_LEVELS
 
 # ======================================================
 # USUARIOS
@@ -383,7 +384,7 @@ def create_cuestionario(db: Session, empresa_id: int, titulo: str, version: int,
 def list_cuestionarios(db: Session, empresa_id: int) -> List[Cuestionario]:
     return db.scalars(select(Cuestionario).where(Cuestionario.empresa_id == empresa_id)).all()
 
-# === cuestionario PUBLICADO más reciente ===
+# === cuestionario PUBLICADO mÃ¡s reciente ===
 def get_latest_published_cuestionario(db: Session, empresa_id: int) -> Optional[Cuestionario]:
     stmt = (
         select(Cuestionario)
@@ -394,7 +395,7 @@ def get_latest_published_cuestionario(db: Session, empresa_id: int) -> Optional[
     )
     return db.scalars(stmt).first()
 
-# --- MODO SIMPLE: helpers automáticos ---
+# --- MODO SIMPLE: helpers automÃ¡ticos ---
 
 def build_or_get_auto_cuestionario(db: Session, empresa_id: int) -> Cuestionario:
     """
@@ -449,15 +450,15 @@ def _validate_assignment_fk(db: Session, empresa_id: int, cuestionario_id: int,
             raise ValueError("Para alcance DEPARTAMENTO, alcance_id es obligatorio")
         dep = db.get(Departamento, alcance_id)
         if not dep or dep.empresa_id != empresa_id:
-            raise ValueError("Departamento inválido para la empresa")
+            raise ValueError("Departamento invÃ¡lido para la empresa")
     elif alcance_tipo == "EMPLEADO":
         if alcance_id is None:
             raise ValueError("Para alcance EMPLEADO, alcance_id es obligatorio")
         emp_obj = db.get(Empleado, alcance_id)
         if not emp_obj or emp_obj.empresa_id != empresa_id:
-            raise ValueError("Empleado inválido para la empresa")
+            raise ValueError("Empleado invÃ¡lido para la empresa")
     else:
-        raise ValueError("alcance_tipo inválido")
+        raise ValueError("alcance_tipo invÃ¡lido")
 
 def create_asignacion(
     db: Session,
@@ -499,14 +500,14 @@ def get_asignacion(db: Session, asignacion_id: int) -> Optional[Asignacion]:
 
 def is_assignment_active(asg: Asignacion, now: Optional[datetime] = None) -> bool:
     """
-    True si now está dentro de [inicio, cierre].
+    True si now estÃ¡ dentro de [inicio, cierre].
     """
     now = now or datetime.utcnow()  # naive UTC
     return (asg.fecha_inicio <= now <= asg.fecha_cierre)
 
 def get_active_asignacion_for_empresa(db: Session, empresa_id: int, now: Optional[datetime] = None) -> Optional[Asignacion]:
     """
-    Devuelve la asignación vigente de alcance EMPRESA para la empresa dada,
+    Devuelve la asignaciÃ³n vigente de alcance EMPRESA para la empresa dada,
     o None si no hay vigente.
     """
     now = now or datetime.utcnow()  # naive UTC
@@ -529,7 +530,7 @@ def get_or_create_active_asignacion(
     anonimo: bool = False,
 ) -> Optional[Asignacion]:
     """
-    Retorna una asignación vigente (alcance EMPRESA). Si no existe y hay un
+    Retorna una asignaciÃ³n vigente (alcance EMPRESA). Si no existe y hay un
     cuestionario PUBLICADO, crea una nueva con vigencia [ahora-1h, ahora+ventana_dias].
     Si no existe cuestionario publicado, retorna None.
     """
@@ -556,7 +557,7 @@ def get_or_create_active_asignacion(
         anonimo=anonimo,
     )
 
-# --- MODO SIMPLE: garantiza asignación auto (vigencia amplia) ---
+# --- MODO SIMPLE: garantiza asignaciÃ³n auto (vigencia amplia) ---
 
 def get_or_create_auto_asignacion(
     db: Session,
@@ -564,7 +565,7 @@ def get_or_create_auto_asignacion(
     anonimo: bool = False,
 ) -> Asignacion:
     """
-    Garantiza una asignación vigente a nivel EMPRESA.
+    Garantiza una asignaciÃ³n vigente a nivel EMPRESA.
     Si no hay, crea una con cuestionario AUTO (todas las preguntas) y vigencia amplia.
     """
     # Asegurar cuestionario actualizado (global + de empresa)
@@ -597,7 +598,7 @@ def get_or_create_auto_asignacion(
     )
 
 # ======================================================
-# ENCUESTA (Asignación → Pilares/Preguntas → Respuestas & Progreso)
+# ENCUESTA (AsignaciÃ³n â†’ Pilares/Preguntas â†’ Respuestas & Progreso)
 # ======================================================
 
 def list_pilares_por_asignacion(db: Session, asignacion_id: int) -> List[Pilar]:
@@ -804,7 +805,7 @@ def submit_bulk_answers(
 
 
 # ======================================================
-# AUDITORÍA
+# AUDITORÃA
 # ======================================================
 def _build_audit_query(
     *,
@@ -927,9 +928,9 @@ def compute_assignment_progress(
     empleado_id: Optional[int] = None
 ) -> Dict:
     """
-    Calcula dos tipos de métricas:
+    Calcula dos tipos de mÃ©tricas:
       - completion: porcentaje de avance (preguntas respondidas / totales)
-      - progreso: puntaje promedio (normalizado 0..1) según las respuestas entregadas
+      - progreso: puntaje promedio (normalizado 0..1) segÃºn las respuestas entregadas
     """
     asg = get_asignacion(db, asignacion_id)
     if not asg:
@@ -962,7 +963,7 @@ def compute_assignment_progress(
             return None
         if tipo == TipoPreguntaEnum.SI_NO:
             lowered = raw.lower()
-            if lowered in {"1", "si", "sí", "true", "t", "yes", "y"}:
+            if lowered in {"1", "si", "sÃ­", "true", "t", "yes", "y"}:
                 return 1.0
             if lowered in {"0", "no", "false", "f", "not", "n"}:
                 return 0.0
@@ -1091,6 +1092,442 @@ def compute_assignment_progress(
         "completion": completion_global,
         "por_pilar": por_pilar,
     }
+
+def compute_dashboard_analytics(
+    db: Session,
+    empresa_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    departamento_ids: Optional[List[int]] = None,
+    empleado_ids: Optional[List[int]] = None,
+    pilar_ids: Optional[List[int]] = None,
+) -> Dict:
+    """Calcula todas las mÃ©tricas del dashboard basadas en Likert."""
+
+    dept_filter = [int(x) for x in (departamento_ids or []) if x is not None]
+    emp_filter = [int(x) for x in (empleado_ids or []) if x is not None]
+    pillar_filter = [int(x) for x in (pilar_ids or []) if x is not None]
+
+    def _as_percent(value_sum: float, weight_sum: float) -> float:
+        if not weight_sum:
+            return 0.0
+        percent = (value_sum / (5 * weight_sum)) * 100
+        if percent < 0:
+            percent = 0.0
+        if percent > 100:
+            percent = 100.0
+        return round(percent, 1)
+
+    def _level_percentages(levels: List[float], weight_sum: float) -> List[float]:
+        if not weight_sum:
+            return [0.0] * 5
+        return [round((value / weight_sum) * 100, 1) for value in levels]
+
+    dept_rows = db.execute(
+        select(Departamento.id, Departamento.nombre).where(Departamento.empresa_id == empresa_id)
+    ).all()
+    dept_lookup = {row.id: row.nombre for row in dept_rows}
+
+    emp_stmt = select(Empleado.id, Empleado.nombre, Empleado.departamento_id).where(
+        Empleado.empresa_id == empresa_id
+    )
+    if emp_filter:
+        emp_stmt = emp_stmt.where(Empleado.id.in_(emp_filter))
+    elif dept_filter:
+        emp_stmt = emp_stmt.where(Empleado.departamento_id.in_(dept_filter))
+    employees = db.execute(emp_stmt).all()
+    employee_lookup = {
+        row.id: {"name": row.nombre, "departamento_id": row.departamento_id}
+        for row in employees
+    }
+    employee_universe = set(employee_lookup.keys())
+    coverage_total = len(emp_filter) if emp_filter else len(employee_universe)
+
+    start_dt = datetime.combine(fecha_desde, datetime.min.time()) if fecha_desde else None
+    end_dt = (
+        datetime.combine(fecha_hasta + timedelta(days=1), datetime.min.time())
+        if fecha_hasta
+        else None
+    )
+
+    stmt = (
+        select(
+            Respuesta.valor,
+            Respuesta.fecha_respuesta,
+            Respuesta.empleado_id,
+            Pregunta.peso.label("pregunta_peso"),
+            Pilar.id.label("pilar_id"),
+            Pilar.nombre.label("pilar_nombre"),
+            Pilar.peso.label("pilar_peso"),
+            Empleado.departamento_id,
+            Departamento.nombre.label("departamento_nombre"),
+            Asignacion.alcance_tipo,
+            Asignacion.alcance_id,
+            Asignacion.anonimo,
+        )
+        .join(Pregunta, Respuesta.pregunta_id == Pregunta.id)
+        .join(Pilar, Pregunta.pilar_id == Pilar.id)
+        .join(Asignacion, Respuesta.asignacion_id == Asignacion.id)
+        .outerjoin(Empleado, Respuesta.empleado_id == Empleado.id)
+        .outerjoin(Departamento, Empleado.departamento_id == Departamento.id)
+        .where(
+            Asignacion.empresa_id == empresa_id,
+            Pregunta.tipo == TipoPreguntaEnum.LIKERT,
+        )
+    )
+    if start_dt:
+        stmt = stmt.where(Respuesta.fecha_respuesta >= start_dt)
+    if end_dt:
+        stmt = stmt.where(Respuesta.fecha_respuesta < end_dt)
+    if pillar_filter:
+        stmt = stmt.where(Pilar.id.in_(pillar_filter))
+    if emp_filter:
+        stmt = stmt.where(Respuesta.empleado_id.in_(emp_filter))
+    if dept_filter:
+        stmt = stmt.where(
+            or_(
+                Empleado.departamento_id.in_(dept_filter),
+                and_(
+                    Asignacion.alcance_tipo == "DEPARTAMENTO",
+                    Asignacion.alcance_id.in_(dept_filter),
+                ),
+            )
+        )
+
+    rows = db.execute(stmt).all()
+
+    pillar_map: Dict[int, Dict[str, object]] = {}
+    dept_map: Dict[Optional[int], Dict[str, object]] = {}
+    timeline_map: Dict[date, Dict[str, object]] = {}
+    employee_map: Dict[int, Dict[str, object]] = {}
+    respondent_employees: set[int] = set()
+    global_stats = {"value_sum": 0.0, "weight_sum": 0.0, "levels": [0.0] * 5}
+
+    for row in rows:
+        raw = row.valor
+        if raw is None:
+            continue
+        try:
+            value = float(str(raw).replace(",", "."))
+        except ValueError:
+            continue
+        if value < 1 or value > 5:
+            continue
+        question_weight = float(row.pregunta_peso or 1)
+        pillar_weight = float(row.pilar_peso or 1)
+        weight = question_weight * pillar_weight
+        if weight <= 0:
+            continue
+
+        level_idx = int(round(value))
+        if level_idx < 1:
+            level_idx = 1
+        if level_idx > 5:
+            level_idx = 5
+        level_pos = level_idx - 1
+        weighted_value = value * weight
+
+        global_stats["value_sum"] += weighted_value
+        global_stats["weight_sum"] += weight
+        global_stats["levels"][level_pos] += weight
+
+        pillar_entry = pillar_map.setdefault(
+            row.pilar_id,
+            {
+                "name": row.pilar_nombre or f"Pilar #{row.pilar_id}",
+                "value_sum": 0.0,
+                "weight_sum": 0.0,
+                "levels": [0.0] * 5,
+            },
+        )
+        pillar_entry["value_sum"] += weighted_value
+        pillar_entry["weight_sum"] += weight
+        pillar_entry["levels"][level_pos] += weight
+
+        day = row.fecha_respuesta.date()
+        timeline_entry = timeline_map.setdefault(
+            day,
+            {"value_sum": 0.0, "weight_sum": 0.0, "pillars": {}},
+        )
+        timeline_entry["value_sum"] += weighted_value
+        timeline_entry["weight_sum"] += weight
+        day_pillar = timeline_entry["pillars"].setdefault(
+            row.pilar_id,
+            {"value_sum": 0.0, "weight_sum": 0.0},
+        )
+        day_pillar["value_sum"] += weighted_value
+        day_pillar["weight_sum"] += weight
+
+        if row.empleado_id is not None:
+            respondent_employees.add(row.empleado_id)
+
+        if not row.anonimo:
+            dept_id = row.departamento_id
+            dept_name = row.departamento_nombre
+            if dept_id is None and row.alcance_tipo == "DEPARTAMENTO" and row.alcance_id is not None:
+                dept_id = row.alcance_id
+                dept_name = dept_lookup.get(dept_id, f"Departamento #{dept_id}")
+            if dept_id is not None:
+                dept_entry = dept_map.setdefault(
+                    dept_id,
+                    {
+                        "name": dept_name or dept_lookup.get(dept_id, f"Departamento #{dept_id}") or f"Departamento #{dept_id}",
+                        "value_sum": 0.0,
+                        "weight_sum": 0.0,
+                        "pillars": {},
+                    },
+                )
+                dept_entry["value_sum"] += weighted_value
+                dept_entry["weight_sum"] += weight
+                dept_pillar = dept_entry["pillars"].setdefault(
+                    row.pilar_id,
+                    {
+                        "name": pillar_entry["name"],
+                        "value_sum": 0.0,
+                        "weight_sum": 0.0,
+                        "levels": [0.0] * 5,
+                    },
+                )
+                dept_pillar["value_sum"] += weighted_value
+                dept_pillar["weight_sum"] += weight
+                dept_pillar["levels"][level_pos] += weight
+
+            if row.empleado_id is not None:
+                emp_info = employee_lookup.get(row.empleado_id)
+                emp_name = (emp_info or {}).get("name") or f"Empleado #{row.empleado_id}"
+                employee_entry = employee_map.setdefault(
+                    row.empleado_id,
+                    {"name": emp_name, "value_sum": 0.0, "weight_sum": 0.0},
+                )
+                employee_entry["value_sum"] += weighted_value
+                employee_entry["weight_sum"] += weight
+
+    coverage_base = set(emp_filter) if emp_filter else employee_universe
+    if coverage_base:
+        coverage_respondents = len(respondent_employees & coverage_base)
+    else:
+        coverage_respondents = len(respondent_employees)
+    coverage_percent = (
+        round((coverage_respondents / coverage_total) * 100, 1)
+        if coverage_total
+        else None
+    )
+
+    if not global_stats["weight_sum"]:
+        return {
+            "generated_at": datetime.utcnow(),
+            "filters": {
+                "empresa_id": empresa_id,
+                "fecha_desde": fecha_desde,
+                "fecha_hasta": fecha_hasta,
+                "departamento_ids": dept_filter,
+                "empleado_ids": emp_filter,
+                "pilar_ids": pillar_filter,
+            },
+            "likert_levels": LIKERT_LEVELS,
+            "kpis": {
+                "global_average": 0.0,
+                "strongest_pillar": None,
+                "weakest_pillar": None,
+                "pillar_gap": 0.0,
+                "coverage_percent": coverage_percent,
+                "coverage_total": coverage_total,
+                "coverage_respondents": coverage_respondents,
+                "trend_30d": None,
+            },
+            "pillars": [],
+            "heatmap": [],
+            "distribution": {"global": [], "by_department": []},
+            "timeline": [],
+            "ranking": {"top": [], "bottom": []},
+            "employees": [],
+        }
+
+    def _build_distribution_entry(pilar_id: int, stats: Dict[str, object]) -> Dict:
+        percent = _as_percent(stats["value_sum"], stats["weight_sum"])
+        levels = _level_percentages(stats["levels"], stats["weight_sum"])
+        pct_ge4 = round(sum(levels[3:]), 1)
+        return {
+            "pillar_id": pilar_id,
+            "pillar_name": stats["name"],
+            "percent": percent,
+            "pct_ge4": pct_ge4,
+            "levels": levels,
+        }
+
+    pillars = [
+        _build_distribution_entry(pid, data)
+        for pid, data in pillar_map.items()
+    ]
+    pillars.sort(key=lambda item: item["percent"], reverse=True)
+    pillar_order = [item["pillar_id"] for item in pillars]
+    pillar_name_lookup = {item["pillar_id"]: item["pillar_name"] for item in pillars}
+
+    heatmap_rows = []
+    distribution_by_department = []
+    dept_items = []
+    for dept_id, data in dept_map.items():
+        if not data["weight_sum"]:
+            continue
+        average = _as_percent(data["value_sum"], data["weight_sum"])
+        dept_items.append((dept_id, average, data))
+    dept_items.sort(key=lambda item: item[1], reverse=True)
+
+    for dept_id, average, data in dept_items:
+        values = []
+        pillars_for_dept = []
+        for pid in pillar_order:
+            stats = data["pillars"].get(pid)
+            if stats:
+                percent = _as_percent(stats["value_sum"], stats["weight_sum"])
+                entry = _build_distribution_entry(pid, stats)
+            else:
+                percent = 0.0
+                entry = {
+                    "pillar_id": pid,
+                    "pillar_name": pillar_name_lookup.get(pid, f"Pilar #{pid}"),
+                    "percent": 0.0,
+                    "pct_ge4": 0.0,
+                    "levels": [0.0] * 5,
+                }
+            values.append({"pillar_id": pid, "percent": percent})
+            pillars_for_dept.append(entry)
+        heatmap_rows.append(
+            {
+                "department_id": dept_id,
+                "department_name": data["name"],
+                "average": average,
+                "values": values,
+            }
+        )
+        distribution_by_department.append(
+            {
+                "department_id": dept_id,
+                "department_name": data["name"],
+                "pillars": pillars_for_dept,
+            }
+        )
+
+    ranking_top = [
+        {"id": dept_id, "name": data["name"], "value": average}
+        for dept_id, average, data in dept_items[:5]
+    ]
+    ranking_bottom = [
+        {"id": dept_id, "name": data["name"], "value": average}
+        for dept_id, average, data in list(reversed(dept_items))[:5]
+    ]
+
+    timeline_points = []
+    for day in sorted(timeline_map.keys()):
+        entry = timeline_map[day]
+        pillars_point = {
+            pid: _as_percent(stats["value_sum"], stats["weight_sum"])
+            for pid, stats in entry["pillars"].items()
+        }
+        timeline_points.append(
+            {
+                "date": day,
+                "global_percent": _as_percent(entry["value_sum"], entry["weight_sum"]),
+                "pillars": pillars_point,
+            }
+        )
+
+    trend_30d = None
+    if timeline_map:
+        latest_day = max(timeline_map.keys())
+        current_start = latest_day - timedelta(days=29)
+        previous_start = current_start - timedelta(days=30)
+        current_value = current_weight = 0.0
+        previous_value = previous_weight = 0.0
+        for day, entry in timeline_map.items():
+            if current_start <= day <= latest_day:
+                current_value += entry["value_sum"]
+                current_weight += entry["weight_sum"]
+            elif previous_start <= day < current_start:
+                previous_value += entry["value_sum"]
+                previous_weight += entry["weight_sum"]
+        current_percent = _as_percent(current_value, current_weight)
+        previous_percent = _as_percent(previous_value, previous_weight)
+        if previous_percent > 0:
+            trend_30d = round(((current_percent - previous_percent) / previous_percent) * 100, 1)
+
+    employee_points = []
+    for emp_id, data in employee_map.items():
+        if not data["weight_sum"]:
+            continue
+        percent = _as_percent(data["value_sum"], data["weight_sum"])
+        avg_value = data["value_sum"] / data["weight_sum"]
+        level = int(round(avg_value))
+        if level < 1:
+            level = 1
+        if level > 5:
+            level = 5
+        employee_points.append(
+            {
+                "id": emp_id,
+                "name": data["name"],
+                "percent": percent,
+                "level": level,
+            }
+        )
+    employee_points.sort(key=lambda item: item["percent"], reverse=True)
+
+    strongest = pillars[0] if pillars else None
+    weakest = pillars[-1] if len(pillars) > 1 else pillars[0] if pillars else None
+    pillar_gap = 0.0
+    if strongest and weakest and strongest is not weakest:
+        pillar_gap = round(strongest["percent"] - weakest["percent"], 1)
+
+    global_average = _as_percent(global_stats["value_sum"], global_stats["weight_sum"])
+
+    return {
+        "generated_at": datetime.utcnow(),
+        "filters": {
+            "empresa_id": empresa_id,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "departamento_ids": dept_filter,
+            "empleado_ids": emp_filter,
+            "pilar_ids": pillar_filter,
+        },
+        "likert_levels": LIKERT_LEVELS,
+        "kpis": {
+            "global_average": global_average,
+            "strongest_pillar": (
+                {
+                    "id": strongest["pillar_id"],
+                    "name": strongest["pillar_name"],
+                    "value": strongest["percent"],
+                }
+                if strongest
+                else None
+            ),
+            "weakest_pillar": (
+                {
+                    "id": weakest["pillar_id"],
+                    "name": weakest["pillar_name"],
+                    "value": weakest["percent"],
+                }
+                if weakest
+                else None
+            ),
+            "pillar_gap": pillar_gap,
+            "coverage_percent": coverage_percent,
+            "coverage_total": coverage_total,
+            "coverage_respondents": coverage_respondents,
+            "trend_30d": trend_30d,
+        },
+        "pillars": pillars,
+        "heatmap": heatmap_rows,
+        "distribution": {
+            "global": pillars,
+            "by_department": distribution_by_department,
+        },
+        "timeline": timeline_points,
+        "ranking": {"top": ranking_top, "bottom": ranking_bottom},
+        "employees": employee_points,
+    }
+
 
 # ======================================================
 # CONSULTING LEADS

@@ -274,6 +274,101 @@ export interface AssignmentProgress {
   por_pilar: PillarProgress[];
 }
 
+
+export interface PillarHighlight {
+  id: number;
+  name: string;
+  value: number;
+}
+
+export interface AnalyticsKpis {
+  global_average: number;
+  strongest_pillar: PillarHighlight | null;
+  weakest_pillar: PillarHighlight | null;
+  pillar_gap: number;
+  coverage_percent: number | null;
+  coverage_total: number;
+  coverage_respondents: number;
+  trend_30d: number | null;
+}
+
+export interface PillarDistribution {
+  pillar_id: number;
+  pillar_name: string;
+  percent: number;
+  pct_ge4: number;
+  levels: number[];
+}
+
+export interface HeatmapCell {
+  pillar_id: number;
+  percent: number;
+}
+
+export interface HeatmapRow {
+  department_id: number | null;
+  department_name: string;
+  average: number;
+  values: HeatmapCell[];
+}
+
+export interface DistributionByDepartment {
+  department_id: number | null;
+  department_name: string;
+  pillars: PillarDistribution[];
+}
+
+export interface DistributionData {
+  global: PillarDistribution[];
+  by_department: DistributionByDepartment[];
+}
+
+export interface TimelinePoint {
+  date: string;
+  global_percent: number;
+  pillars: Record<number, number | null>;
+}
+
+export interface RankingEntry {
+  id: number | null;
+  name: string;
+  value: number;
+}
+
+export interface RankingData {
+  top: RankingEntry[];
+  bottom: RankingEntry[];
+}
+
+export interface EmployeePoint {
+  id: number;
+  name: string;
+  percent: number;
+  level: number;
+}
+
+export interface AnalyticsFiltersSummary {
+  empresa_id: number;
+  fecha_desde?: string | null;
+  fecha_hasta?: string | null;
+  departamento_ids: number[];
+  empleado_ids: number[];
+  pilar_ids: number[];
+}
+
+export interface DashboardAnalyticsResponse {
+  generated_at: string;
+  filters: AnalyticsFiltersSummary;
+  likert_levels: LikertLevel[];
+  kpis: AnalyticsKpis;
+  pillars: PillarDistribution[];
+  heatmap: HeatmapRow[];
+  distribution: DistributionData;
+  timeline: TimelinePoint[];
+  ranking: RankingData;
+  employees: EmployeePoint[];
+}
+
 export interface Asignacion {
   id: number;
   empresa_id: number;

@@ -1,7 +1,7 @@
 # app/schemas.py
 from __future__ import annotations
 from typing import Optional, List, Literal, Dict
-from datetime import datetime
+from datetime import datetime, date
 from pydantic import BaseModel, ConfigDict, Field, model_validator, EmailStr
 
 from .models import RolEnum, TipoPreguntaEnum, AuditActionEnum
@@ -349,6 +349,102 @@ class AssignmentProgress(BaseModel):
     progreso: float       # 0..1 (puntaje global)
     completion: float     # 0..1 (participación global)
     por_pilar: List[PillarProgress]
+
+
+class PillarHighlight(BaseModel):
+    id: int
+    name: str
+    value: float
+
+
+class AnalyticsKpis(BaseModel):
+    global_average: float
+    strongest_pillar: Optional[PillarHighlight] = None
+    weakest_pillar: Optional[PillarHighlight] = None
+    pillar_gap: float
+    coverage_percent: Optional[float] = None
+    coverage_total: int
+    coverage_respondents: int
+    trend_30d: Optional[float] = None
+
+
+class PillarDistribution(BaseModel):
+    pillar_id: int
+    pillar_name: str
+    percent: float
+    pct_ge4: float
+    levels: List[float]
+
+
+class HeatmapCell(BaseModel):
+    pillar_id: int
+    percent: float
+
+
+class HeatmapRow(BaseModel):
+    department_id: Optional[int] = None
+    department_name: str
+    average: float
+    values: List[HeatmapCell]
+
+
+class TimelinePoint(BaseModel):
+    date: date
+    global_percent: float
+    pillars: Dict[int, Optional[float]] = Field(default_factory=dict)
+
+
+class RankingEntry(BaseModel):
+    id: Optional[int] = None
+    name: str
+    value: float
+
+
+class RankingData(BaseModel):
+    top: List[RankingEntry] = Field(default_factory=list)
+    bottom: List[RankingEntry] = Field(default_factory=list)
+
+
+class EmployeePoint(BaseModel):
+    id: int
+    name: str
+    percent: float
+    level: int
+
+
+class DistributionByDepartment(BaseModel):
+    department_id: Optional[int] = None
+    department_name: str
+    pillars: List[PillarDistribution]
+
+
+class DistributionData(BaseModel):
+    global_: List[PillarDistribution] = Field(default_factory=list, alias="global")
+    by_department: List[DistributionByDepartment] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AnalyticsFilters(BaseModel):
+    empresa_id: int
+    fecha_desde: Optional[date] = None
+    fecha_hasta: Optional[date] = None
+    departamento_ids: List[int] = Field(default_factory=list)
+    empleado_ids: List[int] = Field(default_factory=list)
+    pilar_ids: List[int] = Field(default_factory=list)
+
+
+class DashboardAnalyticsResponse(BaseModel):
+    generated_at: datetime
+    filters: AnalyticsFilters
+    likert_levels: List[LikertLevel]
+    kpis: AnalyticsKpis
+    pillars: List[PillarDistribution]
+    heatmap: List[HeatmapRow]
+    distribution: DistributionData
+    timeline: List[TimelinePoint]
+    ranking: RankingData
+    employees: List[EmployeePoint]
 
 
 class AuditLogRead(BaseModel):

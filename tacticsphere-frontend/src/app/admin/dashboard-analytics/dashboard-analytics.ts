@@ -1,44 +1,41 @@
 ﻿import {
-  Component,
-  OnInit,
-  OnDestroy,
-  AfterViewInit,
   AfterViewChecked,
+  AfterViewInit,
+  Component,
   HostListener,
+  OnDestroy,
+  OnInit,
   QueryList,
   ViewChildren,
-  inject,
-  signal,
   computed,
   effect,
+  inject,
+  signal,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { HttpClient } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
+import { HttpClient } from "@angular/common/http";
 import { NgxEchartsDirective, NgxEchartsModule } from "ngx-echarts";
 import * as echarts from "echarts";
-import type { EChartsOption } from "echarts";
+import { EChartsOption } from "echarts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { forkJoin, of, Subscription, firstValueFrom } from "rxjs";
-import { catchError, map, switchMap } from "rxjs/operators";
+import { Subscription, firstValueFrom } from "rxjs";
 
-import { AssignmentsService } from "../../assignments.service";
+import { AnalyticsService, AnalyticsQueryParams } from "../../analytics.service";
 import { CompanyService } from "../../company.service";
 import { EmployeeService } from "../../employee.service";
-import { SurveyService } from "../../survey.service";
 import { AuthService } from "../../auth.service";
 import { AuditService } from "../../services/audit.service";
-import { environment } from "../../../environments/environment";
 import {
-  Asignacion,
-  AssignmentProgress,
+  DashboardAnalyticsResponse,
   Departamento,
   Empleado,
   Empresa,
-  PillarProgress,
+  LikertLevel,
   Usuario,
 } from "../../types";
+import { environment } from "../../../environments/environment";
 import { tsMonoTheme } from "../../theme/theme-echarts";
 
 const TS_MONO_THEME = "tsMono";
@@ -51,262 +48,305 @@ if (!echartsWithTheme.getTheme?.(TS_MONO_THEME)) {
   try {
     echartsWithTheme.registerTheme(TS_MONO_THEME, tsMonoTheme);
   } catch {
-    // If theme already exists we quietly ignore to keep bootstrap resilient.
+    // ignore if already registered
   }
 }
 
-type DashboardScope = "GLOBAL" | "COMPANY" | "DEPARTMENT" | "EMPLOYEE";
-
-type FormatterParam = {
-  dataIndex?: number;
-  name?: string;
-  value?: unknown;
-  seriesName?: string;
-  data?: unknown;
-};
-
-type FormatterParams = FormatterParam | FormatterParam[];
-
-interface DashboardFilter {
-  scope: DashboardScope;
-  companyId?: number | null;
-  departmentId?: number | null;
-  employeeId?: number | null;
-}
-
-interface AssignmentInsight {
-  asignacion: Asignacion;
-  progress: AssignmentProgress | null;
-}
-
-interface PillarAggregate {
-  id: number;
-  name: string;
-  values: number[];
-  responded: number;
-  total: number;
-  scoreSum: number;
-  scoreCount: number;
+interface KpiCard {
+  label: string;
+  value: string;
+  suffix?: string;
+  tooltip?: string;
 }
 
 @Component({
   standalone: true,
   selector: "app-dashboard-analytics",
-  imports: [
-    CommonModule,
-    FormsModule,
-    NgxEchartsModule,
-  ],
+  imports: [CommonModule, FormsModule, NgxEchartsModule],
   templateUrl: "./dashboard-analytics.html",
 })
 export class DashboardAnalyticsComponent
   implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked
 {
   private http = inject(HttpClient);
-  private assignmentsSvc = inject(AssignmentsService);
-  private surveySvc = inject(SurveyService);
+  private analyticsSvc = inject(AnalyticsService);
   private companySvc = inject(CompanyService);
   private employeeSvc = inject(EmployeeService);
   private auth = inject(AuthService);
   private auditSvc = inject(AuditService);
+
+  @ViewChildren(NgxEchartsDirective) charts!: QueryList<NgxEchartsDirective>;
+
   private readonly role = this.auth.getRole();
   private readonly empresaId = this.auth.getEmpresaId();
   readonly isUser = this.role === "USUARIO";
-  readonly isAnalyst = this.role === "ANALISTA";
-  readonly isAdmin = this.role === "ADMIN" || this.role === "ADMIN_SISTEMA";
-  private availableScopes: DashboardScope[] = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
-  private readonly scopeLabels: Record<DashboardScope, string> = {
-    GLOBAL: "Global",
-    COMPANY: "Por empresa",
-    DEPARTMENT: "Por departamento",
-    EMPLOYEE: "Por empleado",
-  };
 
-  get scopeOptions(): Array<{ value: DashboardScope; label: string }> {
-    return this.availableScopes.map((value) => ({
-      value,
-      label: this.scopeLabels[value],
-    }));
-  }
-  @ViewChildren(NgxEchartsDirective) charts!: QueryList<NgxEchartsDirective>;
-
-  ///////////////////////////
-  // State signals
-  ///////////////////////////
-
-  private insightsSignal = signal<AssignmentInsight[]>([]);
+  private analyticsSignal = signal<DashboardAnalyticsResponse | null>(null);
   private companiesSignal = signal<Empresa[]>([]);
   private departmentsSignal = signal<Departamento[]>([]);
   private employeesSignal = signal<Empleado[]>([]);
-  private loadingSignal = signal<boolean>(true);
+  private loadingSignal = signal<boolean>(false);
   private errorSignal = signal<string>("");
   private infoSignal = signal<string>("");
   private exportingSignal = signal<boolean>(false);
+  private filterSignal = signal<AnalyticsQueryParams | null>(null);
+  private likertLevelsSignal = signal<LikertLevel[]>([]);
 
-  private filterSignal = signal<DashboardFilter>({ scope: "GLOBAL" });
-  private pillarSelectionSignal = signal<number | "ALL">("ALL");
-
-  private readonly filterEffect = effect(
-    () => {
-      const filter = this.filterSignal();
-      this.fetchInsights(filter);
-    },
-    { allowSignalWrites: true }
-  );
-
-  private subscriptions: Subscription[] = [];
-  private logoDataUrl: string | null = null;
-  private userLoaded = false;
-  private currentUserName: string | null = null;
-  private currentUserEmail: string | null = null;
-
-  ///////////////////////////
-  // Public getters for template
-  ///////////////////////////
-
-  insights = this.insightsSignal.asReadonly();
-  loading = this.loadingSignal.asReadonly();
-  error = this.errorSignal.asReadonly();
-  info = this.infoSignal.asReadonly();
-
+  analytics = this.analyticsSignal.asReadonly();
   companies = this.companiesSignal.asReadonly();
   departments = this.departmentsSignal.asReadonly();
   employees = this.employeesSignal.asReadonly();
+  loading = this.loadingSignal.asReadonly();
+  error = this.errorSignal.asReadonly();
+  info = this.infoSignal.asReadonly();
   exporting = this.exportingSignal.asReadonly();
 
-  scopeModel: DashboardScope = "GLOBAL";
   selectedCompanyId: number | null = null;
   selectedDepartmentId: number | null = null;
   selectedEmployeeId: number | null = null;
   selectedPillar: number | "ALL" = "ALL";
+  dateFrom: string | null = null;
+  dateTo: string | null = null;
   employeeSearch = "";
   showFilters = false;
-  private didInitialResize = false;
+  private resizeTimer: any;
+  private subscriptions: Subscription[] = [];
+  private logoDataUrl: string | null = null;
+  private currentUserName: string | null = null;
+  private currentUserEmail: string | null = null;
+  private userLoaded = false;
 
-  ///////////////////////////
-  // KPI cards
-  ///////////////////////////
+  readonly filteredEmployees = computed(() => {
+    const search = this.employeeSearch.trim().toLowerCase();
+    if (!search) return this.employees();
+    return this.employees().filter((employee) => {
+      const name = employee.nombre?.toLowerCase() ?? "";
+      const email = employee.email?.toLowerCase() ?? "";
+      const id = String(employee.id ?? "").toLowerCase();
+      return name.includes(search) || email.includes(search) || id.includes(search);
+    });
+  });
 
-  kpiCards = computed(() => {
-    const insights = this.insights();
-    const totals = insights.reduce(
-      (acc, item) => {
-        if (!item.progress) return acc;
-        const responded = Math.max(0, item.progress.respondidas ?? 0);
-        const total = Math.max(0, item.progress.total ?? 0);
-        acc.assignments += 1;
-        if (total && responded >= total) acc.completed += 1;
-        acc.responded += responded;
-        acc.total += total;
-        const score = Math.max(0, Math.min(1, item.progress.progreso ?? 0));
-        acc.scoreSum += score * (total || 1);
-        acc.scoreWeight += total || 1;
-        return acc;
-      },
-      { assignments: 0, completed: 0, responded: 0, total: 0, scoreSum: 0, scoreWeight: 0 }
-    );
-
-    const averageScore = totals.scoreWeight
-      ? this.clampPercent(Math.round((totals.scoreSum / totals.scoreWeight) * 100))
-      : 0;
-    const participation = totals.total
-      ? this.clampPercent(Math.round((totals.responded / totals.total) * 100))
-      : 0;
-
+  readonly kpiCards = computed<KpiCard[]>(() => {
+    const data = this.analytics();
+    const kpis = data?.kpis;
+    if (!kpis) return [];
     return [
-      { label: "Asignaciones analizadas", value: totals.assignments },
-      { label: "Asignaciones completadas", value: totals.completed },
-      { label: "Promedio global", value: averageScore, suffix: "%" },
-      { label: "Tasa de participacion", value: participation, suffix: "%" },
+      {
+        label: "Promedio global",
+        value: `${this.formatNumber(kpis.global_average)}%`,
+      },
+      kpis.strongest_pillar
+        ? {
+            label: "Pilar mas fuerte",
+            value: `${kpis.strongest_pillar.name}`,
+            suffix: `${this.formatNumber(kpis.strongest_pillar.value)}%`,
+          }
+        : ({ label: "Pilar mas fuerte", value: "--" } as KpiCard),
+      kpis.weakest_pillar
+        ? {
+            label: "Pilar a reforzar",
+            value: `${kpis.weakest_pillar.name}`,
+            suffix: `${this.formatNumber(kpis.weakest_pillar.value)}%`,
+          }
+        : ({ label: "Pilar a reforzar", value: "--" } as KpiCard),
+      {
+        label: "Brecha entre pilares",
+        value: `${this.formatNumber(kpis.pillar_gap)} pp`,
+      },
+      {
+        label: "Cobertura",
+        value: kpis.coverage_percent != null ? `${this.formatNumber(kpis.coverage_percent)}%` : "--",
+        suffix: `(${kpis.coverage_respondents}/${kpis.coverage_total})`,
+      },
+      {
+        label: "Tendencia 30d",
+        value: kpis.trend_30d != null ? `${this.formatSigned(kpis.trend_30d)}%` : "--",
+      },
     ];
   });
 
-  ///////////////////////////
-  // Chart options
-  ///////////////////////////
+  readonly rankingTop = computed(() => this.analytics()?.ranking.top ?? []);
+  readonly rankingBottom = computed(() => this.analytics()?.ranking.bottom ?? []);
+  readonly hasEmployeesDistribution = computed(() => (this.analytics()?.employees.length ?? 0) > 0);
 
-  barPillarOption = computed<EChartsOption>(() => {
-    const aggregates = this.buildPillarAggregates();
-    if (!aggregates.length) {
+  private readonly filterEffect = effect(() => {
+    const filter = this.filterSignal();
+    if (!filter) return;
+    this.fetchAnalytics(filter);
+  });
+
+  ngOnInit(): void {
+    this.loadCompanies();
+    if (this.empresaId != null) {
+      this.selectedCompanyId = this.empresaId;
+      this.updateFilter();
+    }
+  }
+
+  ngAfterViewInit(): void {
+    this.resizeAllCharts();
+  }
+
+  ngAfterViewChecked(): void {
+    this.resizeAllCharts();
+  }
+
+  ngOnDestroy(): void {
+    this.filterEffect.destroy();
+    this.subscriptions.forEach((sub) => sub.unsubscribe());
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
+    }
+  }
+
+  toggleFilters(): void {
+    this.showFilters = !this.showFilters;
+  }
+
+  refreshCurrentFilter(): void {
+    this.updateFilter();
+  }
+
+  onCompanyChange(companyId: number | null): void {
+    this.selectedCompanyId = companyId;
+    this.selectedDepartmentId = null;
+    this.selectedEmployeeId = null;
+    this.employeeSearch = "";
+    if (companyId != null) {
+      this.loadDepartments(companyId);
+      this.loadEmployees(companyId, null);
+    } else {
+      this.departmentsSignal.set([]);
+      this.employeesSignal.set([]);
+    }
+    this.updateFilter();
+  }
+
+  onDepartmentChange(departmentId: number | null): void {
+    this.selectedDepartmentId = departmentId;
+    if (this.selectedCompanyId != null) {
+      this.loadEmployees(this.selectedCompanyId, departmentId ?? undefined);
+    }
+    this.updateFilter();
+  }
+
+  onPillarChange(selection: number | "ALL"): void {
+    this.selectedPillar = selection;
+    this.updateFilter();
+  }
+
+  onEmployeeChange(employeeId: number | null): void {
+    this.selectedEmployeeId = employeeId;
+    this.updateFilter();
+  }
+
+  onDateChange(): void {
+    this.updateFilter();
+  }
+
+  onPillarBarClick(event: any): void {
+    const pillarId = event?.data?.pillarId as number | undefined;
+    if (pillarId == null) return;
+    this.selectedPillar = this.selectedPillar === pillarId ? "ALL" : pillarId;
+    this.updateFilter();
+  }
+
+  onHeatmapClick(event: any): void {
+    const pillarId = event?.data?.pillarId as number | undefined;
+    const departmentId = event?.data?.departmentId as number | undefined;
+    if (pillarId == null && departmentId == null) return;
+    if (pillarId != null) {
+      this.selectedPillar = pillarId;
+    }
+    if (departmentId != null) {
+      this.selectedDepartmentId = departmentId;
+    }
+    this.updateFilter();
+  }
+
+  filterSummary(): string[] {
+    const summary: string[] = [];
+    const company = this.resolveCompanyName(this.selectedCompanyId ?? this.empresaId);
+    summary.push(`Empresa: ${company}`);
+    if (this.selectedDepartmentId != null) {
+      summary.push(`Departamento: ${this.resolveDepartmentName(this.selectedDepartmentId)}`);
+    }
+    if (this.selectedEmployeeId != null) {
+      summary.push(`Empleado: ${this.resolveEmployeeName(this.selectedEmployeeId)}`);
+    }
+    if (this.selectedPillar !== "ALL") {
+      const pillar = this.analytics()?.pillars.find((p) => p.pillar_id === this.selectedPillar)?.pillar_name;
+      summary.push(`Pilar: ${pillar ?? `#${this.selectedPillar}`}`);
+    }
+    if (this.dateFrom) summary.push(`Desde: ${this.dateFrom}`);
+    if (this.dateTo) summary.push(`Hasta: ${this.dateTo}`);
+    return summary;
+  }
+
+  pillarOptions() {
+    return this.analytics()?.pillars ?? [];
+  }
+
+  barPillarOption(): EChartsOption {
+    const pillars = [...(this.analytics()?.pillars ?? [])].sort((a, b) => b.percent - a.percent);
+    if (!pillars.length) {
       return this.emptyChartOption("Sin informacion de pilares");
     }
-
-    const categories = aggregates.map((item) => item.name);
-    const scores = aggregates.map((item) => item.scoreAvg);
-
+    const categories = pillars.map((item) => item.pillar_name);
+    const data = pillars.map((item) => ({ value: this.round(item.percent), pillarId: item.pillar_id }));
+    const selected = this.selectedPillar;
     return {
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        formatter: (params: FormatterParams) => {
-          const list = this.asParamArray(params);
-          const idx = list[0]?.dataIndex ?? 0;
-          const label = categories[idx] ?? "";
-          const score = scores[idx] ?? 0;
-          return `${label}: ${score}%`;
+        formatter: (params: any) => {
+          const first = Array.isArray(params) ? params[0] : params;
+          return `${first.name}: ${this.formatNumber(first.value)}%`;
         },
       },
-      grid: { left: 200, right: 48, bottom: 48, top: 72, containLabel: true },
-      xAxis: {
-        type: "value",
-        max: 100,
-        axisLabel: { formatter: "{value}%", color: "#6B7280" },
-        splitLine: { lineStyle: { color: "#E5E7EB", type: "dashed" } },
-      },
+      grid: { left: 180, right: 48, bottom: 32, top: 24 },
+      xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
       yAxis: {
         type: "category",
         data: categories,
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          interval: 0,
-          width: 220,
-          overflow: "break",
-          lineHeight: 18,
-        },
+        axisLabel: { fontWeight: 600, color: "#111827" },
       },
       series: [
         {
           type: "bar",
-          data: scores,
+          data: data.map((item) => ({
+            value: item.value,
+            pillarId: item.pillarId,
+            itemStyle: {
+              color:
+                selected !== "ALL" && item.pillarId === selected
+                  ? "#2563EB"
+                  : "#94A3B8",
+            },
+          })),
           barWidth: 24,
-          itemStyle: { color: "#2563EB", borderRadius: [0, 12, 12, 0] },
-          label: {
-            show: true,
-            position: "right",
-            formatter: "{c}%",
-            color: "#1F2937",
-            fontWeight: 600,
-          },
+          label: { show: true, position: "right", formatter: "{c}%", fontWeight: 600 },
         },
       ],
     };
-  });
+  }
 
-  radarBalanceOption = computed<EChartsOption>(() => {
-    const aggregates = this.buildPillarAggregates();
-    if (!aggregates.length) {
-      return this.emptyChartOption("Sin balance registrado", "radar");
-    }
-
-    const indicators = aggregates.map((item) => ({ name: item.name, max: 100 }));
-    const values = aggregates.map((item) => item.scoreAvg);
-
+  radarBalanceOption(): EChartsOption {
+    const pillars = this.analytics()?.pillars ?? [];
+    if (!pillars.length) return this.emptyChartOption("Sin balance registrado", "radar");
     return {
       tooltip: {
         trigger: "item",
-        formatter: (params: FormatterParams) => {
-          const list = this.asParamArray(params);
-          const data = list[0];
-          const arr = (data?.value as number[]) ?? [];
-          if (!arr.length) return "Sin datos";
-          return arr
-            .map((val, idx) => `${indicators[idx]?.name ?? ""}: ${this.clampPercent(val)}%`)
+        formatter: (params: any) => {
+          const values = Array.isArray(params.value) ? params.value : [];
+          return values
+            .map((value: number, idx: number) => `${pillars[idx].pillar_name}: ${this.formatNumber(value)}%`)
             .join("<br/>");
         },
       },
       radar: {
-        indicator: indicators,
+        indicator: pillars.map((pillar) => ({ name: pillar.pillar_name, max: 100 })),
         radius: "70%",
         splitNumber: 4,
         splitLine: { lineStyle: { color: "#CBD5F5" } },
@@ -318,7 +358,7 @@ export class DashboardAnalyticsComponent
           type: "radar",
           data: [
             {
-              value: values,
+              value: pillars.map((pillar) => this.round(pillar.percent)),
               name: "Promedio",
               areaStyle: { color: "rgba(59,130,246,0.28)" },
               lineStyle: { color: "#2563EB", width: 2 },
@@ -327,454 +367,205 @@ export class DashboardAnalyticsComponent
           ],
         },
       ],
-    } as EChartsOption;
-  });
+    };
+  }
 
-  heatmapOption = computed<EChartsOption>(() => {
-    const { departments, pillars, data } = this.buildHeatmapMatrix();
-    if (!departments.length || !pillars.length) {
-      return this.emptyChartOption("Sin combinaciones disponibles");
-    }
-
+  heatmapOption(): EChartsOption {
+    const analytics = this.analytics();
+    const rows = analytics?.heatmap ?? [];
+    const pillars = analytics?.pillars ?? [];
+    if (!rows.length || !pillars.length) return this.emptyChartOption("Sin combinaciones disponibles");
+    const departments = [...rows].sort((a, b) => b.average - a.average);
+    const pillarIndex = new Map(pillars.map((p, idx) => [p.pillar_id, idx] as const));
+    const data = departments.flatMap((dept, yIdx) =>
+      dept.values
+        .map((cell) => {
+          const xIdx = pillarIndex.get(cell.pillar_id);
+          if (xIdx == null) return null;
+          return {
+            value: [xIdx, yIdx, this.round(cell.percent)],
+            pillarId: cell.pillar_id,
+            departmentId: dept.department_id ?? null,
+          };
+        })
+        .filter((item): item is { value: [number, number, number]; pillarId: number; departmentId: number | null } => !!item)
+    );
     return {
       tooltip: {
-        position: "top",
-        formatter: (params: FormatterParams) => {
-          const item = this.asParamArray(params)[0];
-          if (!item) return "";
-          const tuple = item.data as [number, number, number];
-          const pillar = pillars[tuple[0]] ?? "";
-          const dept = departments[tuple[1]] ?? "";
-          return `${dept}<br/>${pillar}: ${tuple[2]}%`;
+        formatter: (params: any) => {
+          const value = params.data?.value as [number, number, number];
+          if (!value) return "";
+          const dept = departments[value[1]];
+          const pillar = pillars[value[0]];
+          return `${dept?.department_name ?? "Departamento"} · ${pillar?.pillar_name ?? "Pilar"}: ${this.formatNumber(
+            value[2]
+          )}%`;
         },
       },
-      grid: { left: 220, right: 48, bottom: 120, top: 64, containLabel: true },
+      grid: { left: 180, right: 32, top: 48, bottom: 80 },
       xAxis: {
         type: "category",
-        data: pillars,
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          interval: 0,
-          width: 160,
-          overflow: "break",
-          lineHeight: 16,
-          margin: 16,
-        },
+        data: pillars.map((p) => p.pillar_name),
+        axisLabel: { interval: 0, rotate: 20, fontWeight: 600 },
       },
       yAxis: {
         type: "category",
-        data: departments,
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          width: 220,
-          overflow: "break",
-          lineHeight: 18,
-        },
+        data: departments.map((d) => d.department_name),
+        axisLabel: { fontWeight: 600 },
       },
       visualMap: {
         min: 0,
         max: 100,
-        calculable: true,
         orient: "horizontal",
         left: "center",
-        bottom: 12,
+        bottom: 10,
       },
       series: [
         {
           type: "heatmap",
           data,
-          label: { show: true, formatter: "{c}%", color: "#111827", fontWeight: 600 },
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowColor: "rgba(0,0,0,0.25)",
-            },
-          },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" } },
         },
       ],
-    } as EChartsOption;
-  });
+    };
+  }
 
-  timelineOption = computed<EChartsOption>(() => {
-    const timeline = this.buildTimeline();
-    if (!timeline.length) {
-      return this.emptyChartOption("Sin historial disponible");
-    }
+  distributionOption(): EChartsOption {
+    const distributions = [...(this.analytics()?.distribution.global ?? [])].sort(
+      (a, b) => b.pct_ge4 - a.pct_ge4
+    );
+    if (!distributions.length) return this.emptyChartOption("Sin datos de distribucion");
+    const categories = distributions.map((item) => item.pillar_name);
+    const levelColors = ["#991b1b", "#ca8a04", "#facc15", "#22c55e", "#2563eb"];
+    const series = [1, 2, 3, 4, 5].map((level, idx) => {
+      const levelIndex = level - 1;
+      return {
+        name: this.formatLikertLabel(level),
+        type: "bar" as const,
+        stack: "total",
+        emphasis: { focus: "series" },
+        barWidth: 32,
+        itemStyle: { color: levelColors[idx] ?? "#94a3b8" },
+        data: distributions.map((item) => {
+          const value = this.round(item.levels[levelIndex]);
+          return level >= 5
+            ? { value, pctGe4: item.pct_ge4 }
+            : { value };
+        }),
+      };
+    });
+    const topSeries = series[4];
+    (topSeries as any).label = {
+      show: true,
+      position: "top",
+      fontWeight: 600,
+      formatter: (params: any) =>
+        `${this.formatNumber(params?.data?.pctGe4 ?? params?.data?.value ?? 0)}% ≥4`,
+    };
+    return {
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params: any) => {
+          const lines = params.map(
+            (item: any) => `${item.seriesName}: ${this.formatNumber(item.value)}%`
+          );
+          const label = params?.[0]?.name ?? "";
+          return `${label}<br/>${lines.join("<br/>")}`;
+        },
+      },
+      legend: {
+        data: series.map((s) => s.name),
+        top: 0,
+        type: "scroll",
+        left: 16,
+        right: 16,
+        orient: "horizontal",
+      },
+      grid: { left: 140, right: 32, bottom: 32, top: 80, containLabel: true },
+      xAxis: { type: "category", data: categories, axisLabel: { interval: 0, rotate: 20 } },
+      yAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
+      series: series as unknown as EChartsOption["series"],
+    };
+  }
 
-    const pillarIds = this.activePillarIds();
-    const primaryPillar = pillarIds?.[0] ?? null;
-    const pillarSeries = primaryPillar
-      ? timeline.map((item) => item.pillarScores.get(primaryPillar) ?? null)
-      : null;
-
+  timelineOption(): EChartsOption {
+    const timeline = this.analytics()?.timeline ?? [];
+    if (!timeline.length) return this.emptyChartOption("Sin historial disponible");
+    const categories = timeline.map((item) => item.date);
+    const globalSeries = timeline.map((item) => this.round(item.global_percent));
+    const selectedPillar = this.selectedPillar;
+    const pillarSeries = selectedPillar === "ALL"
+      ? null
+      : timeline.map((item) => {
+          const value = item.pillars[selectedPillar as number];
+          return value != null ? this.round(value) : null;
+        });
     const series: any[] = [
       {
-        name: "Promedio global",
+        name: "Global",
         type: "line",
-        data: timeline.map((item) => item.global),
+        data: globalSeries,
         smooth: true,
-        showSymbol: false,
         lineStyle: { width: 3, color: "#3A8FFF" },
         areaStyle: { color: "rgba(59,130,246,0.12)" },
       },
     ];
-
     if (pillarSeries) {
       series.push({
         name: "Pilar seleccionado",
         type: "line",
         data: pillarSeries,
         smooth: true,
-        connectNulls: true,
-        showSymbol: false,
         lineStyle: { width: 2, color: "#F97316" },
+        connectNulls: true,
       });
     }
-
     return {
       tooltip: { trigger: "axis" },
       legend: { data: series.map((item) => item.name) },
-      grid: { left: 72, right: 32, bottom: 72, top: 48, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: timeline.map((item) => item.label),
-        boundaryGap: false,
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          interval: 0,
-           width: 120,
-           overflow: "break",
-          lineHeight: 16,
-        },
-      },
-      yAxis: {
-        type: "value",
-        min: 0,
-        max: 100,
-        axisLabel: { formatter: "{value}%", color: "#6B7280" },
-        splitLine: { lineStyle: { color: "#E5E7EB", type: "dashed" } },
-      },
+      grid: { left: 64, right: 32, bottom: 48, top: 48 },
+      xAxis: { type: "category", data: categories, boundaryGap: false },
+      yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
       series,
-    } as EChartsOption;
-  });
+    };
+  }
 
-  departmentParticipationOption = computed<EChartsOption>(() => {
-    const departments = this.collectDepartmentAggregates(this.activePillarIds());
-
-    const rows = departments.length
-      ? departments.map((dept) => ({
-          label: dept.name,
-          responded: Math.max(0, dept.responded),
-          total: Math.max(0, dept.total),
-        }))
-      : this.insights()
-          .filter((insight) => !!insight.progress)
-          .map((insight) => {
-            const progress = insight.progress!;
-            const responded = Math.max(0, progress.respondidas ?? 0);
-            const total = Math.max(0, progress.total ?? 0);
-            return {
-              label: `Asig. #${insight.asignacion.id}`,
-              responded,
-              total,
-            };
-          });
-
-    if (!rows.length) {
-      return this.emptyChartOption("Sin datos de participacion");
-    }
-
-    const categories = rows.map((row) => row.label);
-    const respondedSeries = rows.map((row) => {
-      if (!row.total) return 0;
-      return this.clampPercent(Number(((row.responded / row.total) * 100).toFixed(1)));
-    });
-    const pendingSeries = rows.map((row, index) => {
-      const responded = respondedSeries[index] ?? 0;
-      return this.clampPercent(Number((100 - responded).toFixed(1)));
-    });
-
+  employeeScatterOption(): EChartsOption {
+    const employees = this.analytics()?.employees ?? [];
+    if (!employees.length) return this.emptyChartOption("Sin datos de empleados");
     return {
       tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "shadow" },
-        formatter: (params: FormatterParams) => {
-          const list = this.asParamArray(params);
-          const first = list[0];
-          if (!first) return "";
-          const idx = first.dataIndex ?? 0;
-          const row = rows[idx];
-          const responded = respondedSeries[idx] ?? 0;
-          const pending = pendingSeries[idx] ?? 0;
-          const total = row.total || 0;
-          return `${row.label}<br/>Respondidas: ${responded}% (${row.responded}/${total})<br/>Pendientes: ${pending}%`;
+        formatter: (params: any) => {
+          const point = employees[params.dataIndex];
+          const label = this.formatLikertLabel(point.level);
+          return `${point.name}<br/>${this.formatNumber(point.percent)}% · ${label}`;
         },
       },
-      legend: { data: ["Respondidas", "Pendientes"] },
-      grid: { left: 200, right: 32, bottom: 32, top: 48, containLabel: true },
-      xAxis: {
-        type: "value",
-        max: 100,
-        axisLabel: { formatter: "{value}%", color: "#6B7280" },
-        splitLine: { lineStyle: { color: "#E5E7EB", type: "dashed" } },
-      },
-      yAxis: {
-        type: "category",
-        data: categories,
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          width: 240,
-          overflow: "break",
-          lineHeight: 18,
-        },
-      },
+      xAxis: { type: "category", data: employees.map((emp) => emp.name), show: false },
+      yAxis: { type: "value", min: 0, max: 100, axisLabel: { formatter: "{value}%" } },
       series: [
         {
-          name: "Respondidas",
-          type: "bar",
-          stack: "total",
-          data: respondedSeries,
-          barWidth: 26,
-          itemStyle: { color: "#10B981", borderRadius: [0, 12, 12, 0] },
-        },
-        {
-          name: "Pendientes",
-          type: "bar",
-          stack: "total",
-          data: pendingSeries,
-          barWidth: 26,
-          itemStyle: { color: "#F59E0B", borderRadius: [12, 0, 0, 12] },
+          type: "scatter",
+          symbolSize: 14,
+          data: employees.map((emp) => this.round(emp.percent)),
+          itemStyle: { color: "#2563EB" },
         },
       ],
-    } as EChartsOption;
-  });
-
-  rankingOption = computed<EChartsOption>(() => {
-    const rankings = this.buildRanking();
-    if (!rankings.length) {
-      return this.emptyChartOption("Sin ranking disponible");
-    }
-
-    return {
-      tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "shadow" },
-        formatter: (params: FormatterParams) => {
-          const item = this.asParamArray(params)[0];
-          if (!item) return "";
-          const value = Number(item.value ?? 0) || 0;
-          return `${item.name}: ${value}%`;
-        },
-      },
-      grid: { left: 220, right: 32, bottom: 32, top: 32, containLabel: true },
-      xAxis: {
-        type: "value",
-        max: 100,
-        axisLabel: { formatter: "{value}%", color: "#6B7280" },
-        splitLine: { lineStyle: { color: "#E5E7EB", type: "dashed" } },
-      },
-      yAxis: {
-        type: "category",
-        data: rankings.map((item) => item.label),
-        axisLabel: {
-          color: "#1F2937",
-          fontWeight: 600,
-          interval: 0,
-          width: 220,
-          overflow: "break",
-          lineHeight: 18,
-        },
-      },
-      series: [
-        {
-          type: "bar",
-          data: rankings.map((item) => item.value),
-          barWidth: 26,
-          itemStyle: { color: "#6366F1", borderRadius: [0, 12, 12, 0] },
-          label: {
-            show: true,
-            position: "right",
-            formatter: "{c}%",
-            color: "#1F2937",
-            fontWeight: 600,
-          },
-        },
-      ],
-    } as EChartsOption;
-  });
-
-  ///////////////////////////
-  // Filter helpers
-  ///////////////////////////
-
-  filterSummary(): string[] {
-    const summary: string[] = [`Ambito: ${this.scopeLabels[this.scopeModel]}`];
-
-    if (this.scopeModel !== "GLOBAL") {
-      const company =
-        this.selectedCompanyId != null
-          ? this.resolveCompanyName(this.selectedCompanyId)
-          : "Sin seleccionar";
-      summary.push(`Empresa: ${company}`);
-    }
-
-    if (this.scopeModel === "DEPARTMENT" || this.scopeModel === "EMPLOYEE") {
-      const department =
-        this.selectedDepartmentId != null
-          ? this.resolveDepartmentName(this.selectedDepartmentId, this.selectedCompanyId)
-          : "Sin seleccionar";
-      summary.push(`Departamento: ${department}`);
-    }
-
-    if (this.scopeModel === "EMPLOYEE") {
-      const employee =
-        this.selectedEmployeeId != null
-          ? this.resolveEmployeeName(this.selectedEmployeeId)
-          : "Sin seleccionar";
-      summary.push(`Empleado: ${employee}`);
-    }
-
-    const selection = this.pillarSelectionSignal();
-    const pillarLabel =
-      selection === "ALL"
-        ? "Todos los pilares"
-        : this.pillarOptions().find((p) => p.id === selection)?.name ?? `Pilar #${selection}`;
-    summary.push(`Pilar: ${pillarLabel}`);
-    summary.push(`Asignaciones analizadas: ${this.insights().length}`);
-
-    return summary;
+    };
   }
 
-  pillarOptions() {
-    const options = new Map<number, string>();
-    this.insights().forEach((insight) => {
-      insight.progress?.por_pilar?.forEach((pillar) => {
-        options.set(pillar.pilar_id, pillar.pilar_nombre);
-      });
-    });
-    return Array.from(options.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  trackByIndex(index: number) {
-    return index;
-  }
-
-  filteredEmployees = computed(() => {
-    const term = this.employeeSearch.trim().toLowerCase();
-    if (!term) return this.employees();
-    return this.employees().filter((employee) => {
-      const name = employee.nombre?.toLowerCase() ?? "";
-      const email = employee.email?.toLowerCase() ?? "";
-      const id = String(employee.id ?? "").toLowerCase();
-      return name.includes(term) || email.includes(term) || id.includes(term);
-    });
-  });
-
-  requiresCompany(): boolean {
-    return this.scopeModel !== "GLOBAL";
-  }
-
-  requiresDepartment(): boolean {
-    return this.scopeModel === "DEPARTMENT" || this.scopeModel === "EMPLOYEE";
-  }
-
-  trackById(_: number, item: any) {
-    return item?.id ?? item;
-  }
-
-  onScopeChange(): void {
-    if (!this.availableScopes.includes(this.scopeModel)) {
-      this.scopeModel = this.availableScopes[0];
-    }
-    if (this.isUser) {
-      this.scopeModel = "COMPANY";
-    }
-    if (this.scopeModel === "GLOBAL") {
-      this.selectedCompanyId = null;
-      this.selectedDepartmentId = null;
-      this.selectedEmployeeId = null;
-      this.departmentsSignal.set([]);
-      this.employeesSignal.set([]);
-    }
-    if (this.scopeModel === "COMPANY") {
-      this.selectedDepartmentId = null;
-      this.selectedEmployeeId = null;
-    }
-    if (this.scopeModel === "DEPARTMENT") {
-      this.selectedEmployeeId = null;
-    }
-    this.updateFilter();
-  }
-
-  onCompanyChange(companyId: number | null): void {
-    if (this.isUser) {
-      this.selectedCompanyId = this.empresaId ?? null;
-      companyId = this.selectedCompanyId;
-    }
-    this.selectedDepartmentId = null;
-    this.selectedEmployeeId = null;
-    this.employeeSearch = "";
-
-    if (companyId != null) {
-      this.loadDepartments(companyId);
-      if (this.scopeModel === "EMPLOYEE") {
-        this.loadEmployees(companyId, null);
-      } else {
-        this.employeesSignal.set([]);
-      }
-    } else {
-      this.departmentsSignal.set([]);
-      this.employeesSignal.set([]);
-    }
-
-    this.updateFilter();
-  }
-
-  onDepartmentChange(departmentId: number | null): void {
-    if (this.scopeModel === "EMPLOYEE" && this.selectedCompanyId != null) {
-      this.loadEmployees(this.selectedCompanyId, departmentId ?? undefined);
-    }
-    this.updateFilter();
-  }
-
-  onPillarChange(selection: number | "ALL"): void {
-    this.selectedPillar = selection;
-    this.pillarSelectionSignal.set(selection);
-  }
-
-  onEmployeeChange(_: number | null): void {
-    this.updateFilter();
-  }
-
-  onEmployeeSearchChange(term: string): void {
-    this.employeeSearch = term ?? "";
-  }
-
-  toggleFilters(): void {
-    this.showFilters = !this.showFilters;
-  }
-
-  refreshCurrentFilter(): void {
-    const current = this.filterSignal();
-    this.filterSignal.set({ ...current });
+  exportPdfUrlDisabled(): boolean {
+    return this.loading() || this.exporting() || !this.analytics();
   }
 
   async exportPdf(): Promise<void> {
-    if (this.exportingSignal()) {
-      return;
-    }
+    if (this.exporting()) return;
     const container = document.getElementById("analytics-export");
     if (!container) {
       this.errorSignal.set("No pudimos encontrar el contenido para exportar.");
       return;
     }
-
     try {
       this.errorSignal.set("");
       this.exportingSignal.set(true);
@@ -782,15 +573,12 @@ export class DashboardAnalyticsComponent
       await new Promise((resolve) => setTimeout(resolve, 60));
       await this.ensureLogo();
       await this.ensureCurrentUser();
-
       const canvas = await html2canvas(container, { scale: 2, backgroundColor: "#FFFFFF" });
       const imgData = canvas.toDataURL("image/png");
-
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const title = "TacticSphere - Informe analitico";
-
       if (this.logoDataUrl) {
         pdf.addImage(this.logoDataUrl, "PNG", 15, 12, 20, 20);
         pdf.setFontSize(16);
@@ -799,7 +587,6 @@ export class DashboardAnalyticsComponent
         pdf.setFontSize(16);
         pdf.text(title, 15, 24);
       }
-
       const generatedAt = new Date();
       const metadataLines = this.buildMetadataLines(generatedAt);
       let metaY = this.logoDataUrl ? 36 : 30;
@@ -808,7 +595,6 @@ export class DashboardAnalyticsComponent
         pdf.text(line, 15, metaY);
         metaY += 5;
       });
-
       const contentTop = metaY + 4;
       const imgWidth = pageWidth - 30;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -820,238 +606,75 @@ export class DashboardAnalyticsComponent
         drawHeight *= scale;
         drawWidth *= scale;
       }
-
       pdf.addImage(imgData, "PNG", 15, contentTop, drawWidth, drawHeight);
       pdf.save("tacticsphere-analytics.pdf");
       try {
         await firstValueFrom(this.auditSvc.logReportExport("dashboard-analytics"));
-      } catch (logErr) {
-        console.error("No se pudo registrar la auditoría de exportación", logErr);
+      } catch {
+        // ignore log errors
       }
-    } catch (err) {
-      console.error("Error exportando PDF analitico", err);
-      this.errorSignal.set("No pudimos generar el PDF. Intenta nuevamente.");
+    } catch (error) {
+      console.error(error);
+      this.errorSignal.set("No pudimos exportar el PDF. Intenta nuevamente.");
     } finally {
       this.exportingSignal.set(false);
     }
   }
 
-  @HostListener("window:resize")
-  onWindowResize(): void {
-    this.resizeAllCharts();
+  trackById(_: number, item: any) {
+    return item?.id ?? item;
   }
 
-  private resizeAllCharts(): void {
-    if (!this.charts || this.charts.length === 0) {
+  trackByIndex(index: number) {
+    return index;
+  }
+
+  // ----------------------------------------
+  // Private helpers
+  // ----------------------------------------
+
+  private fetchAnalytics(filter: AnalyticsQueryParams): void {
+    if (!filter.companyId) {
+      this.analyticsSignal.set(null);
+      this.infoSignal.set("Selecciona una empresa para ver resultados");
+      this.loadingSignal.set(false);
       return;
     }
-    this.charts.forEach((chart) => {
-      try {
-        chart.resize();
-      } catch {
-      }
-    });
-  }
-
-  ///////////////////////////
-  // Lifecycle
-  ///////////////////////////
-
-  private configureRoleContext(): void {
-    if (this.isUser) {
-      this.availableScopes = ["COMPANY"];
-      this.scopeModel = "COMPANY";
-      this.selectedCompanyId = this.empresaId ?? null;
-      this.selectedDepartmentId = null;
-      this.selectedEmployeeId = null;
-      if (this.empresaId == null) {
-        this.infoSignal.set("Tu usuario no tiene una empresa asociada. Contacta al administrador.");
-      }
-    } else if (this.isAnalyst) {
-      this.availableScopes = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
-      this.scopeModel = "GLOBAL";
-    } else {
-      this.availableScopes = ["GLOBAL", "COMPANY", "DEPARTMENT", "EMPLOYEE"];
-      this.scopeModel = "GLOBAL";
-    }
-    this.updateFilter();
-  }
-
-  ngAfterViewInit(): void {
-    setTimeout(() => this.resizeAllCharts(), 0);
-  }
-
-  ngAfterViewChecked(): void {
-    if (!this.didInitialResize) {
-      this.didInitialResize = true;
-      setTimeout(() => this.resizeAllCharts(), 0);
-    }
-  }
-
-  ngOnInit(): void {
-    this.configureRoleContext();
-    this.loadCompanies();
-    this.ensureCurrentUser().catch(() => void 0);
-    this.ensureLogo().catch(() => void 0);
-  }
-
-  ngOnDestroy(): void {
-    this.subscriptions.forEach((sub) => sub.unsubscribe());
-    this.filterEffect.destroy();
-  }
-
-  ///////////////////////////
-  // Data loading
-  ///////////////////////////
-
-  private updateFilter(): void {
-    const filter: DashboardFilter = { scope: this.scopeModel };
-    if (this.selectedCompanyId != null) filter.companyId = this.selectedCompanyId;
-    if (this.scopeModel === "DEPARTMENT" || this.scopeModel === "EMPLOYEE") {
-      filter.departmentId = this.selectedDepartmentId ?? null;
-    }
-    if (this.scopeModel === "EMPLOYEE") {
-      filter.employeeId = this.selectedEmployeeId ?? null;
-    }
-    this.filterSignal.set(filter);
-  }
-
-  private fetchInsights(filter: DashboardFilter): void {
     this.loadingSignal.set(true);
     this.errorSignal.set("");
     this.infoSignal.set("");
-
-    if (filter.scope === "COMPANY" && filter.companyId == null) {
-      this.loadingSignal.set(false);
-      this.infoSignal.set("Selecciona una empresa para ver sus resultados.");
-      this.insightsSignal.set([]);
-      return;
-    }
-    if (filter.scope === "DEPARTMENT") {
-      if (filter.companyId == null) {
-        this.loadingSignal.set(false);
-        this.infoSignal.set("Selecciona una empresa para filtrar por departamento.");
-        this.insightsSignal.set([]);
-        return;
-      }
-      if (filter.departmentId == null) {
-        this.loadingSignal.set(false);
-        this.infoSignal.set("Selecciona un departamento para visualizar resultados.");
-        this.insightsSignal.set([]);
-        return;
-      }
-    }
-    if (filter.scope === "EMPLOYEE") {
-      if (filter.companyId == null) {
-        this.loadingSignal.set(false);
-        this.infoSignal.set("Selecciona una empresa para filtrar por empleado.");
-        this.insightsSignal.set([]);
-        return;
-      }
-      if (filter.employeeId == null) {
-        this.loadingSignal.set(false);
-        this.infoSignal.set("Elige un empleado para ver sus resultados individuales.");
-        this.insightsSignal.set([]);
-        return;
-      }
-    }
-
-    const companyParam = filter.companyId ?? undefined;
-    const sub = this.assignmentsSvc
-      .list(companyParam)
-      .pipe(
-        switchMap((assignments) => {
-          if (!assignments.length) {
-            return of<AssignmentInsight[]>([]);
-          }
-          const ordered = [...assignments].sort(
-            (a, b) =>
-              this.parseDate(b.fecha_inicio).getTime() - this.parseDate(a.fecha_inicio).getTime()
-          );
-          return this.buildInsightsForFilter(ordered, filter);
-        }),
-        catchError((err) => {
-          console.error("Error cargando dashboards", err);
-          this.errorSignal.set(
-            err?.error?.detail ?? "No pudimos cargar los resultados. Intenta nuevamente mÃ¡s tarde."
-          );
-          return of<AssignmentInsight[]>([]);
-        })
-      )
-      .subscribe((insights) => {
-        this.insightsSignal.set(insights);
-        this.loadingSignal.set(false);
+    const sub = this.analyticsSvc
+      .getDashboardAnalytics(filter)
+      .subscribe({
+        next: (response) => {
+          this.analyticsSignal.set(response);
+          this.likertLevelsSignal.set(response.likert_levels ?? []);
+          this.loadingSignal.set(false);
+        },
+        error: (err) => {
+          console.error("Error loading analytics", err);
+          this.analyticsSignal.set(null);
+          this.loadingSignal.set(false);
+          this.errorSignal.set(err?.error?.detail ?? "No pudimos cargar los resultados.");
+        },
       });
-
     this.subscriptions.push(sub);
-  }
-
-  private buildInsightsForFilter(assignments: Asignacion[], filter: DashboardFilter) {
-    if (filter.scope === "DEPARTMENT" && filter.companyId && filter.departmentId != null) {
-      return this.employeeSvc
-        .listByCompany(filter.companyId, filter.departmentId)
-        .pipe(
-          switchMap((employees) => {
-            if (!employees.length) {
-              return of(
-                assignments.map((asignacion) => ({
-                  asignacion,
-                  progress: null,
-                }))
-              );
-            }
-            const obs = assignments.map((asignacion) =>
-              this.aggregateProgressForEmployees(asignacion, employees)
-            );
-            return forkJoin(obs);
-          })
-        );
-    }
-
-    if (filter.scope === "EMPLOYEE" && filter.employeeId != null) {
-      const obs = assignments.map((asignacion) =>
-        this.surveySvc.getProgress(asignacion.id, filter.employeeId).pipe(
-          catchError(() => of(null)),
-          map((progress) => ({
-            asignacion,
-            progress,
-          }))
-        )
-      );
-      return forkJoin(obs);
-    }
-
-    const obs = assignments.map((asignacion) =>
-      this.surveySvc.getProgress(asignacion.id).pipe(
-        catchError(() => of(null)),
-        map((progress) => ({
-          asignacion,
-          progress,
-        }))
-      )
-    );
-    return forkJoin(obs);
   }
 
   private loadCompanies(): void {
     const sub = this.companySvc.list().subscribe({
       next: (rows) => {
         let companies = rows ?? [];
-        if (this.isUser) {
-          if (this.empresaId != null) {
-            companies = companies.filter((company) => company.id === this.empresaId);
-            this.selectedCompanyId = this.empresaId;
-          } else {
-            companies = [];
+        if (this.isUser && this.empresaId != null) {
+          companies = companies.filter((company) => company.id === this.empresaId);
+          this.selectedCompanyId = this.empresaId;
+          if (companies.length) {
+            this.loadDepartments(this.empresaId);
+            this.loadEmployees(this.empresaId, null);
           }
-          if (!companies.length && this.empresaId != null) {
-            this.infoSignal.set(
-              "No encontramos la empresa asociada a tu usuario. Contacta al administrador."
-            );
-          }
-          this.updateFilter();
         }
         this.companiesSignal.set(companies);
+        this.updateFilter();
       },
       error: () => {
         this.errorSignal.set("No pudimos cargar la lista de empresas.");
@@ -1082,506 +705,137 @@ export class DashboardAnalyticsComponent
     this.subscriptions.push(sub);
   }
 
-  ///////////////////////////
-  // Aggregation helpers
-  ///////////////////////////
-
-  private buildPillarAggregates() {
-    const map = this.collectPillarAggregates(this.activePillarIds());
-    return Array.from(map.values()).map((aggregate) => ({
-      id: aggregate.id,
-      name: aggregate.name,
-      scoreAvg: aggregate.scoreCount
-        ? this.clampPercent(Number(((aggregate.scoreSum / aggregate.scoreCount) * 100).toFixed(1)))
-        : 0,
-      coverage: aggregate.total
-        ? this.clampPercent(Number(((aggregate.responded / aggregate.total) * 100).toFixed(1)))
-        : 0,
-    }));
-  }
-
-  private buildHeatmapMatrix() {
-    const departments = this.collectDepartmentAggregates(this.activePillarIds());
-    const pillars = this.activePillarIds()
-      ? this.pillarOptions().filter((p) => (this.activePillarIds() ?? []).includes(p.id))
-      : this.pillarOptions();
-
-    const departmentNames = departments.map((dept) => dept.name);
-    const pillarNames = pillars.map((pillar) => pillar.name);
-    const data: Array<[number, number, number]> = [];
-
-    departments.forEach((dept, yIndex) => {
-      pillars.forEach((pillar, xIndex) => {
-        const stats = dept.pillarScores.get(pillar.id);
-        const value =
-          stats && stats.scoreCount
-            ? this.clampPercent(Number(((stats.scoreSum / stats.scoreCount) * 100).toFixed(1)))
-            : 0;
-        data.push([xIndex, yIndex, value]);
-      });
-    });
-
-    return { departments: departmentNames, pillars: pillarNames, data };
-  }
-
-  private buildTimeline() {
-    return this.insights()
-      .filter((insight) => !!insight.progress)
-      .map((insight) => {
-        const progress = insight.progress!;
-        const end = this.parseDate(insight.asignacion.fecha_cierre);
-        const start = this.parseDate(insight.asignacion.fecha_inicio);
-        const date = Number.isNaN(end.getTime()) ? start : end;
-        const timeValue = Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
-        const label = this.formatDateLabel(date, insight.asignacion.id);
-        const pillarScores = new Map<number, number>();
-        progress?.por_pilar?.forEach((pillar) => {
-          pillarScores.set(pillar.pilar_id, this.progressPercent(pillar));
-        });
-        return {
-          time: timeValue,
-          label,
-          global: this.progressPercent(progress),
-          pillarScores,
-        };
-      })
-      .sort((a, b) => a.time - b.time);
-  }
-
-  private buildRanking() {
-    const pillarIds = this.activePillarIds();
-    const departments = this.collectDepartmentAggregates(pillarIds);
-    if (departments.length) {
-      return departments
-        .map((dept) => {
-          const totals = Array.from(dept.pillarScores.values()).reduce(
-            (acc, item) => {
-              acc.sum += item.scoreSum;
-              acc.count += item.scoreCount;
-              return acc;
-            },
-            { sum: 0, count: 0 }
-          );
-          const average = totals.count ? (totals.sum / totals.count) * 100 : 0;
-          return { label: dept.name, value: average };
-        })
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10);
+  private updateFilter(): void {
+    const companyId = this.selectedCompanyId ?? this.empresaId ?? null;
+    if (companyId == null) {
+      this.infoSignal.set("Selecciona una empresa para ver resultados.");
+      this.analyticsSignal.set(null);
+      return;
     }
-
-    const employees = this.collectEmployeeAggregates(pillarIds);
-    if (employees.length) {
-      return employees
-        .map((employee) => ({
-          label: employee.name,
-          value: employee.scoreCount ? (employee.scoreSum / employee.scoreCount) * 100 : 0,
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10);
-    }
-
-    return this.insights()
-      .filter((insight) => !!insight.progress)
-      .map((insight) => ({
-        label: `${this.resolveCompanyName(insight.asignacion.empresa_id)} Â- Asig. #${insight.asignacion.id}`,
-        value: this.progressPercent(insight.progress),
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }
-
-  private aggregateProgressForEmployees(
-    asignacion: Asignacion,
-    employees: Empleado[]
-  ) {
-    const requests = employees.map((emp) =>
-      this.surveySvc.getProgress(asignacion.id, emp.id).pipe(catchError(() => of(null)))
-    );
-    return forkJoin(requests).pipe(
-      map((results) => {
-        const valid = results.filter((p): p is AssignmentProgress => !!p);
-        const aggregated = valid.length ? this.combineProgress(valid) : null;
-        return {
-          asignacion,
-          progress: aggregated,
-        };
-      })
-    );
-  }
-
-  private combineProgress(progresses: AssignmentProgress[]): AssignmentProgress {
-    const totalRespondidas = progresses.reduce((acc, p) => acc + Math.max(0, p.respondidas ?? 0), 0);
-    const totalPreguntas = progresses.reduce((acc, p) => acc + Math.max(0, p.total ?? 0), 0);
-
-    let scoreSum = 0;
-    let scoreWeight = 0;
-    const pillarMap = new Map<
-      number,
-      { scoreSum: number; scoreCount: number; respondidas: number; total: number; nombre: string }
-    >();
-
-    progresses.forEach((progress) => {
-      const responded = Math.max(0, progress.respondidas ?? 0);
-      const total = Math.max(0, progress.total ?? 0);
-      const weight = responded || total;
-      if (weight) {
-        scoreSum += (progress.progreso ?? 0) * weight;
-        scoreWeight += weight;
-      }
-
-      progress.por_pilar.forEach((pillar) => {
-        const current =
-          pillarMap.get(pillar.pilar_id) ?? {
-            scoreSum: 0,
-            scoreCount: 0,
-            respondidas: 0,
-            total: 0,
-            nombre: pillar.pilar_nombre,
-          };
-        const answered = Math.max(0, pillar.respondidas ?? 0);
-        const totalPilar = Math.max(0, pillar.total ?? 0);
-        if (answered > 0) {
-          current.scoreSum += (pillar.progreso ?? 0) * answered;
-          current.scoreCount += answered;
-        }
-        current.respondidas += answered;
-        current.total += totalPilar;
-        pillarMap.set(pillar.pilar_id, current);
-      });
-    });
-
-    const por_pilar: PillarProgress[] = Array.from(pillarMap.entries()).map(
-      ([id, data]) => ({
-        pilar_id: id,
-        pilar_nombre: data.nombre,
-        respondidas: data.respondidas,
-        total: data.total,
-        progreso: data.scoreCount ? data.scoreSum / data.scoreCount : 0,
-        completion: data.total ? data.respondidas / data.total : 0,
-      })
-    );
-
-    const progreso = scoreWeight ? scoreSum / scoreWeight : 0;
-    const completion = totalPreguntas ? totalRespondidas / totalPreguntas : 0;
-
-    return {
-      total: totalPreguntas,
-      respondidas: totalRespondidas,
-      progreso,
-      completion,
-      por_pilar,
+    this.infoSignal.set("");
+    const filter: AnalyticsQueryParams = {
+      companyId,
+      dateFrom: this.dateFrom || undefined,
+      dateTo: this.dateTo || undefined,
+      departmentIds: this.selectedDepartmentId != null ? [this.selectedDepartmentId] : undefined,
+      employeeIds: this.selectedEmployeeId != null ? [this.selectedEmployeeId] : undefined,
+      pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
     };
+    this.filterSignal.set(filter);
   }
 
-  private collectPillarAggregates(activePillars?: number[] | null) {
-    const selected = activePillars ?? this.activePillarIds();
-    const aggregates = new Map<number, PillarAggregate>();
+  private resolveCompanyName(id: number | null | undefined): string {
+    if (id == null) return "Empresa";
+    const company = this.companiesSignal().find((item) => item.id === id);
+    return company ? company.nombre : `Empresa #${id}`;
+  }
 
-    this.insights().forEach((insight) => {
-      insight.progress?.por_pilar?.forEach((pillar) => {
-        if (selected && !selected.includes(pillar.pilar_id)) return;
-        const current =
-          aggregates.get(pillar.pilar_id) ??
-          {
-            id: pillar.pilar_id,
-            name: pillar.pilar_nombre,
-            values: [],
-            responded: 0,
-            total: 0,
-            scoreSum: 0,
-            scoreCount: 0,
+  private resolveDepartmentName(id: number | null | undefined): string {
+    if (id == null) return "Todos";
+    const department = this.departmentsSignal().find((item) => item.id === id);
+    return department ? department.nombre : `Departamento #${id}`;
+  }
+
+  private resolveEmployeeName(id: number | null | undefined): string {
+    if (id == null) return "Todos";
+    const employee = this.employeesSignal().find((item) => item.id === id);
+    return employee ? employee.nombre : `Empleado #${id}`;
+  }
+
+  private ensureLogo(): Promise<void> {
+    if (this.logoDataUrl) return Promise.resolve();
+    const logoElement = document.querySelector<HTMLImageElement>("header img");
+    if (!logoElement?.src) return Promise.resolve();
+    return fetch(logoElement.src)
+      .then((response) => response.blob())
+      .then((blob) =>
+        new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => {
+            this.logoDataUrl = reader.result as string;
+            resolve();
           };
-        const answered = Math.max(0, pillar.respondidas ?? 0);
-        const total = Math.max(0, pillar.total ?? 0);
-        const percent = this.progressPercent(pillar);
-        current.values.push(percent);
-        current.responded += answered;
-        current.total += total;
-        if (answered > 0) {
-          current.scoreSum += (pillar.progreso ?? 0) * answered;
-          current.scoreCount += answered;
-        }
-        aggregates.set(pillar.pilar_id, current);
-      });
-    });
-
-    return aggregates;
-  }
-
-  private collectDepartmentAggregates(activePillars?: number[] | null) {
-    const selected = activePillars ?? this.activePillarIds();
-    const map = new Map<
-      number,
-      {
-        id: number;
-        name: string;
-        responded: number;
-        total: number;
-        pillarScores: Map<
-          number,
-          { name: string; scoreSum: number; scoreCount: number; responded: number; total: number }
-        >;
-      }
-    >();
-
-    this.insights().forEach((insight) => {
-      const asignacion = insight.asignacion;
-      if (asignacion.alcance_tipo !== "DEPARTAMENTO" || asignacion.alcance_id == null) return;
-
-      const deptId = asignacion.alcance_id;
-      const current =
-        map.get(deptId) ??
-        {
-          id: deptId,
-          name: this.resolveDepartmentName(deptId, asignacion.empresa_id),
-          responded: 0,
-          total: 0,
-          pillarScores: new Map<
-            number,
-            { name: string; scoreSum: number; scoreCount: number; responded: number; total: number }
-          >(),
-        };
-
-      const progress = insight.progress;
-      if (progress) {
-        current.responded += Math.max(0, progress.respondidas ?? 0);
-        current.total += Math.max(0, progress.total ?? 0);
-
-        progress.por_pilar.forEach((pillar) => {
-          if (selected && !selected.includes(pillar.pilar_id)) return;
-          const stats =
-            current.pillarScores.get(pillar.pilar_id) ?? {
-              name: pillar.pilar_nombre,
-              scoreSum: 0,
-              scoreCount: 0,
-              responded: 0,
-              total: 0,
-            };
-          const answered = Math.max(0, pillar.respondidas ?? 0);
-          const total = Math.max(0, pillar.total ?? 0);
-          if (answered > 0) {
-            stats.scoreSum += (pillar.progreso ?? 0) * answered;
-            stats.scoreCount += answered;
-          }
-          stats.responded += answered;
-          stats.total += total;
-          current.pillarScores.set(pillar.pilar_id, stats);
-        });
-      }
-
-      map.set(deptId, current);
-    });
-
-    return Array.from(map.values());
-  }
-
-  private collectEmployeeAggregates(activePillars?: number[] | null) {
-    const selected = activePillars ?? this.activePillarIds();
-    const map = new Map<
-      number,
-      { id: number; name: string; scoreSum: number; scoreCount: number }
-    >();
-
-    this.insights().forEach((insight) => {
-      const asignacion = insight.asignacion;
-      if (asignacion.alcance_tipo !== "EMPLEADO" || asignacion.alcance_id == null) return;
-      const employeeId = asignacion.alcance_id;
-      const current =
-        map.get(employeeId) ??
-        {
-          id: employeeId,
-          name: this.resolveEmployeeName(employeeId),
-          scoreSum: 0,
-          scoreCount: 0,
-        };
-
-      const progress = insight.progress;
-      if (progress) {
-        if (selected && selected.length) {
-          progress.por_pilar.forEach((pillar) => {
-            if (!selected.includes(pillar.pilar_id)) return;
-            const answered = Math.max(0, pillar.respondidas ?? 0);
-            if (answered > 0) {
-              current.scoreSum += (pillar.progreso ?? 0) * answered;
-              current.scoreCount += answered;
-            }
-          });
-        } else {
-          const answered = Math.max(0, progress.respondidas ?? 0);
-          if (answered > 0) {
-            current.scoreSum += (progress.progreso ?? 0) * answered;
-            current.scoreCount += answered;
-          }
-        }
-      }
-      map.set(employeeId, current);
-    });
-
-    return Array.from(map.values());
-  }
-
-  ///////////////////////////
-  // Utilities
-  ///////////////////////////
-
-  private buildMetadataLines(timestamp: Date): string[] {
-    const name = (this.currentUserName ?? "").trim() || "Usuario desconocido";
-    const email = (this.currentUserEmail ?? "").trim();
-    const userLine = email ? `${name} <${email}>` : name;
-    const lines = [
-      `Generado por: ${userLine}`,
-      `Fecha y hora: ${timestamp.toLocaleString()}`,
-      "Filtros aplicados:",
-    ];
-    this.filterSummary().forEach((item) => lines.push(`- ${item}`));
-    return lines;
+          reader.readAsDataURL(blob);
+        })
+      )
+      .catch(() => undefined);
   }
 
   private async ensureCurrentUser(): Promise<void> {
     if (this.userLoaded) return;
     try {
-      const me = await firstValueFrom(
-        this.http.get<Usuario>(`${environment.apiUrl}/me`)
-      );
-      if (me) {
-        this.currentUserName = me.nombre ?? me.email ?? this.currentUserName;
-        this.currentUserEmail = me.email ?? this.currentUserEmail;
-      }
-    } catch (error) {
-      console.warn("No se pudo cargar el usuario para el PDF", error);
+      const user = await firstValueFrom(this.http.get<Usuario>(`${environment.apiUrl}/me`));
+      this.currentUserName = user?.nombre ?? null;
+      this.currentUserEmail = user?.email ?? null;
+    } catch {
+      this.currentUserName = null;
+      this.currentUserEmail = null;
     } finally {
       this.userLoaded = true;
     }
   }
 
-  private async ensureLogo(): Promise<void> {
-    if (this.logoDataUrl) return;
-    try {
-      const response = await fetch("assets/logo_ts.png");
-      if (!response.ok) return;
-      const blob = await response.blob();
-      this.logoDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(reader.error);
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.warn("No se pudo cargar el logo para el PDF", error);
+  private buildMetadataLines(generatedAt: Date): string[] {
+    const filter = this.filterSignal();
+    return [
+      `Generado: ${generatedAt.toLocaleString()}`,
+      `Usuario: ${this.currentUserName ?? "--"} (${this.currentUserEmail ?? "--"})`,
+      `Filtros: ${this.filterSummary().join(" · ")}`,
+    ];
+  }
+
+  private resizeAllCharts(): void {
+    this.charts?.forEach((chart) => chart.resize());
+  }
+
+  @HostListener("window:resize")
+  onWindowResize(): void {
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
     }
+    this.resizeTimer = setTimeout(() => this.resizeAllCharts(), 120);
   }
 
-  private activePillarIds(): number[] | null {
-    const selection = this.pillarSelectionSignal();
-    if (selection === "ALL") return null;
-    return [selection];
+  private formatNumber(value: number | null | undefined): string {
+    if (value == null || Number.isNaN(value)) return "0";
+    return Number(value).toFixed(1).replace(/\.0$/, "");
   }
 
-  private progressPercent(progress: AssignmentProgress | PillarProgress | null | undefined): number {
-    if (!progress) return 0;
-    const raw = Number(progress.progreso ?? 0) * 100;
-    return this.clampPercent(Math.round(raw));
+  formatPercent(value: number | null | undefined): string {
+    if (value == null || Number.isNaN(value)) return "--";
+    return `${this.formatNumber(value)}%`;
   }
 
-  private completionPercent(progress: AssignmentProgress | null | undefined): number {
-    if (!progress) return 0;
-    if (typeof progress.completion === "number") {
-      return this.clampPercent(Math.round(progress.completion * 100));
-    }
-    const total = Math.max(0, progress.total ?? 0);
-    if (!total) return 0;
-    const responded = Math.max(0, progress.respondidas ?? 0);
-    return this.clampPercent(Math.round((responded / total) * 100));
+  private formatSigned(value: number): string {
+    if (value > 0) return `+${this.formatNumber(value)}`;
+    return this.formatNumber(value);
+  }
+
+  private round(value: number | null | undefined): number {
+    if (value == null || Number.isNaN(value)) return 0;
+    return Math.round(value * 10) / 10;
   }
 
   private emptyChartOption(text: string, type: "cartesian" | "radar" = "cartesian"): EChartsOption {
     if (type === "radar") {
       return {
-        title: {
-          text,
-          left: "center",
-          top: "middle",
-          textStyle: { color: "#9CA3AF", fontWeight: 500 },
-        },
+        title: { text, left: "center", top: "middle", textStyle: { color: "#9CA3AF", fontWeight: 500 } },
         radar: { indicator: [] },
         series: [],
       };
     }
     return {
-      title: {
-        text,
-        left: "center",
-        top: "middle",
-        textStyle: { color: "#9CA3AF", fontWeight: 500 },
-      },
+      title: { text, left: "center", top: "middle", textStyle: { color: "#9CA3AF", fontWeight: 500 } },
       xAxis: { show: false },
       yAxis: { show: false },
       series: [],
     };
   }
 
-  private clampPercent(value: number): number {
-    if (!Number.isFinite(value)) return 0;
-    if (value < 0) return 0;
-    if (value > 100) return 100;
-    return value;
-  }
-
-  private asParamArray(params: FormatterParams): FormatterParam[] {
-    if (Array.isArray(params)) return params as FormatterParam[];
-    return [params as FormatterParam];
-  }
-
-  private resolveCompanyName(id: number | null | undefined): string {
-    if (id == null) return "Empresa";
-    const companies = this.companiesSignal();
-    const company = companies.find((item) => item.id === id);
-    return company ? company.nombre : `Empresa #${id}`;
-  }
-
-  private resolveDepartmentName(id: number | null | undefined, companyId?: number | null): string {
-    if (id == null) return "Departamento general";
-    const departments = this.departmentsSignal();
-    const found = departments.find((dept) => dept.id === id);
-    if (found) return found.nombre;
-    const companies = this.companiesSignal();
-    if (companyId != null) {
-      const company = companies.find((item) => item.id === companyId);
-      const match = company?.departamentos?.find((dept) => dept.id === id);
-      if (match) return match.nombre;
-    }
-    for (const company of companies) {
-      const match = company.departamentos?.find((dept) => dept.id === id);
-      if (match) return match.nombre;
-    }
-    return `Departamento #${id}`;
-  }
-
-  private resolveEmployeeName(id: number | null | undefined): string {
-    if (id == null) return "Empleado sin asignar";
-    const employees = this.employeesSignal();
-    const employee = employees.find((item) => item.id === id);
-    return employee ? employee.nombre : `Empleado #${id}`;
-  }
-
-  private parseDate(value: string | Date | null | undefined): Date {
-    if (!value) return new Date(NaN);
-    if (value instanceof Date) return value;
-    let normalized = value.trim();
-    if (!normalized.includes("T")) normalized = normalized.replace(" ", "T");
-    if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)) normalized = `${normalized}Z`;
-    return new Date(normalized);
-  }
-
-  private formatDateLabel(date: Date, assignmentId: number): string {
-    if (Number.isNaN(date.getTime())) return `Asignacion #${assignmentId}`;
-    const year = date.getUTCFullYear();
-    const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
-    const day = `${date.getUTCDate()}`.padStart(2, "0");
-    return `${year}-${month}-${day}`;
+  private formatLikertLabel(level: number): string {
+    const levels = this.likertLevelsSignal();
+    const match = levels.find((item) => item.valor === level);
+    return match ? `${match.valor} - ${match.nombre}` : `Nivel ${level}`;
   }
 }
-
-
-
-
