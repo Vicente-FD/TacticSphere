@@ -1,0 +1,51 @@
+<section class="likert-buckets" *ngIf="shouldDisplay">
+  <div class="likert-buckets__header">
+    <div>
+      <p class="likert-buckets__eyebrow">Estadios Likert</p>
+      <p class="likert-buckets__subtitle">Distribución de colaboradores por nivel actual.</p>
+    </div>
+    <span class="likert-buckets__badge">
+      {{ totalEmployeesCount }} empleado{{ totalEmployeesCount === 1 ? '' : 's' }}
+    </span>
+  </div>
+
+  <div class="likert-buckets__scroller">
+    <div class="likert-buckets__grid">
+      <article
+        class="likert-card"
+        *ngFor="let bucket of groupedBuckets; trackBy: trackByBucket"
+        [style.--bucket-color]="bucket.color"
+      >
+        <header class="likert-card__header">
+          <div class="likert-card__title">
+            <span class="likert-card__dot" [style.background]="bucket.color"></span>
+            <div>
+              <p class="likert-card__name">{{ bucket.label }}</p>
+              <p class="likert-card__subtitle">{{ bucket.subtitle }}</p>
+            </div>
+          </div>
+          <div class="likert-card__count">
+            <span class="likert-card__count-number">{{ bucket.employees.length }}</span>
+            <span class="likert-card__count-label">
+              empleado{{ bucket.employees.length === 1 ? '' : 's' }}
+            </span>
+          </div>
+        </header>
+
+        <ng-container *ngIf="bucket.employees.length; else emptyBucket">
+          <ul class="likert-card__list">
+            <li *ngFor="let employee of bucket.employees; trackBy: trackByEmployee">
+              <button class="likert-card__employee" type="button" (click)="handleEmployeeClick(employee.id)">
+                <span class="likert-card__employee-name">{{ formatEmployeeIdentity(employee) }}</span>
+                <span class="likert-card__chevron" aria-hidden="true">→</span>
+              </button>
+            </li>
+          </ul>
+        </ng-container>
+        <ng-template #emptyBucket>
+          <p class="likert-card__empty">Sin empleados</p>
+        </ng-template>
+      </article>
+    </div>
+  </div>
+</section>

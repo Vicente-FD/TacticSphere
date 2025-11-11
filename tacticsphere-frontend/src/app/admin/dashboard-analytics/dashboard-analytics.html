@@ -100,7 +100,7 @@
           >
             <option [ngValue]="null">Todos los empleados</option>
             <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp.id">
-              {{ emp.nombre }} (ID {{ emp.id }})
+              {{ formatEmployeeIdentity(emp) }}
             </option>
           </select>
           <input
@@ -122,6 +122,12 @@
 
     <section id="analytics-export" class="space-y-6" *ngIf="!loading(); else loadingState">
       <ng-container *ngIf="analytics(); else emptyState">
+        <app-likert-buckets
+          [employees]="likertBucketEmployees()"
+          [filter]="likertBucketsFilter()"
+          (employeeClick)="onLikertEmployeeClick($event)"
+        ></app-likert-buckets>
+
         <div class="ts-card space-y-3 min-w-0 animate-subtleUp">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-ink">Resumen del filtro actual</h2>

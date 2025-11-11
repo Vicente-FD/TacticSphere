@@ -1,4 +1,4 @@
-﻿import {
+import {
   AfterViewChecked,
   AfterViewInit,
   Component,
@@ -31,12 +31,18 @@ import {
   DashboardAnalyticsResponse,
   Departamento,
   Empleado,
+  EmployeePoint,
   Empresa,
   LikertLevel,
   Usuario,
 } from "../../types";
 import { environment } from "../../../environments/environment";
 import { tsMonoTheme } from "../../theme/theme-echarts";
+import {
+  LikertBucketEmployee,
+  LikertBucketsComponent,
+  LikertBucketsFilter,
+} from "./likert-buckets/likert-buckets.component";
 
 const TS_MONO_THEME = "tsMono";
 const echartsWithTheme = echarts as unknown as {
@@ -73,7 +79,7 @@ interface KpiCard {
 @Component({
   standalone: true,
   selector: "app-dashboard-analytics",
-  imports: [CommonModule, FormsModule, NgxEchartsModule],
+  imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent],
   templateUrl: "./dashboard-analytics.html",
 })
 export class DashboardAnalyticsComponent
@@ -134,10 +140,70 @@ export class DashboardAnalyticsComponent
     if (!search) return this.employees();
     return this.employees().filter((employee) => {
       const name = employee.nombre?.toLowerCase() ?? "";
+      const lastName = employee.apellidos?.toLowerCase() ?? "";
       const email = employee.email?.toLowerCase() ?? "";
       const id = String(employee.id ?? "").toLowerCase();
-      return name.includes(search) || email.includes(search) || id.includes(search);
+      const rut = employee.rut?.toLowerCase() ?? "";
+      return (
+        name.includes(search) ||
+        lastName.includes(search) ||
+        email.includes(search) ||
+        id.includes(search) ||
+        rut.includes(search)
+      );
     });
+  });
+
+  readonly likertBucketEmployees = computed<LikertBucketEmployee[]>(() => {
+    const analyticsEmployees: EmployeePoint[] = this.analytics()?.employees ?? [];
+    if (!analyticsEmployees.length) return [];
+    const employeesMap = new Map(this.employees().map((employee) => [employee.id, employee]));
+    return analyticsEmployees.map((point) => {
+      const metadata = employeesMap.get(point.id);
+      if (metadata) {
+        return {
+          id: point.id,
+          level: point.level,
+          nombre: metadata.nombre,
+          apellidos: metadata.apellidos ?? null,
+          rut: metadata.rut ?? null,
+        };
+      }
+      const fallback = (point.name ?? "").trim();
+      if (!fallback) {
+        return {
+          id: point.id,
+          level: point.level,
+          nombre: `Empleado ${point.id}`,
+          apellidos: null,
+          rut: null,
+        };
+      }
+      const segments = fallback.split(/\s+/);
+      const nombre = segments.shift() ?? fallback;
+      const apellidos = segments.length ? segments.join(" ") : null;
+      return {
+        id: point.id,
+        level: point.level,
+        nombre,
+        apellidos,
+        rut: null,
+      };
+    });
+  });
+
+  readonly likertBucketsFilter = computed<LikertBucketsFilter>(() => {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      return { scope: "global" };
+    }
+    if (filter.employeeIds?.length) {
+      return { scope: "employee" };
+    }
+    if (filter.departmentIds?.length) {
+      return { scope: "department" };
+    }
+    return { scope: "company" };
   });
 
   readonly kpiCards = computed<KpiCard[]>(() => {
@@ -276,6 +342,12 @@ export class DashboardAnalyticsComponent
       this.selectedDepartmentId = departmentId;
     }
     this.updateFilter();
+  }
+
+  onLikertEmployeeClick(employeeId: number): void {
+    if (employeeId == null) return;
+    this.onEmployeeChange(employeeId);
+    this.showFilters = true;
   }
 
   filterSummary(): string[] {
@@ -433,7 +505,7 @@ export class DashboardAnalyticsComponent
           if (!value) return "";
           const dept = departments[value[1]];
           const pillar = pillars[value[0]];
-          return `${dept?.department_name ?? "Departamento"} · ${pillar?.pillar_name ?? "Pilar"}: ${this.formatNumber(
+          return `${dept?.department_name ?? "Departamento"} � ${pillar?.pillar_name ?? "Pilar"}: ${this.formatNumber(
             value[2]
           )}%`;
         },
@@ -506,7 +578,7 @@ export class DashboardAnalyticsComponent
       position: "top",
       fontWeight: 600,
       formatter: (params: any) =>
-        `${this.formatNumber(params?.data?.pctGe4 ?? params?.data?.value ?? 0)}% ≥4`,
+        `${this.formatNumber(params?.data?.pctGe4 ?? params?.data?.value ?? 0)}% =4`,
     };
     return {
       backgroundColor: TS_COLORS.background,
@@ -610,6 +682,8 @@ export class DashboardAnalyticsComponent
   employeeScatterOption(): EChartsOption {
     const employees = this.analytics()?.employees ?? [];
     if (!employees.length) return this.emptyChartOption("Sin datos de empleados");
+    const identityEntries = this.likertBucketEmployees();
+    const identityMap = new Map(identityEntries.map((entry) => [entry.id, entry] as const));
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 800,
@@ -618,10 +692,18 @@ export class DashboardAnalyticsComponent
         formatter: (params: any) => {
           const point = employees[params.dataIndex];
           const label = this.formatLikertLabel(point.level);
-          return `${point.name}<br/>${this.formatNumber(point.percent)}% · ${label}`;
+          const identity = identityMap.get(point.id) ?? { nombre: point.name ?? `Empleado ${point.id}` };
+          return `${this.formatEmployeeIdentity(identity, point.name)}<br/>${this.formatNumber(point.percent)}% ? ${label}`;
         },
       },
-      xAxis: { type: "category", data: employees.map((emp) => emp.name), show: false },
+      xAxis: {
+        type: "category",
+        data: employees.map((emp) => {
+          const identity = identityMap.get(emp.id) ?? { nombre: emp.name ?? `Empleado ${emp.id}` };
+          return this.formatEmployeeIdentity(identity, emp.name);
+        }),
+        show: false,
+      },
       yAxis: {
         type: "value",
         min: 0,
@@ -640,7 +722,6 @@ export class DashboardAnalyticsComponent
       ],
     };
   }
-
   exportPdfUrlDisabled(): boolean {
     return this.loading() || this.exporting() || !this.analytics();
   }
@@ -896,7 +977,7 @@ export class DashboardAnalyticsComponent
     return [
       `Generado: ${generatedAt.toLocaleString()}`,
       `Usuario: ${this.currentUserName ?? "--"} (${this.currentUserEmail ?? "--"})`,
-      `Filtros: ${this.filterSummary().join(" · ")}`,
+      `Filtros: ${this.filterSummary().join(" � ")}`,
     ];
   }
 
@@ -915,6 +996,19 @@ export class DashboardAnalyticsComponent
   private formatNumber(value: number | null | undefined): string {
     if (value == null || Number.isNaN(value)) return "0";
     return Number(value).toFixed(1).replace(/\.0$/, "");
+  }
+
+  formatEmployeeIdentity(
+    record: { nombre?: string | null; apellidos?: string | null; rut?: string | null },
+    fallbackName?: string | null
+  ): string {
+    const trimmedFallback = fallbackName?.trim();
+    const parts = [record?.nombre, record?.apellidos]
+      .map((value) => value?.trim())
+      .filter((value): value is string => !!value && value.length > 0);
+    const displayName = parts.join(" ").trim() || trimmedFallback || "Empleado sin nombre";
+    const rut = record?.rut?.trim();
+    return rut ? `${displayName} - ${rut}` : displayName;
   }
 
   formatPercent(value: number | null | undefined): string {
@@ -954,3 +1048,6 @@ export class DashboardAnalyticsComponent
     return match ? `${match.valor} - ${match.nombre}` : `Nivel ${level}`;
   }
 }
+
+
+

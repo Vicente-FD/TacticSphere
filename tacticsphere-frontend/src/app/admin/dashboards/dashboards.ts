@@ -131,7 +131,7 @@ interface PillarTrendSerie {
                 >
                   <option [ngValue]="null">Selecciona empleado…</option>
                   <option *ngFor="let emp of employees()" [ngValue]="emp.id">
-                    {{ emp.nombre }} (ID {{ emp.id }})
+                    {{ formatEmployeeIdentity(emp) }}
                   </option>
                 </select>
               </label>
@@ -441,6 +441,15 @@ export class DashboardsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCompanies();
+  }
+
+  formatEmployeeIdentity(record: { nombre?: string | null; apellidos?: string | null; rut?: string | null }): string {
+    const parts = [record?.nombre, record?.apellidos]
+      .map((value) => (value ?? '').trim())
+      .filter((value) => !!value);
+    const displayName = parts.join(' ').trim() || 'Empleado sin nombre';
+    const rut = record?.rut?.trim();
+    return rut ? `${displayName} - ${rut}` : displayName;
   }
 
   totalAssignments = computed(() => this.insights().length);

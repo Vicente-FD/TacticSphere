@@ -1,0 +1,190 @@
+:host {
+  display: block;
+  font-family: 'Inter', 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1e293b;
+}
+
+.likert-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.likert-buckets__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.likert-buckets__eyebrow {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+  margin: 0;
+}
+
+.likert-buckets__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.likert-buckets__badge {
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.likert-buckets__scroller {
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+}
+
+.likert-buckets__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 20px);
+}
+
+.likert-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  overflow: hidden;
+}
+
+.likert-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.08);
+}
+
+.likert-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.likert-card__title {
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.likert-card__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 0.4rem;
+  flex-shrink: 0;
+}
+
+.likert-card__name {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.likert-card__subtitle {
+  margin: 0.1rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.likert-card__count {
+  text-align: right;
+}
+
+.likert-card__count-number {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--bucket-color, #0f172a);
+  line-height: 1;
+}
+
+.likert-card__count-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.likert-card__list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.likert-card__employee {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  background: #ffffff;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 200ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.likert-card__employee:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  transform: translateX(2px);
+}
+
+.likert-card__employee-name {
+  font-weight: 500;
+  color: #0f172a;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.likert-card__chevron {
+  font-size: 1rem;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.likert-card__empty {
+  margin: 1.25rem 0 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
