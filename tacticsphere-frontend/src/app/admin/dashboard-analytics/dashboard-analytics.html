@@ -1,122 +1,146 @@
 ﻿<div class="ts-page">
   <div class="ts-container space-y-6">
     <section class="ts-card space-y-6 animate-subtleUp">
-      <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 class="ts-title">Dashboard analitico</h1>
-          <p class="ts-subtitle">Explora la madurez digital por empresa, departamentos, empleados y pilares.</p>
-        </div>
-        <div class="flex flex-wrap gap-2 text-sm">
-          <ng-container *ngFor="let card of kpiCards(); trackBy: trackByIndex">
-            <div class="ts-chip min-w-[150px]">
-              <span class="uppercase text-[11px] tracking-[0.08em] text-muted">{{ card.label }}</span>
-              <span class="ml-2 text-lg font-semibold text-ink">{{ card.value }}</span>
-              <span *ngIf="card.suffix" class="ml-1 text-xs text-muted">{{ card.suffix }}</span>
+      <div class="space-y-1">
+        <h1 class="ts-title">Dashboard analitico</h1>
+        <p class="ts-subtitle">Explora la madurez digital por empresa, departamentos, empleados y pilares.</p>
+      </div>
+
+      <div class="grid gap-6">
+        <div class="grid gap-4 md:grid-cols-2">
+          <ng-container *ngFor="let card of kpiCards().slice(0, 4); trackBy: trackByIndex">
+            <div class="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(2,6,23,0.06)]">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748B]">{{ card.label }}</p>
+              <div class="mt-1 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold text-[#0F172A]">{{ card.value }}</span>
+                <span *ngIf="card.suffix" class="text-xs font-medium text-[#94A3B8]">{{ card.suffix }}</span>
+              </div>
             </div>
           </ng-container>
         </div>
-      </div>
 
-      <div class="flex flex-wrap items-center gap-3">
-        <button type="button" class="ts-btn ts-btn--ghost" (click)="toggleFilters()">
-          {{ showFilters ? 'Ocultar filtros' : 'Mostrar filtros' }}
-        </button>
-        <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
-          Actualizar datos
-        </button>
-        <button
-          class="ts-btn ts-btn--outline"
-          type="button"
-          (click)="exportCsv()"
-          [disabled]="loading() || exportingCsv() || !analytics()"
-        >
-          {{ exportingCsv() ? 'Exportando CSV...' : 'Exportar CSV' }}
-        </button>
-        <button class="ts-btn" type="button" (click)="exportPdf()" [disabled]="exportPdfUrlDisabled()">
-          {{ exporting() ? 'Generando PDF...' : 'Exportar PDF' }}
-        </button>
-      </div>
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
+            Actualizar datos
+          </button>
+          <button class="ts-btn ts-btn--outline" type="button" (click)="exportCsv()" [disabled]="loading() || exportingCsv() || !analytics()">
+            {{ exportingCsv() ? 'Exportando CSV...' : 'Exportar CSV' }}
+          </button>
+          <button class="ts-btn" type="button" (click)="exportPdf()" [disabled]="exportPdfUrlDisabled()">
+            {{ exporting() ? 'Generando PDF...' : 'Exportar PDF' }}
+          </button>
+        </div>
 
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6" *ngIf="showFilters">
-        <label class="block space-y-2 xl:col-span-2">
-          <span class="ts-label">Empresa</span>
-          <select
-            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
-            [(ngModel)]="selectedCompanyId"
-            (ngModelChange)="onCompanyChange($event)"
-            [disabled]="isUser"
-            panelClass="ts-select-panel"
-          >
-            <option [ngValue]="null">Selecciona empresa...</option>
-            <option *ngFor="let company of companies(); trackBy: trackById" [ngValue]="company.id">{{ company.nombre }}</option>
-          </select>
-        </label>
+        <div class="grid gap-6 xl:grid-cols-3">
+          <div class="rounded-2xl border border-[#E2E8F0] bg-white/80 p-5 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#64748B]">Datos</p>
+            <div class="mt-4 grid gap-4">
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Empresa</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="selectedCompanyId"
+                  (ngModelChange)="onCompanyChange($event)"
+                  [disabled]="isUser"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Selecciona empresa...</option>
+                  <option *ngFor="let company of companies(); trackBy: trackById" [ngValue]="company.id">{{ company.nombre }}</option>
+                </select>
+              </label>
 
-        <label class="block space-y-2">
-          <span class="ts-label">Desde</span>
-          <input class="ts-input" type="date" [(ngModel)]="dateFrom" (change)="onDateChange()" />
-        </label>
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Departamento</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="selectedDepartmentId"
+                  (ngModelChange)="onDepartmentChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Todos los departamentos</option>
+                  <option *ngFor="let dept of departments(); trackBy: trackById" [ngValue]="dept.id">{{ dept.nombre }}</option>
+                </select>
+              </label>
 
-        <label class="block space-y-2">
-          <span class="ts-label">Hasta</span>
-          <input class="ts-input" type="date" [(ngModel)]="dateTo" (change)="onDateChange()" />
-        </label>
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Pilar</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="selectedPillar"
+                  (ngModelChange)="onPillarChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="'ALL'">Todos los pilares</option>
+                  <option *ngFor="let pillar of pillarOptions(); trackBy: trackByIndex" [ngValue]="pillar.pillar_id">
+                    {{ pillar.pillar_name }}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
 
-        <label class="block space-y-2">
-          <span class="ts-label">Departamento</span>
-          <select
-            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
-            [(ngModel)]="selectedDepartmentId"
-            (ngModelChange)="onDepartmentChange($event)"
-            panelClass="ts-select-panel"
-          >
-            <option [ngValue]="null">Todos los departamentos</option>
-            <option *ngFor="let dept of departments(); trackBy: trackById" [ngValue]="dept.id">{{ dept.nombre }}</option>
-          </select>
-        </label>
+          <div class="rounded-2xl border border-[#E2E8F0] bg-white/80 p-5 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#64748B]">Colaboradores</p>
+            <div class="mt-4 grid gap-4">
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Empleado</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="selectedEmployeeId"
+                  (ngModelChange)="onEmployeeChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Todos los empleados</option>
+                  <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp.id">
+                    {{ formatEmployeeIdentity(emp) }}
+                  </option>
+                </select>
+              </label>
 
-        <label class="block space-y-2">
-          <span class="ts-label">Pilar</span>
-          <select
-            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
-            [(ngModel)]="selectedPillar"
-            (ngModelChange)="onPillarChange($event)"
-            panelClass="ts-select-panel"
-          >
-            <option [ngValue]="'ALL'">Todos los pilares</option>
-            <option *ngFor="let pillar of pillarOptions(); trackBy: trackByIndex" [ngValue]="pillar.pillar_id">
-              {{ pillar.pillar_name }}
-            </option>
-          </select>
-        </label>
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Buscar empleado</span>
+                <input
+                  class="ts-input rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  type="text"
+                  placeholder="Nombre, correo o RUT"
+                  [(ngModel)]="employeeSearch"
+                />
+              </label>
+            </div>
+          </div>
 
-        <label class="block space-y-2 xl:col-span-2">
-          <span class="ts-label">Empleado</span>
-          <select
-            class="ts-select bg-[#F8FAFC] text-[#1E293B]"
-            [(ngModel)]="selectedEmployeeId"
-            (ngModelChange)="onEmployeeChange($event)"
-            panelClass="ts-select-panel"
-          >
-            <option [ngValue]="null">Todos los empleados</option>
-            <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp.id">
-              {{ formatEmployeeIdentity(emp) }}
-            </option>
-          </select>
-          <input
-            class="ts-input mt-2"
-            type="text"
-            placeholder="Buscar empleado"
-            [(ngModel)]="employeeSearch"
-          />
-        </label>
-      </div>
+          <div class="rounded-2xl border border-[#E2E8F0] bg-white/80 p-5 shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#64748B]">Periodo</p>
+            <div class="mt-4 grid gap-4">
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Desde</span>
+                <input
+                  class="ts-input rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  type="date"
+                  [(ngModel)]="dateFrom"
+                  (change)="onDateChange()"
+                />
+              </label>
 
-      <div *ngIf="info()" class="rounded-2xl border border-border bg-[#f6f6f6] px-4 py-3 text-sm text-muted">
-        {{ info() }}
-      </div>
-      <div *ngIf="error()" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
-        {{ error() }}
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Hasta</span>
+                <input
+                  class="ts-input rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  type="date"
+                  [(ngModel)]="dateTo"
+                  (change)="onDateChange()"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="info()" class="rounded-2xl border border-border bg-[#F8FAFC] px-4 py-3 text-sm text-muted">
+          {{ info() }}
+        </div>
+        <div *ngIf="error()" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+          {{ error() }}
+        </div>
       </div>
     </section>
 

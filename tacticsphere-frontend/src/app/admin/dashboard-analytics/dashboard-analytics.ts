@@ -139,7 +139,6 @@ export class DashboardAnalyticsComponent
   dateFrom: string | null = null;
   dateTo: string | null = null;
   employeeSearch = "";
-  showFilters = false;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private subscriptions: Subscription[] = [];
   private logoDataUrl: string | null = null;
@@ -312,10 +311,6 @@ export class DashboardAnalyticsComponent
     });
   }
 
-  toggleFilters(): void {
-    this.showFilters = !this.showFilters;
-  }
-
   refreshCurrentFilter(): void {
     this.updateFilter();
   }
@@ -380,7 +375,6 @@ export class DashboardAnalyticsComponent
   onLikertEmployeeClick(employeeId: number): void {
     if (employeeId == null) return;
     this.onEmployeeChange(employeeId);
-    this.showFilters = true;
   }
 
   filterSummary(): string[] {
