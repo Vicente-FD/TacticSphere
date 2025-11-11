@@ -253,7 +253,7 @@ def main():
 
             db, Asignacion,
 
-            empresa_id=empresa.id, cuestionario_id=cuesti.id, alcance_tipo="EMPRESA", alcance_id=empresa.id,
+            empresa_id=empresa.id, cuestionario_id=cuesti.id, alcance_tipo="EMPRESA", alcance_id=None,
 
             defaults=dict(fecha_inicio=ahora, fecha_cierre=ahora + timedelta(days=14), anonimo=False)
 

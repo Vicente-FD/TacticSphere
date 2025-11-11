@@ -46,7 +46,7 @@ import { AssignmentsService } from '../assignments.service';
               #{{ selectedAssignment.id }}
             </div>
             <div *ngIf="progress" class="ts-chip">
-              {{ progress.respondidas }} / {{ progress.total }} respondidas
+              {{ realtimeRespondidas }} / {{ totalQuestions }} respondidas
             </div>
           </div>
         </div>
@@ -297,12 +297,12 @@ import { AssignmentsService } from '../assignments.service';
             </div>
           </div>
 
-          <div class="ts-card space-y-6">
+          <div class="ts-card space-y-6 survey-sticky-progress">
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <h2 class="text-xl font-semibold text-ink">Progreso general</h2>
                 <div *ngIf="progress" class="ts-chip">
-                  {{ progress.respondidas }} / {{ progress.total }} respondidas
+                  {{ realtimeRespondidas }} / {{ totalQuestions }} respondidas
                 </div>
               </div>
               <p class="text-sm text-neutral-400">
@@ -315,23 +315,26 @@ import { AssignmentsService } from '../assignments.service';
                 <div class="h-3 w-full overflow-hidden rounded-full bg-neutral-200">
                   <div
                     class="h-full rounded-full bg-success transition-all duration-160 ease-smooth"
-                    [style.width.%]="pr.progreso * 100"
+                    [style.width.%]="realtimeAdvancePercent"
                   ></div>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-3">
                   <div class="rounded-xl border border-neutral-200 bg-neutral-100/60 p-4 text-sm text-neutral-600">
                     <span class="mb-1 block text-xs uppercase tracking-[0.08em] text-neutral-400">Total</span>
-                    <span class="text-lg font-semibold text-ink">{{ pr.total }}</span>
+                    <span class="text-lg font-semibold text-ink">{{ totalQuestions }}</span>
                   </div>
                   <div class="rounded-xl border border-neutral-200 bg-neutral-100/60 p-4 text-sm text-neutral-600">
                     <span class="mb-1 block text-xs uppercase tracking-[0.08em] text-neutral-400">Respondidas</span>
-                    <span class="text-lg font-semibold text-ink">{{ pr.respondidas }}</span>
+                    <span class="text-lg font-semibold text-ink">{{ realtimeRespondidas }}</span>
                   </div>
                   <div class="rounded-xl border border-neutral-200 bg-neutral-100/60 p-4 text-sm text-neutral-600">
                     <span class="mb-1 block text-xs uppercase tracking-[0.08em] text-neutral-400">Avance</span>
-                    <span class="text-lg font-semibold text-ink">{{ (pr.progreso * 100) | number: '1.0-0' }}%</span>
+                    <span class="text-lg font-semibold text-ink">{{ realtimeAdvancePercent }}%</span>
                   </div>
                 </div>
+                <p class="text-xs text-neutral-500">
+                  Pendientes: {{ realtimePending }}
+                </p>
               </div>
             </ng-container>
 
@@ -352,7 +355,7 @@ import { AssignmentsService } from '../assignments.service';
                   Selecciona un pilar y responde las preguntas pendientes.
                 </p>
               </div>
-              <div class="ts-chip">{{ pr.respondidas }} / {{ pr.total }} respondidas</div>
+              <div class="ts-chip">{{ realtimeRespondidas }} / {{ totalQuestions }} respondidas</div>
             </div>
 
             <div class="grid gap-6 lg:grid-cols-[minmax(0,_0.3fr)_minmax(0,_1fr)]">
@@ -369,15 +372,15 @@ import { AssignmentsService } from '../assignments.service';
                     }"
                   >
                     <div class="flex items-center justify-between text-sm font-medium text-ink">
-                      <span>{{ p.nombre }}</span>
-                      <span class="text-neutral-400">
-                        {{ progressMap[p.id]?.respondidas || 0 }} / {{ progressMap[p.id]?.total || 0 }}
+                       <span>{{ p.nombre }}</span>
+                       <span class="text-neutral-400">
+                        {{ getPillarRespondidas(p.id) }} / {{ getPillarTotal(p.id) }}
                       </span>
                     </div>
                     <div class="mt-2 h-1.5 w-full rounded-full bg-neutral-200">
                       <div
                         class="h-full rounded-full bg-accent transition-all duration-160 ease-smooth"
-                        [style.width.%]="(progressMap[p.id]?.progreso || 0) * 100"
+                        [style.width.%]="getPillarPercent(p.id)"
                       ></div>
                     </div>
                   </button>
@@ -525,48 +528,24 @@ import { AssignmentsService } from '../assignments.service';
       </div>
     </div>
 
-    <div
-      *ngIf="progress"
-      class="survey-progress-bar border-t border-neutral-200 bg-white/95"
-    >
-      <div class="ts-container flex flex-wrap items-center gap-4 py-3">
-        <div>
-          <p class="text-sm font-semibold text-ink">Avance del cuestionario</p>
-          <p class="text-xs text-neutral-500">
-            {{ progress?.respondidas || 0 }} respondidas - {{ pendingQuestions }} pendientes
-          </p>
-        </div>
-        <div class="flex min-w-[12rem] flex-1 items-center gap-3">
-          <div class="h-2 flex-1 rounded-full bg-neutral-200">
-            <div
-              class="h-full rounded-full bg-accent transition-all duration-160 ease-smooth"
-              [style.width.%]="(progress?.progreso || 0) * 100"
-            ></div>
-          </div>
-          <span class="text-sm font-semibold text-ink">
-            {{ ((progress?.progreso || 0) * 100) | number: '1.0-0' }}%
-          </span>
-        </div>
-        <button
-          class="ts-btn ts-btn--positive"
-          (click)="submitFullSurvey()"
-          [disabled]="!canFinalize || loadingFinalSubmit"
-        >
-          {{
-            loadingFinalSubmit
-              ? 'Enviando...'
-              : canFinalize
-              ? 'Enviar encuesta'
-              : 'Completa todos los pilares'
-          }}
-        </button>
-      </div>
-    </div>
   `,
   styles: [
     `
       :host {
         display: block;
+      }
+
+      .survey-sticky-progress {
+        position: sticky;
+        top: 1rem;
+        z-index: 30;
+      }
+
+      @media (max-width: 767px) {
+        .survey-sticky-progress {
+          position: static;
+          top: auto;
+        }
       }
     `,
   ],
@@ -1187,10 +1166,60 @@ export class SurveyComponent implements OnInit, OnDestroy {
   }
 
   get pendingQuestions(): number {
+    return this.realtimePending;
+  }
+
+  get totalQuestions(): number {
+    return Math.max(this.progress?.total ?? 0, 0);
+  }
+
+  get realtimeRespondidas(): number {
     if (!this.progress) {
       return 0;
     }
-    return Math.max(this.progress.total - this.progress.respondidas, 0);
+    const base = Math.max(this.progress.respondidas ?? 0, 0);
+    const total = this.totalQuestions;
+    if (!total) {
+      return base;
+    }
+    const adjusted = Math.max(0, Math.min(total, base + this.computeLocalProgressDelta()));
+    return adjusted;
+  }
+
+  get realtimeAdvancePercent(): number {
+    const total = this.totalQuestions;
+    if (!total) {
+      return 0;
+    }
+    return Math.round((this.realtimeRespondidas / total) * 100);
+  }
+
+  get realtimePending(): number {
+    const total = this.totalQuestions;
+    if (!total) {
+      return 0;
+    }
+    return Math.max(total - this.realtimeRespondidas, 0);
+  }
+
+  getPillarTotal(pilarId: number): number {
+    return Math.max(this.progressMap[pilarId]?.total ?? 0, 0);
+  }
+
+  getPillarRespondidas(pilarId: number): number {
+    const entry = this.progressMap[pilarId];
+    if (!entry) {
+      return 0;
+    }
+    return this.calculatePillarRespondidas(entry);
+  }
+
+  getPillarPercent(pilarId: number): number {
+    const entry = this.progressMap[pilarId];
+    if (!entry) {
+      return 0;
+    }
+    return this.calculatePillarProgressPercent(entry);
   }
 
   private get allPillarsComplete(): boolean {
@@ -1286,6 +1315,62 @@ export class SurveyComponent implements OnInit, OnDestroy {
       return !!(this.asignacionId || this.activeAssignments.length);
     }
     return this.empleadoId != null;
+  }
+
+  private computeLocalProgressDelta(): number {
+    if (
+      !this.currentPilar ||
+      !this.questions ||
+      this.questions.pilar_id !== this.currentPilar.pilar_id ||
+      !this.questions.preguntas?.length
+    ) {
+      return 0;
+    }
+    return this.questions.preguntas.reduce((delta, question) => {
+      const draftHasValue = this.hasAnswerValue(this.answers[question.id]);
+      const savedHasValue = this.hasAnswerValue(question.respuesta_actual);
+      if (draftHasValue && !savedHasValue) {
+        return delta + 1;
+      }
+      if (!draftHasValue && savedHasValue) {
+        return delta - 1;
+      }
+      return delta;
+    }, 0);
+  }
+
+  private calculatePillarRespondidas(entry: PillarProgress): number {
+    const total = Math.max(entry.total ?? 0, 0);
+    if (!total) {
+      return 0;
+    }
+    let responded = Math.max(entry.respondidas ?? 0, 0);
+    if (this.currentPilar && entry.pilar_id === this.currentPilar.pilar_id) {
+      responded = Math.max(0, Math.min(total, responded + this.computeLocalProgressDelta()));
+    }
+    return Math.min(total, responded);
+  }
+
+  private calculatePillarProgressPercent(entry: PillarProgress): number {
+    const total = Math.max(entry.total ?? 0, 0);
+    if (!total) {
+      return 0;
+    }
+    const ratio = this.calculatePillarRespondidas(entry) / total;
+    return Math.min(100, Math.max(0, ratio * 100));
+  }
+
+  private hasAnswerValue(value: unknown): boolean {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (typeof value === 'string') {
+      return value.trim().length > 0;
+    }
+    if (typeof value === 'number') {
+      return !Number.isNaN(value);
+    }
+    return true;
   }
 }
 

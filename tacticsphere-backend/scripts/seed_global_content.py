@@ -1,9 +1,8 @@
 """
-Populate database with a global set of pillars, questions, questionnaires, and assignments.
+Populate database with the canonical catalogue of pillars, questions, questionnaires, and assignments.
 
-The script ensures every company shares the same catalogue of pillars/preguntas by creating
-company-specific copies (required by the current schema) and wiring assignments so surveys
-can start without manual setup.
+This script replaces any previous set of global pilares/preguntas with the new catalogue and wires every
+company so it can start surveying right away.
 """
 
 from __future__ import annotations
@@ -34,17 +33,68 @@ from app.models import (
 
 GLOBAL_TEMPLATE: List[Dict] = [
     {
-        "nombre": "Estrategia",
-        "descripcion": "Direccion y objetivos de la transformacion.",
+        "nombre": "Infraestructura & Cloud",
+        "descripcion": (
+            "Practicas ITIL v4: Gestion de Disponibilidad y Capacidad; Gestion de Continuidad de Servicios; "
+            "Monitoreo y Eventos."
+        ),
         "preguntas": [
             {
-                "enunciado": "La empresa tiene una vision digital clara y compartida.",
+                "enunciado": "La empresa utiliza servicios en la nube (correo, almacenamiento, aplicaciones)?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
             },
             {
-                "enunciado": "Existen indicadores que miden avances de la transformacion.",
+                "enunciado": "Existen entornos virtualizados para servidores o aplicaciones criticas?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La infraestructura tecnologica esta documentada y estandarizada?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se aplican practicas de monitoreo para detectar fallas y caidas?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se mide la capacidad de la infraestructura para prevenir saturacion?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se utilizan arquitecturas hibridas o multicloud?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La empresa cuenta con planes de continuidad y recuperacion ante desastres (DRP)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se automatizan despliegues mediante CI/CD o infraestructura como codigo?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Los contratos con proveedores cloud se gestionan con SLAs definidos y medidos?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La disponibilidad de la infraestructura esta alineada a los objetivos estrategicos del negocio?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
@@ -52,17 +102,65 @@ GLOBAL_TEMPLATE: List[Dict] = [
         ],
     },
     {
-        "nombre": "Tecnologia",
-        "descripcion": "Infraestructura, software y datos disponibles.",
+        "nombre": "Big Data & Analytics",
+        "descripcion": "Practicas ITIL v4: Gestion de la Informacion y del Conocimiento; Medicion y Reporte.",
         "preguntas": [
             {
-                "enunciado": "La infraestructura soporta las necesidades actuales y futuras.",
+                "enunciado": "La empresa centraliza sus datos en un repositorio unico (Data Warehouse o Data Lake)?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
             },
             {
-                "enunciado": "Contamos con politicas de seguridad y respaldo efectivas.",
+                "enunciado": "Existen politicas de calidad de datos documentadas y aplicadas?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "El acceso a los datos esta controlado mediante roles definidos?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se realizan analisis basicos con herramientas como Excel o SQL?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se utilizan lenguajes o frameworks avanzados (Python, R, Spark)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se generan reportes periodicos basados en datos actualizados?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se aplican tecnicas de analitica predictiva en procesos clave?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La empresa analiza datos en tiempo real (por ejemplo IoT, logs, streaming)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Existe un catalogo o gobierno de datos que describa origenes y usos?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "El analisis de datos guia decisiones estrategicas de alto impacto?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
@@ -70,17 +168,133 @@ GLOBAL_TEMPLATE: List[Dict] = [
         ],
     },
     {
-        "nombre": "Procesos",
-        "descripcion": "Estandarizacion y mejora continua.",
+        "nombre": "Business Intelligence (BI)",
+        "descripcion": "Practicas ITIL v4: Gestion de Medicion y Reporte; Gestion de Demanda.",
         "preguntas": [
             {
-                "enunciado": "Los procesos clave estan documentados y estandarizados.",
+                "enunciado": "La empresa define formalmente KPIs alineados a sus objetivos estrategicos?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
             },
             {
-                "enunciado": "Existe mejora continua basada en datos.",
+                "enunciado": "Existen dashboards ejecutivos para visualizar dichos KPIs?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La direccion consulta regularmente los dashboards o reportes?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "El BI esta integrado en diferentes areas (finanzas, operaciones, marketing)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Los reportes se generan de forma automatica y no manual?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La informacion de BI se actualiza en tiempo real o con baja latencia?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se aplican tecnicas de visualizacion adecuadas para la interpretacion?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Los usuarios cuentan con autoservicio de BI (Power BI, Tableau, Looker)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "El BI se utiliza para anticipar demandas y planificar recursos?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "El BI forma parte del ciclo de mejora continua de la organizacion?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+        ],
+    },
+    {
+        "nombre": "Inteligencia Artificial (IA)",
+        "descripcion": (
+            "Practicas ITIL v4: Gestion de la Innovacion; Automatizacion y Soporte de TI; Gestion de Cambios."
+        ),
+        "preguntas": [
+            {
+                "enunciado": "La empresa conoce y evalua casos de uso de IA aplicables a su industria?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se han realizado pilotos de IA (por ejemplo chatbots o RPA basica)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Existen proyectos de machine learning en areas especificas?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se usan modelos predictivos en procesos criticos (ventas, mantenimiento)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La IA esta integrada en sistemas productivos o de negocio?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Existen lineamientos eticos o de gobernanza para el uso de IA?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Se aplican tecnicas avanzadas como NLP o vision computacional?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "Los proyectos de IA tienen metricas claras de exito y retorno (ROI)?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La IA esta incluida formalmente en la estrategia tecnologica de la empresa?",
+                "tipo": "LIKERT",
+                "es_obligatoria": True,
+                "peso": 1,
+            },
+            {
+                "enunciado": "La IA se utiliza como fuente de innovacion continua (por ejemplo IA generativa o nuevos modelos de negocio)?",
                 "tipo": "LIKERT",
                 "es_obligatoria": True,
                 "peso": 1,
@@ -88,6 +302,21 @@ GLOBAL_TEMPLATE: List[Dict] = [
         ],
     },
 ]
+
+
+def purge_obsolete_pilares(session, valid_names: Iterable[str]) -> int:
+    valid = set(valid_names)
+    if not valid:
+        return 0
+    removed = 0
+    stmt = select(Pilar).where(Pilar.empresa_id.is_(None))
+    for pilar in session.scalars(stmt):
+        if pilar.nombre not in valid:
+            session.delete(pilar)
+            removed += 1
+    if removed:
+        session.flush()
+    return removed
 
 
 def ensure_pilar(session, data: Dict) -> Tuple[Pilar, bool]:
@@ -117,62 +346,81 @@ def ensure_pilar(session, data: Dict) -> Tuple[Pilar, bool]:
     return pilar, created
 
 
-def ensure_preguntas(session, pilar: Pilar, preguntas: Iterable[Dict]) -> Tuple[List[Pregunta], int]:
-    created_count = 0
+def parse_tipo(tipo_value) -> TipoPreguntaEnum:
+    if isinstance(tipo_value, TipoPreguntaEnum):
+        return tipo_value
+    return TipoPreguntaEnum(tipo_value)
+
+
+def ensure_preguntas(
+    session, pilar: Pilar, preguntas: Iterable[Dict]
+) -> Tuple[List[Pregunta], int, int]:
+    existing = {
+        pregunta.enunciado: pregunta
+        for pregunta in session.scalars(select(Pregunta).where(Pregunta.pilar_id == pilar.id))
+    }
+    desired_texts = set()
     ensured: List[Pregunta] = []
+    created_count = 0
+    removed_count = 0
+
     for pdata in preguntas:
-        stmt = select(Pregunta).where(
-            Pregunta.pilar_id == pilar.id,
-            Pregunta.enunciado == pdata["enunciado"],
-        )
-        pregunta = session.scalars(stmt).first()
+        desired_texts.add(pdata["enunciado"])
+        tipo_enum = parse_tipo(pdata.get("tipo", TipoPreguntaEnum.LIKERT.value))
+        es_obligatoria = pdata.get("es_obligatoria", True)
+        peso = pdata.get("peso", 1)
+
+        pregunta = existing.get(pdata["enunciado"])
         if not pregunta:
             pregunta = Pregunta(
                 pilar_id=pilar.id,
                 enunciado=pdata["enunciado"],
-                tipo=TipoPreguntaEnum[pdata.get("tipo", "LIKERT")],
-                es_obligatoria=pdata.get("es_obligatoria", True),
-                peso=pdata.get("peso", 1),
+                tipo=tipo_enum,
+                es_obligatoria=es_obligatoria,
+                peso=peso,
             )
             session.add(pregunta)
             session.flush()
             created_count += 1
         else:
             updated = False
-            target_tipo = TipoPreguntaEnum[pdata.get("tipo", pregunta.tipo.name)]
-            if pregunta.tipo != target_tipo:
-                pregunta.tipo = target_tipo
+            if pregunta.tipo != tipo_enum:
+                pregunta.tipo = tipo_enum
                 updated = True
-            if pregunta.es_obligatoria != pdata.get("es_obligatoria", pregunta.es_obligatoria):
-                pregunta.es_obligatoria = pdata.get("es_obligatoria", pregunta.es_obligatoria)
+            if pregunta.es_obligatoria != es_obligatoria:
+                pregunta.es_obligatoria = es_obligatoria
                 updated = True
-            if pregunta.peso != pdata.get("peso", pregunta.peso):
-                pregunta.peso = pdata.get("peso", pregunta.peso)
+            if pregunta.peso != peso:
+                pregunta.peso = peso
                 updated = True
             if updated:
                 session.flush()
         ensured.append(pregunta)
-    return ensured, created_count
+
+    for enunciado, pregunta in existing.items():
+        if enunciado not in desired_texts:
+            session.delete(pregunta)
+            removed_count += 1
+    if removed_count:
+        session.flush()
+
+    return ensured, created_count, removed_count
 
 
 def ensure_cuestionario(session, empresa_id: int, preguntas: Iterable[Pregunta]) -> Tuple[Cuestionario, int]:
-    stmt = (
-        select(Cuestionario)
-        .where(Cuestionario.empresa_id == empresa_id)
-        .where(Cuestionario.estado == "PUBLICADO")
-        .order_by(Cuestionario.version.desc(), Cuestionario.id.desc())
-        .limit(1)
-    )
+    stmt = select(Cuestionario).where(Cuestionario.empresa_id == empresa_id).order_by(Cuestionario.version.desc())
     cuestionario = session.scalars(stmt).first()
+    created = False
     if not cuestionario:
         cuestionario = Cuestionario(
             empresa_id=empresa_id,
-            titulo="Plantilla Global",
+            titulo="Diagnostico Digital",
             version=1,
             estado="PUBLICADO",
         )
         session.add(cuestionario)
         session.flush()
+        created = True
 
     existing = {
         pid
@@ -253,28 +501,35 @@ def main() -> None:
             print("No hay empresas registradas. Nada que hacer.")
             return
 
+        removed_pilares = purge_obsolete_pilares(session, [item["nombre"] for item in GLOBAL_TEMPLATE])
+        removed_preguntas = 0
+
         summaries = []
         for empresa in empresas:
             pilares_creados = 0
             preguntas_creadas = 0
+            preguntas_eliminadas = 0
             question_pool: List[Pregunta] = []
 
             for pilar_data in GLOBAL_TEMPLATE:
                 pilar, nuevo = ensure_pilar(session, pilar_data)
                 if nuevo:
                     pilares_creados += 1
-                preguntas, nuevas = ensure_preguntas(session, pilar, pilar_data["preguntas"])
+                preguntas, nuevas, eliminadas = ensure_preguntas(session, pilar, pilar_data["preguntas"])
                 preguntas_creadas += nuevas
+                preguntas_eliminadas += eliminadas
                 question_pool.extend(preguntas)
 
             cuestionario, nuevas_relaciones = ensure_cuestionario(session, empresa.id, question_pool)
             asignacion, asignacion_creada = ensure_assignment(session, empresa.id, cuestionario)
 
+            removed_preguntas += preguntas_eliminadas
             summaries.append(
                 {
                     "empresa": empresa.nombre,
                     "pilares_creados": pilares_creados,
                     "preguntas_creadas": preguntas_creadas,
+                    "preguntas_eliminadas": preguntas_eliminadas,
                     "nuevas_relaciones": nuevas_relaciones,
                     "asignacion_creada": asignacion_creada,
                     "asignacion_id": asignacion.id,
@@ -284,10 +539,13 @@ def main() -> None:
 
         session.commit()
         print("Contenido global sincronizado correctamente.\n")
+        if removed_pilares or removed_preguntas:
+            print(f"Se eliminaron {removed_pilares} pilares y {removed_preguntas} preguntas obsoletas.")
         for item in summaries:
             print(
                 f"- {item['empresa']}: pilares nuevos={item['pilares_creados']}, "
                 f"preguntas nuevas={item['preguntas_creadas']}, "
+                f"preguntas eliminadas={item['preguntas_eliminadas']}, "
                 f"relaciones anadidas={item['nuevas_relaciones']}, "
                 f"asignacion {'creada' if item['asignacion_creada'] else 'existente'} "
                 f"(asg #{item['asignacion_id']}, cuestionario #{item['cuestionario_id']})"
