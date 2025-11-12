@@ -154,6 +154,14 @@ class PreguntaCreate(BaseModel):
     respuesta_esperada: Optional[str] = Field(default=None, max_length=500)
 
 
+class PreguntaUpdate(BaseModel):
+    enunciado: Optional[str] = None
+    tipo: Optional[TipoPreguntaEnum] = None
+    es_obligatoria: Optional[bool] = None
+    peso: Optional[int] = None
+    respuesta_esperada: Optional[str] = Field(default=None, max_length=500)
+
+
 class PreguntaRead(BaseModel):
     id: int
     pilar_id: int

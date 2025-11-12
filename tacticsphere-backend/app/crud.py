@@ -372,6 +372,35 @@ def create_pregunta(
 def list_preguntas(db: Session, pilar_id: int) -> List[Pregunta]:
     return db.scalars(select(Pregunta).where(Pregunta.pilar_id == pilar_id)).all()
 
+
+def update_pregunta(
+    db: Session,
+    pregunta_id: int,
+    *,
+    enunciado: Optional[str] = None,
+    tipo: Optional[TipoPreguntaEnum] = None,
+    es_obligatoria: Optional[bool] = None,
+    peso: Optional[int] = None,
+    respuesta_esperada: Optional[str] = None,
+) -> Optional[Pregunta]:
+    q = db.get(Pregunta, pregunta_id)
+    if not q:
+        return None
+    if enunciado is not None:
+        q.enunciado = enunciado
+    if tipo is not None:
+        q.tipo = tipo
+    if es_obligatoria is not None:
+        q.es_obligatoria = es_obligatoria
+    if peso is not None:
+        q.peso = peso
+    if respuesta_esperada is not None:
+        q.respuesta_esperada = (respuesta_esperada or "").strip() or None
+    db.commit()
+    db.refresh(q)
+    return q
+
+
 def delete_pregunta(db: Session, pregunta_id: int) -> bool:
     q = db.get(Pregunta, pregunta_id)
     if not q:

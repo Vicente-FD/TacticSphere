@@ -1,4 +1,4 @@
-# app/main.py
+﻿# app/main.py
 
 from typing import Optional, List
 
@@ -69,7 +69,7 @@ from .schemas import (
 
     PilarCreate, PilarRead,
 
-    PreguntaCreate, PreguntaRead,
+    PreguntaCreate, PreguntaRead, PreguntaUpdate,
 
     # Cuestionarios
 
@@ -1332,6 +1332,51 @@ def create_question(
 
 
 
+
+@app.put("/questions/{pregunta_id}", response_model=PreguntaRead)
+def update_question(
+    pregunta_id: int,
+    data: PreguntaUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    pregunta = db.get(Pregunta, pregunta_id)
+    if not pregunta:
+        raise HTTPException(status_code=404, detail="Pregunta no existe")
+    p = db.get(Pilar, pregunta.pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    _ensure_company_access(current, p.empresa_id)
+
+    payload = data.model_dump(exclude_unset=True)
+    if not payload:
+        return pregunta
+
+    updated = crud.update_pregunta(
+        db,
+        pregunta_id,
+        enunciado=payload.get("enunciado"),
+        tipo=payload.get("tipo"),
+        es_obligatoria=payload.get("es_obligatoria"),
+        peso=payload.get("peso"),
+        respuesta_esperada=payload.get("respuesta_esperada"),
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Pregunta no existe")
+
+    audit_log(
+        db,
+        action=AuditActionEnum.QUESTION_UPDATE,
+        current_user=current,
+        empresa_id=p.empresa_id,
+        entity_type="Pregunta",
+        entity_id=updated.id,
+        notes=f"Actualizó pregunta {updated.enunciado[:60]}",
+        diff_after={"id": updated.id, "pilar_id": updated.pilar_id},
+        request=request,
+    )
+    return updated
 @app.delete("/questions/{pregunta_id}", status_code=204)
 
 def delete_question(

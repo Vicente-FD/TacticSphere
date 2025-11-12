@@ -39,6 +39,19 @@ export class QuestionService {
     return this.http.post<Pregunta>(`${this.base}/questions`, input);
   }
 
+  update(
+    id: number,
+    input: {
+      enunciado: string;
+      tipo: TipoPreguntaEnum;
+      es_obligatoria: boolean;
+      peso: number;
+      respuesta_esperada?: string | null;
+    }
+  ): Observable<Pregunta> {
+    return this.http.put<Pregunta>(`${this.base}/questions/${id}`, input);
+  }
+
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/questions/${id}`);
   }

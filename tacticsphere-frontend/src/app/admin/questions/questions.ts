@@ -1,4 +1,4 @@
-import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core';
+import { Component, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
@@ -8,6 +8,16 @@ import { PilarService } from '../../pillar.service';
 import { QuestionService } from '../../question.service';
 
 import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
+
+interface QuestionView {
+  id: number;
+  raw: Pregunta | undefined;
+  title: string;
+  typeLabel: string;
+  weightLabel: string;
+  expected: string;
+  isMandatory: boolean;
+}
 
 @Component({
   standalone: true,
@@ -141,10 +151,81 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
                 <span>{{ creatingQuestion ? 'Guardando...' : 'Agregar pregunta' }}</span>
               </button>
             </div>
-          </div>
+            </div>
 
-          <div class="ts-card space-y-5">
-            <div class="flex items-center justify-between">
+            <div class="ts-card space-y-5" *ngIf="editingQuestionId">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-ink">Editar pregunta</h2>
+                  <p class="text-sm text-neutral-400">Ajusta el contenido sin afectar los resultados históricos.</p>
+                </div>
+                <span class="text-xs text-neutral-400">ID #{{ editingQuestionId }}</span>
+              </div>
+
+              <div class="space-y-4">
+                <label class="block space-y-2">
+                  <span class="ts-label">Enunciado</span>
+                  <textarea
+                    class="ts-input min-h-[120px] resize-y"
+                    [(ngModel)]="editForm.enunciado"
+                    placeholder="Actualiza la pregunta"
+                  ></textarea>
+                </label>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label class="block space-y-2">
+                    <span class="ts-label">Tipo de respuesta</span>
+                    <select class="ts-select" [(ngModel)]="editForm.tipo">
+                      <option [ngValue]="'LIKERT'">Likert (1 a 5)</option>
+                      <option [ngValue]="'ABIERTA'">Respuesta abierta</option>
+                      <option [ngValue]="'SI_NO'">Sí / No</option>
+                    </select>
+                  </label>
+
+                  <label class="block space-y-2">
+                    <span class="ts-label">Peso</span>
+                    <input class="ts-input" type="number" min="1" [(ngModel)]="editForm.peso" />
+                  </label>
+                </div>
+
+                <label class="block space-y-2">
+                  <span class="ts-label">Respuesta esperada (opcional)</span>
+                  <input
+                    class="ts-input"
+                    type="text"
+                    maxlength="500"
+                    [(ngModel)]="editForm.respuesta_esperada"
+                    placeholder="Pista o guía interna"
+                  />
+                </label>
+
+                <label class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
+                    [(ngModel)]="editForm.es_obligatoria"
+                  />
+                  <span class="text-sm text-neutral-700">Respuesta obligatoria</span>
+                </label>
+              </div>
+
+              <div class="flex flex-wrap gap-3">
+                <button
+                  class="ts-btn ts-btn--positive"
+                  type="button"
+                  (click)="guardarEdicion()"
+                  [disabled]="updatingQuestion || !editForm.enunciado.trim()"
+                >
+                  {{ updatingQuestion ? 'Actualizando...' : 'Guardar cambios' }}
+                </button>
+                <button class="ts-btn ts-btn--secondary" type="button" (click)="cancelarEdicion()" [disabled]="updatingQuestion">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+
+            <div class="ts-card space-y-5">
+              <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-lg font-semibold text-ink">Preguntas del pilar</h2>
                 <p class="text-sm text-neutral-400">
@@ -164,43 +245,57 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
             <ng-container *ngIf="!loadingPreguntas && preguntas().length; else emptyQuestions">
               <div class="space-y-3">
                 <div
-                  *ngFor="let q of preguntas()"
+                  *ngFor="let item of preguntasView(); trackBy: trackByQuestionView"
                   class="rounded-xl border border-neutral-200 p-4 transition-all duration-120 ease-smooth hover:border-accent/40 hover:shadow-card"
+                  [ngClass]="{ 'ring-2 ring-accent shadow-card': isEditingQuestion(item.id) }"
                 >
                   <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="space-y-2">
-                      <p class="text-base font-medium text-ink">{{ q.enunciado }}</p>
-                      <p class="text-xs text-accent" *ngIf="q.respuesta_esperada">
-                        Respuesta esperada: {{ q.respuesta_esperada }}
+                      <p class="text-base font-medium text-ink">
+                        {{ item.title }}
+                      </p>
+                      <p class="text-xs text-accent" *ngIf="item.expected">
+                        Respuesta esperada: {{ item.expected }}
                       </p>
                       <div class="flex flex-wrap gap-2 text-xs text-neutral-400">
-                        <span class="ts-badge uppercase">{{ q.tipo }}</span>
-                        <span class="ts-chip">Peso {{ q.peso }}</span>
+                        <span class="ts-badge uppercase">{{ item.typeLabel }}</span>
+                        <span class="ts-chip">Peso {{ item.weightLabel }}</span>
                         <span class="ts-chip">
-                          {{ q.es_obligatoria ? 'Obligatoria' : 'Opcional' }}
+                          {{ item.isMandatory ? 'Obligatoria' : 'Opcional' }}
                         </span>
                       </div>
                     </div>
 
-                    <button
-                      class="ts-btn ts-btn--danger"
-                      (click)="eliminarPregunta(q.id)"
-                      [disabled]="deletingId === q.id"
-                    >
-                      <lucide-icon
-                        *ngIf="deletingId !== q.id"
-                        name="Trash2"
-                        class="h-4 w-4"
-                        strokeWidth="1.75"
-                      ></lucide-icon>
-                      <lucide-icon
-                        *ngIf="deletingId === q.id"
-                        name="Loader2"
-                        class="h-4 w-4 animate-spin"
-                        strokeWidth="1.75"
-                      ></lucide-icon>
-                      <span>{{ deletingId === q.id ? 'Eliminando...' : 'Eliminar' }}</span>
-                    </button>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        class="ts-btn ts-btn--secondary"
+                        type="button"
+                        (click)="startEdit(item.raw)"
+                        [disabled]="!item.raw"
+                      >
+                        <lucide-icon name="PencilLine" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+                        <span>Editar</span>
+                      </button>
+                      <button
+                        class="ts-btn ts-btn--danger"
+                        (click)="eliminarPregunta(item.raw?.id)"
+                        [disabled]="!item.raw?.id || deletingId === item.raw?.id"
+                      >
+                        <lucide-icon
+                          *ngIf="deletingId !== item.raw?.id"
+                          name="Trash2"
+                          class="h-4 w-4"
+                          strokeWidth="1.75"
+                        ></lucide-icon>
+                        <lucide-icon
+                          *ngIf="deletingId === item.raw?.id"
+                          name="Loader2"
+                          class="h-4 w-4 animate-spin"
+                          strokeWidth="1.75"
+                        ></lucide-icon>
+                        <span>{{ deletingId === item.raw?.id ? 'Eliminando...' : 'Eliminar' }}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -225,6 +320,35 @@ export class QuestionsComponent implements OnInit {
 
   pilares: WritableSignal<Pilar[]> = signal<Pilar[]>([]);
   preguntas: WritableSignal<Pregunta[]> = signal<Pregunta[]>([]);
+  readonly preguntasView = computed<QuestionView[]>(() =>
+    (this.preguntas() ?? []).map((question, index) => {
+      const hasValidId = typeof question?.id === 'number' && Number.isFinite(question.id);
+      const rawTitle =
+        typeof question?.enunciado === 'string' ? question.enunciado.trim() : '';
+      const title = rawTitle || `Pregunta ${index + 1}`;
+      const typeLabel =
+        typeof question?.tipo === 'string' && question.tipo.trim().length
+          ? question.tipo
+          : '--';
+      const weightLabel =
+        typeof question?.peso === 'number' && !Number.isNaN(question.peso)
+          ? String(question.peso)
+          : '--';
+      const expected =
+        typeof question?.respuesta_esperada === 'string'
+          ? question.respuesta_esperada.trim()
+          : '';
+      return {
+        id: hasValidId ? (question as Pregunta).id : index * -1,
+        raw: question,
+        title,
+        typeLabel,
+        weightLabel,
+        expected,
+        isMandatory: !!question?.es_obligatoria,
+      };
+    })
+  );
 
   selectedPilarId: number | null = null;
 
@@ -246,6 +370,21 @@ export class QuestionsComponent implements OnInit {
     peso: 1,
     respuesta_esperada: '',
   };
+  editingQuestionId: number | null = null;
+  updatingQuestion = false;
+  editForm: {
+    enunciado: string;
+    tipo: TipoPreguntaEnum;
+    es_obligatoria: boolean;
+    peso: number;
+    respuesta_esperada: string;
+  } = {
+    enunciado: '',
+    tipo: 'LIKERT',
+    es_obligatoria: true,
+    peso: 1,
+    respuesta_esperada: '',
+  };
 
   ngOnInit(): void {
     this.loadPilares();
@@ -255,6 +394,7 @@ export class QuestionsComponent implements OnInit {
     this.pilares.set([]);
     this.preguntas.set([]);
     this.selectedPilarId = null;
+    this.resetEditingState();
     this.loadingPilares = true;
     this.pillarsSrv.listAll().subscribe({
       next: (rows: Pilar[]) => this.pilares.set(rows ?? []),
@@ -266,7 +406,12 @@ export class QuestionsComponent implements OnInit {
   private cargarPreguntas(pilarId: number): void {
     this.loadingPreguntas = true;
     this.questionsSrv.listByPilar(pilarId).subscribe({
-      next: (rows: Pregunta[]) => this.preguntas.set(rows ?? []),
+      next: (rows: Pregunta[]) => {
+        const sanitized = (rows ?? []).filter(
+          (item): item is Pregunta => !!item && typeof item.id === 'number'
+        );
+        this.preguntas.set(sanitized);
+      },
       error: (error: unknown) => console.error('Error listando preguntas', error),
       complete: () => (this.loadingPreguntas = false),
     });
@@ -274,6 +419,7 @@ export class QuestionsComponent implements OnInit {
 
   loadPreguntas(): void {
     this.preguntas.set([]);
+    this.resetEditingState();
     if (!this.selectedPilarId) return;
     this.cargarPreguntas(this.selectedPilarId);
   }
@@ -281,7 +427,14 @@ export class QuestionsComponent implements OnInit {
   crearPregunta(): void {
     if (!this.selectedPilarId || this.creatingQuestion) return;
 
-    const payload = {
+    const payload: {
+      pilar_id: number;
+      enunciado: string;
+      tipo: TipoPreguntaEnum;
+      es_obligatoria: boolean;
+      peso: number;
+      respuesta_esperada?: string;
+    } = {
       pilar_id: this.selectedPilarId,
       enunciado: this.form.enunciado.trim(),
       tipo: this.form.tipo,
@@ -314,12 +467,15 @@ export class QuestionsComponent implements OnInit {
     });
   }
 
-  eliminarPregunta(id: number): void {
-    if (this.deletingId) return;
+  eliminarPregunta(id: number | null | undefined): void {
+    if (!id || this.deletingId) return;
     this.deletingId = id;
 
     this.questionsSrv.delete(id).subscribe({
       next: () => {
+        if (this.editingQuestionId === id) {
+          this.resetEditingState();
+        }
         if (this.selectedPilarId) this.cargarPreguntas(this.selectedPilarId);
       },
       error: (error) => {
@@ -330,5 +486,77 @@ export class QuestionsComponent implements OnInit {
         this.deletingId = null;
       },
     });
+  }
+
+  startEdit(question: Pregunta | undefined): void {
+    if (!question) return;
+    this.editingQuestionId = question.id;
+    this.updatingQuestion = false;
+    this.editForm = {
+      enunciado: question.enunciado,
+      tipo: question.tipo,
+      es_obligatoria: question.es_obligatoria,
+      peso: question.peso,
+      respuesta_esperada: question.respuesta_esperada ?? '',
+    };
+  }
+
+  cancelarEdicion(): void {
+    this.resetEditingState();
+  }
+
+  guardarEdicion(): void {
+    if (!this.editingQuestionId || this.updatingQuestion) return;
+    const trimmedEnunciado = this.editForm.enunciado.trim();
+    if (!trimmedEnunciado) return;
+    const payload: {
+      enunciado: string;
+      tipo: TipoPreguntaEnum;
+      es_obligatoria: boolean;
+      peso: number;
+      respuesta_esperada?: string;
+    } = {
+      enunciado: trimmedEnunciado,
+      tipo: this.editForm.tipo,
+      es_obligatoria: this.editForm.es_obligatoria,
+      peso: this.editForm.peso || 1,
+      respuesta_esperada: this.editForm.respuesta_esperada?.trim() ?? '',
+    };
+    if (!payload.respuesta_esperada) {
+      delete payload.respuesta_esperada;
+    }
+    this.updatingQuestion = true;
+    this.questionsSrv.update(this.editingQuestionId, payload).subscribe({
+      next: () => {
+        this.resetEditingState();
+        if (this.selectedPilarId) {
+          this.cargarPreguntas(this.selectedPilarId);
+        }
+      },
+      error: (error) => {
+        console.error('Error actualizando pregunta', error);
+        this.updatingQuestion = false;
+      },
+    });
+  }
+
+  isEditingQuestion(id: number): boolean {
+    return this.editingQuestionId != null && this.editingQuestionId === id;
+  }
+
+  private resetEditingState(): void {
+    this.editingQuestionId = null;
+    this.updatingQuestion = false;
+    this.editForm = {
+      enunciado: '',
+      tipo: 'LIKERT',
+      es_obligatoria: true,
+      peso: 1,
+      respuesta_esperada: '',
+    };
+  }
+
+  trackByQuestionView(index: number, item: QuestionView): number {
+    return item?.id ?? index;
   }
 }
