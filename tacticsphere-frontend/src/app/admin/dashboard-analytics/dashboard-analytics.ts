@@ -1,5 +1,4 @@
 import {
-  AfterViewChecked,
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
@@ -22,7 +21,7 @@ import { EChartsOption } from "echarts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Subject, Subscription, firstValueFrom } from "rxjs";
-import { debounceTime } from "rxjs/operators";
+import { debounceTime, distinctUntilChanged } from "rxjs/operators";
 
 import { AnalyticsService, AnalyticsQueryParams } from "../../analytics.service";
 import { CompanyService } from "../../company.service";
@@ -91,9 +90,7 @@ interface KpiCard {
   templateUrl: "./dashboard-analytics.html",
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DashboardAnalyticsComponent
-  implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked
-{
+export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterViewInit {
   private http = inject(HttpClient);
   private analyticsSvc = inject(AnalyticsService);
   private companySvc = inject(CompanyService);
@@ -140,6 +137,8 @@ export class DashboardAnalyticsComponent
   dateTo: string | null = null;
   employeeSearch = "";
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private resizeScheduled = false;
+  private rafId: number | null = null;
   private subscriptions: Subscription[] = [];
   private logoDataUrl: string | null = null;
   private currentUserName: string | null = null;
@@ -224,6 +223,10 @@ export class DashboardAnalyticsComponent
     const data = this.analytics();
     const kpis = data?.kpis;
     if (!kpis) return [];
+    const coverageAreas = (data?.coverage_by_department ?? []).filter((item) => item.total > 0);
+    const lowestCoverage = coverageAreas.length
+      ? [...coverageAreas].sort((a, b) => a.coverage_percent - b.coverage_percent)[0]
+      : null;
     return [
       {
         label: "Promedio global",
@@ -252,10 +255,14 @@ export class DashboardAnalyticsComponent
         value: kpis.coverage_percent != null ? `${this.formatNumber(kpis.coverage_percent)}%` : "--",
         suffix: `(${kpis.coverage_respondents}/${kpis.coverage_total})`,
       },
-      {
-        label: "Tendencia 30d",
-        value: kpis.trend_30d != null ? `${this.formatSigned(kpis.trend_30d)}%` : "--",
-      },
+      lowestCoverage
+        ? {
+            label: "Cobertura mas baja",
+            value: lowestCoverage.department_name,
+            suffix: `${this.formatNumber(lowestCoverage.coverage_percent)}%`,
+            tooltip: `Respuestas: ${lowestCoverage.respondents}/${lowestCoverage.total}`,
+          }
+        : ({ label: "Cobertura mas baja", value: "--" } as KpiCard),
     ];
   });
 
@@ -271,7 +278,10 @@ export class DashboardAnalyticsComponent
 
   constructor() {
     const filterSub = this.filterUpdates$
-      .pipe(debounceTime(150))
+      .pipe(
+        debounceTime(200),
+        distinctUntilChanged((prev, curr) => this.buildCacheKey(prev) === this.buildCacheKey(curr))
+      )
       .subscribe((filter) => this.fetchAnalytics(filter));
     this.subscriptions.push(filterSub);
   }
@@ -285,11 +295,9 @@ export class DashboardAnalyticsComponent
   }
 
   ngAfterViewInit(): void {
-    this.resizeAllCharts();
-  }
-
-  ngAfterViewChecked(): void {
-    this.resizeAllCharts();
+    this.scheduleResize();
+    const chartsChangesSub = this.charts.changes.subscribe(() => this.scheduleResize());
+    this.subscriptions.push(chartsChangesSub);
   }
 
   ngOnDestroy(): void {
@@ -300,6 +308,11 @@ export class DashboardAnalyticsComponent
       clearTimeout(this.resizeTimer);
       this.resizeTimer = null;
     }
+    if (this.rafId != null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.resizeScheduled = false;
     this.zone.runOutsideAngular(() => {
       this.charts?.forEach((chart) => {
         try {
@@ -420,7 +433,7 @@ export class DashboardAnalyticsComponent
           return `${first.name}: ${this.formatNumber(first.value)}%`;
         },
       },
-      grid: { left: 180, right: 48, bottom: 32, top: 32, containLabel: true },
+      grid: { left: 0, right: 16, bottom: 32, top: 24, containLabel: true },
       color: [TS_COLORS.primary],
       xAxis: {
         type: "value",
@@ -464,12 +477,17 @@ export class DashboardAnalyticsComponent
   radarBalanceOption(): EChartsOption {
     const pillars = this.analytics()?.pillars ?? [];
     if (!pillars.length) return this.emptyChartOption("Sin balance registrado", "radar");
+    const formatLabel = (label?: string) => {
+      const value = label ?? "";
+      return value.length > 22 ? `${value.slice(0, 22)}…` : value;
+    };
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 900,
       animationEasing: "cubicOut",
       tooltip: {
         trigger: "item",
+        textStyle: { color: "#FFFFFF", fontWeight: 500 },
         formatter: (params: any) => {
           const values = Array.isArray(params.value) ? params.value : [];
           return values
@@ -477,13 +495,29 @@ export class DashboardAnalyticsComponent
             .join("<br/>");
         },
       },
+      legend: {
+        data: ["Promedio"],
+        top: 0,
+        left: "center",
+        icon: "circle",
+        textStyle: { color: TS_COLORS.text, fontWeight: 600 },
+        formatter: formatLabel,
+      },
       radar: {
         indicator: pillars.map((pillar) => ({ name: pillar.pillar_name, max: 100 })),
         radius: "70%",
         splitNumber: 4,
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
         splitArea: { areaStyle: { color: [AREA_FILL, "rgba(59,130,246,0.05)"] } },
-        axisName: { color: TS_COLORS.text, fontWeight: 600 },
+        axisName: {
+          color: TS_COLORS.text,
+          fontWeight: 600,
+          fontSize: 12,
+          backgroundColor: "rgba(255,255,255,0.9)",
+          borderRadius: 6,
+          padding: [3, 6],
+          formatter: formatLabel,
+        },
       },
       series: [
         {
@@ -537,7 +571,7 @@ export class DashboardAnalyticsComponent
           )}%`;
         },
       },
-      grid: { left: 180, right: 32, top: 48, bottom: 80, containLabel: true },
+      grid: { left: 0, right: 16, top: 48, bottom: 80, containLabel: true },
       xAxis: {
         type: "category",
         data: pillars.map((p) => p.pillar_name),
@@ -631,7 +665,7 @@ export class DashboardAnalyticsComponent
         orient: "horizontal",
         textStyle: { color: TS_COLORS.text },
       },
-      grid: { left: 140, right: 32, bottom: 32, top: 80, containLabel: true },
+      grid: { left: 0, right: 16, bottom: 32, top: 80, containLabel: true },
       xAxis: {
         type: "category",
         data: categories,
@@ -648,50 +682,31 @@ export class DashboardAnalyticsComponent
     };
   }
 
-  timelineOption(): EChartsOption {
-    const timeline = this.analytics()?.timeline ?? [];
-    if (!timeline.length) return this.emptyChartOption("Sin historial disponible");
-    const categories = timeline.map((item) => item.date);
-    const globalSeries = timeline.map((item) => this.round(item.global_percent));
-    const selectedPillar = this.selectedPillar;
-    const pillarSeries = selectedPillar === "ALL"
-      ? null
-      : timeline.map((item) => {
-          const value = item.pillars[selectedPillar as number];
-          return value != null ? this.round(value) : null;
-        });
-    const series: any[] = [
-      {
-        name: "Global",
-        type: "line",
-        data: globalSeries,
-        smooth: true,
-        lineStyle: { width: 3, color: TS_COLORS.primary },
-        areaStyle: { color: AREA_FILL },
-      },
-    ];
-    if (pillarSeries) {
-      series.push({
-        name: "Pilar seleccionado",
-        type: "line",
-        data: pillarSeries,
-        smooth: true,
-        lineStyle: { width: 2, color: TS_COLORS.positive },
-        connectNulls: true,
-      });
-    }
+  coverageByDepartmentOption(): EChartsOption {
+    const coverage = [...(this.analytics()?.coverage_by_department ?? [])].filter((item) => item.total > 0);
+    if (!coverage.length) return this.emptyChartOption("Sin datos de cobertura");
+    const topCoverage = coverage.sort((a, b) => b.coverage_percent - a.coverage_percent).slice(0, 15);
+    const categories = topCoverage.map((item) => item.department_name);
     return {
       backgroundColor: TS_COLORS.background,
-      animationDuration: 900,
+      animationDuration: 800,
       animationEasing: "cubicOut",
-      tooltip: { trigger: "axis" },
-      legend: { data: series.map((item) => item.name), textStyle: { color: TS_COLORS.text } },
-      grid: { left: 64, right: 32, bottom: 48, top: 48, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (raw: any) => {
+          const params = Array.isArray(raw) ? raw[0] : raw;
+          const dataIndex = params?.dataIndex ?? 0;
+          const entry = topCoverage[dataIndex];
+          if (!entry) return "";
+          return `${entry.department_name}<br/>${this.formatNumber(entry.coverage_percent)}% (${entry.respondents}/${entry.total})`;
+        },
+      },
+      grid: { left: 0, right: 24, bottom: 48, top: 56, containLabel: true },
       xAxis: {
         type: "category",
         data: categories,
-        boundaryGap: false,
-        axisLabel: { color: TS_COLORS.text },
+        axisLabel: { interval: 0, rotate: 22, color: TS_COLORS.text, fontWeight: 500 },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       yAxis: {
@@ -700,9 +715,26 @@ export class DashboardAnalyticsComponent
         max: 100,
         axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
-        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
-      series,
+      series: [
+        {
+          type: "bar",
+          barWidth: 28,
+          itemStyle: { color: TS_COLORS.primary, borderRadius: [6, 6, 0, 0] },
+          data: topCoverage.map((item) => ({
+            value: this.round(item.coverage_percent),
+            respondents: item.respondents,
+            total: item.total,
+          })),
+          label: {
+            show: true,
+            position: "top",
+            formatter: (params: any) => `${this.formatNumber(params?.value ?? 0)}%`,
+            color: TS_COLORS.text,
+            fontWeight: 600,
+          },
+        },
+      ],
     };
   }
 
@@ -711,24 +743,36 @@ export class DashboardAnalyticsComponent
     if (!employees.length) return this.emptyChartOption("Sin datos de empleados");
     const identityEntries = this.likertBucketEmployees();
     const identityMap = new Map(identityEntries.map((entry) => [entry.id, entry] as const));
+    const categories = employees.map((emp) => {
+      const identity = identityMap.get(emp.id) ?? { nombre: emp.name ?? `Empleado ${emp.id}` };
+      return this.formatEmployeeIdentity(identity, emp.name);
+    });
+    const focusId = this.selectedEmployeeId;
+    const focusIndex = focusId != null ? employees.findIndex((emp) => emp.id === focusId) : -1;
+    const focusPoint = focusIndex >= 0 ? employees[focusIndex] : null;
+    const baseData = employees.map((emp, index) => [index, this.round(emp.percent), index]);
+    const buildTooltip = (emp: EmployeePoint | null) => {
+      if (!emp) return "";
+      const identity = identityMap.get(emp.id) ?? { nombre: emp.name ?? `Empleado ${emp.id}` };
+      const label = this.formatLikertLabel(emp.level);
+      return `${this.formatEmployeeIdentity(identity, emp.name)}<br/>${this.formatNumber(emp.percent)}% · ${label}`;
+    };
+    const dimmedData = focusPoint ? baseData.filter((item) => item[2] !== focusIndex) : baseData;
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 800,
       animationEasing: "cubicOut",
       tooltip: {
+        show: !focusPoint,
         formatter: (params: any) => {
-          const point = employees[params.dataIndex];
-          const label = this.formatLikertLabel(point.level);
-          const identity = identityMap.get(point.id) ?? { nombre: point.name ?? `Empleado ${point.id}` };
-          return `${this.formatEmployeeIdentity(identity, point.name)}<br/>${this.formatNumber(point.percent)}% · ${label}`;
+          const data: number[] | undefined = params?.data;
+          const idx = Array.isArray(data) ? data[2] : undefined;
+          return buildTooltip(idx != null ? employees[idx] : null);
         },
       },
       xAxis: {
         type: "category",
-        data: employees.map((emp) => {
-          const identity = identityMap.get(emp.id) ?? { nombre: emp.name ?? `Empleado ${emp.id}` };
-          return this.formatEmployeeIdentity(identity, emp.name);
-        }),
+        data: categories,
         show: false,
       },
       yAxis: {
@@ -742,10 +786,49 @@ export class DashboardAnalyticsComponent
       series: [
         {
           type: "scatter",
-          symbolSize: 14,
-          data: employees.map((emp) => this.round(emp.percent)),
-          itemStyle: { color: TS_COLORS.primary },
+          name: "Equipo",
+          symbolSize: focusPoint ? 10 : 14,
+          data: dimmedData,
+          itemStyle: {
+            color: focusPoint ? "rgba(148,163,184,0.45)" : TS_COLORS.primary,
+          },
+          emphasis: { focus: focusPoint ? "none" : "series" },
+          silent: !!focusPoint,
         },
+        ...(focusPoint
+          ? [
+              {
+                type: "scatter" as const,
+                name: "Empleado seleccionado",
+                symbolSize: 28,
+                data: [[focusIndex, this.round(focusPoint.percent), focusIndex]],
+                itemStyle: { color: TS_COLORS.primary },
+                tooltip: {
+                  formatter: () => buildTooltip(focusPoint),
+                },
+                label: {
+                  show: true,
+                  position: "top" as const,
+                  formatter: () => `${this.formatNumber(focusPoint.percent)}%`,
+                  color: TS_COLORS.text,
+                  fontWeight: 600,
+                },
+                markLine: {
+                  symbol: "none",
+                  silent: true,
+                  lineStyle: { color: TS_COLORS.gridLine, type: "dashed" as const },
+                  data: [{ yAxis: this.round(focusPoint.percent) }],
+                  label: {
+                    formatter: () => `${this.formatNumber(focusPoint.percent)}%`,
+                    color: TS_COLORS.text,
+                    backgroundColor: "rgba(255,255,255,0.9)",
+                    padding: [2, 6],
+                    borderRadius: 4,
+                  },
+                },
+              },
+            ]
+          : []),
       ],
     };
   }
@@ -861,6 +944,7 @@ export class DashboardAnalyticsComponent
       this.analyticsSignal.set(null);
       this.infoSignal.set("Selecciona una empresa para ver resultados");
       this.loadingSignal.set(false);
+      this.scheduleResize();
       return;
     }
     const cacheKey = this.buildCacheKey(filter);
@@ -869,6 +953,7 @@ export class DashboardAnalyticsComponent
       this.analyticsSignal.set(cached);
       this.likertLevelsSignal.set(cached.likert_levels ?? []);
       this.loadingSignal.set(false);
+       this.scheduleResize();
       return;
     }
     this.loadingSignal.set(true);
@@ -882,12 +967,14 @@ export class DashboardAnalyticsComponent
           this.analyticsSignal.set(response);
           this.likertLevelsSignal.set(response.likert_levels ?? []);
           this.loadingSignal.set(false);
+          this.scheduleResize();
         },
         error: (err) => {
           console.error("Error loading analytics", err);
           this.analyticsSignal.set(null);
           this.loadingSignal.set(false);
           this.errorSignal.set(err?.error?.detail ?? "No pudimos cargar los resultados.");
+          this.scheduleResize();
         },
       });
     this.subscriptions.push(sub);
@@ -952,6 +1039,7 @@ export class DashboardAnalyticsComponent
       departmentIds: this.selectedDepartmentId != null ? [this.selectedDepartmentId] : undefined,
       employeeIds: this.selectedEmployeeId != null ? [this.selectedEmployeeId] : undefined,
       pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
+      includeTimeline: false,
     };
     this.filterSignal.set(filter);
   }
@@ -964,6 +1052,7 @@ export class DashboardAnalyticsComponent
       departmentIds: filter.departmentIds ?? [],
       employeeIds: filter.employeeIds ?? [],
       pillarIds: filter.pillarIds ?? [],
+      includeTimeline: filter.includeTimeline ?? true,
     });
   }
 
@@ -1040,13 +1129,32 @@ export class DashboardAnalyticsComponent
     });
   }
 
+  private scheduleResize(): void {
+    if (this.resizeScheduled) return;
+    this.resizeScheduled = true;
+    this.zone.runOutsideAngular(() => {
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        this.rafId = window.requestAnimationFrame(() => {
+          this.rafId = null;
+          this.resizeScheduled = false;
+          this.resizeAllCharts();
+        });
+      } else {
+        setTimeout(() => {
+          this.resizeScheduled = false;
+          this.resizeAllCharts();
+        }, 16);
+      }
+    });
+  }
+
   @HostListener("window:resize")
   onWindowResize(): void {
     this.zone.runOutsideAngular(() => {
       if (this.resizeTimer) {
         clearTimeout(this.resizeTimer);
       }
-      this.resizeTimer = setTimeout(() => this.resizeAllCharts(), 150);
+      this.resizeTimer = setTimeout(() => this.scheduleResize(), 150);
     });
   }
 
@@ -1071,11 +1179,6 @@ export class DashboardAnalyticsComponent
   formatPercent(value: number | null | undefined): string {
     if (value == null || Number.isNaN(value)) return "--";
     return `${this.formatNumber(value)}%`;
-  }
-
-  private formatSigned(value: number): string {
-    if (value > 0) return `+${this.formatNumber(value)}`;
-    return this.formatNumber(value);
   }
 
   private round(value: number | null | undefined): number {
@@ -1105,6 +1208,3 @@ export class DashboardAnalyticsComponent
     return match ? `${match.valor} - ${match.nombre}` : `Nivel ${level}`;
   }
 }
-
-
-

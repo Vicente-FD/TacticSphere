@@ -102,6 +102,10 @@
     @apply bg-white border border-border rounded-2xl shadow-card p-6 transition-transform duration-200;
   }
 
+  .ts-card--flush {
+    @apply px-0;
+  }
+
   .ts-card-muted {
     @apply bg-white border border-border rounded-2xl p-6 shadow-card;
   }

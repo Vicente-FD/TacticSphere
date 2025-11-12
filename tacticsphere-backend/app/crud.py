@@ -1101,6 +1101,7 @@ def compute_dashboard_analytics(
     departamento_ids: Optional[List[int]] = None,
     empleado_ids: Optional[List[int]] = None,
     pilar_ids: Optional[List[int]] = None,
+    include_timeline: bool = True,
 ) -> Dict:
     """Calcula todas las mÃ©tricas del dashboard basadas en Likert."""
 
@@ -1198,7 +1199,7 @@ def compute_dashboard_analytics(
 
     pillar_map: Dict[int, Dict[str, object]] = {}
     dept_map: Dict[Optional[int], Dict[str, object]] = {}
-    timeline_map: Dict[date, Dict[str, object]] = {}
+    timeline_map: Optional[Dict[date, Dict[str, object]]] = {} if include_timeline else None
     employee_map: Dict[int, Dict[str, object]] = {}
     respondent_employees: set[int] = set()
     global_stats = {"value_sum": 0.0, "weight_sum": 0.0, "levels": [0.0] * 5}
@@ -1244,19 +1245,20 @@ def compute_dashboard_analytics(
         pillar_entry["weight_sum"] += weight
         pillar_entry["levels"][level_pos] += weight
 
-        day = row.fecha_respuesta.date()
-        timeline_entry = timeline_map.setdefault(
-            day,
-            {"value_sum": 0.0, "weight_sum": 0.0, "pillars": {}},
-        )
-        timeline_entry["value_sum"] += weighted_value
-        timeline_entry["weight_sum"] += weight
-        day_pillar = timeline_entry["pillars"].setdefault(
-            row.pilar_id,
-            {"value_sum": 0.0, "weight_sum": 0.0},
-        )
-        day_pillar["value_sum"] += weighted_value
-        day_pillar["weight_sum"] += weight
+        if timeline_map is not None:
+            day = row.fecha_respuesta.date()
+            timeline_entry = timeline_map.setdefault(
+                day,
+                {"value_sum": 0.0, "weight_sum": 0.0, "pillars": {}},
+            )
+            timeline_entry["value_sum"] += weighted_value
+            timeline_entry["weight_sum"] += weight
+            day_pillar = timeline_entry["pillars"].setdefault(
+                row.pilar_id,
+                {"value_sum": 0.0, "weight_sum": 0.0},
+            )
+            day_pillar["value_sum"] += weighted_value
+            day_pillar["weight_sum"] += weight
 
         if row.empleado_id is not None:
             respondent_employees.add(row.empleado_id)
@@ -1417,23 +1419,24 @@ def compute_dashboard_analytics(
         for dept_id, average, data in list(reversed(dept_items))[:5]
     ]
 
-    timeline_points = []
-    for day in sorted(timeline_map.keys()):
-        entry = timeline_map[day]
-        pillars_point = {
-            pid: _as_percent(stats["value_sum"], stats["weight_sum"])
-            for pid, stats in entry["pillars"].items()
-        }
-        timeline_points.append(
-            {
-                "date": day,
-                "global_percent": _as_percent(entry["value_sum"], entry["weight_sum"]),
-                "pillars": pillars_point,
+    timeline_points: List[Dict[str, object]] = []
+    if include_timeline and timeline_map:
+        for day in sorted(timeline_map.keys()):
+            entry = timeline_map[day]
+            pillars_point = {
+                pid: _as_percent(stats["value_sum"], stats["weight_sum"])
+                for pid, stats in entry["pillars"].items()
             }
-        )
+            timeline_points.append(
+                {
+                    "date": day,
+                    "global_percent": _as_percent(entry["value_sum"], entry["weight_sum"]),
+                    "pillars": pillars_point,
+                }
+            )
 
     trend_30d = None
-    if timeline_map:
+    if include_timeline and timeline_map:
         latest_day = max(timeline_map.keys())
         current_start = latest_day - timedelta(days=29)
         previous_start = current_start - timedelta(days=30)
@@ -1469,8 +1472,39 @@ def compute_dashboard_analytics(
                 "percent": percent,
                 "level": level,
             }
-        )
+    )
     employee_points.sort(key=lambda item: item["percent"], reverse=True)
+
+    coverage_totals: Dict[Optional[int], int] = {}
+    for meta in employee_lookup.values():
+        dept_id = meta["departamento_id"]
+        coverage_totals[dept_id] = coverage_totals.get(dept_id, 0) + 1
+    coverage_responses: Dict[Optional[int], int] = {}
+    for emp_id in respondent_employees:
+        meta = employee_lookup.get(emp_id)
+        if not meta:
+            continue
+        dept_id = meta["departamento_id"]
+        coverage_responses[dept_id] = coverage_responses.get(dept_id, 0) + 1
+    coverage_entries = []
+    for dept_id, total in coverage_totals.items():
+        respondents = coverage_responses.get(dept_id, 0)
+        percent = round((respondents / total) * 100, 1) if total else 0.0
+        name = (
+            dept_lookup.get(dept_id, f"Departamento #{dept_id}")
+            if dept_id is not None
+            else "Sin departamento"
+        )
+        coverage_entries.append(
+            {
+                "department_id": dept_id,
+                "department_name": name,
+                "respondents": respondents,
+                "total": total,
+                "coverage_percent": percent,
+            }
+        )
+    coverage_entries.sort(key=lambda item: item["coverage_percent"], reverse=True)
 
     strongest = pillars[0] if pillars else None
     weakest = pillars[-1] if len(pillars) > 1 else pillars[0] if pillars else None
@@ -1523,6 +1557,7 @@ def compute_dashboard_analytics(
             "global": pillars,
             "by_department": distribution_by_department,
         },
+        "coverage_by_department": coverage_entries,
         "timeline": timeline_points,
         "ranking": {"top": ranking_top, "bottom": ranking_bottom},
         "employees": employee_points,

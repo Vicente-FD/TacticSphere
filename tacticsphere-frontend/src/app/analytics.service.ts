@@ -12,6 +12,7 @@ export interface AnalyticsQueryParams {
   departmentIds?: number[];
   employeeIds?: number[];
   pillarIds?: number[];
+  includeTimeline?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -37,6 +38,9 @@ export class AnalyticsService {
     (params.pillarIds ?? []).forEach((id) => {
       httpParams = httpParams.append('pilar_ids', String(id));
     });
+    if (params.includeTimeline === false) {
+      httpParams = httpParams.set('include_timeline', 'false');
+    }
 
     return this.http.get<DashboardAnalyticsResponse>(`${this.api}/analytics/dashboard`, {
       params: httpParams,

@@ -1909,6 +1909,7 @@ def analytics_dashboard(
     departamento_ids: Optional[List[int]] = Query(None),
     empleado_ids: Optional[List[int]] = Query(None),
     pilar_ids: Optional[List[int]] = Query(None),
+    include_timeline: bool = Query(True),
     db: Session = Depends(get_db),
     current: Usuario = Depends(get_current_user),
 ):
@@ -1921,6 +1922,7 @@ def analytics_dashboard(
         departamento_ids=departamento_ids,
         empleado_ids=empleado_ids,
         pilar_ids=pilar_ids,
+        include_timeline=include_timeline,
     )
     return DashboardAnalyticsResponse(**data)
 

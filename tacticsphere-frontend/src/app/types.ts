@@ -323,6 +323,14 @@ export interface DistributionData {
   by_department: DistributionByDepartment[];
 }
 
+export interface CoverageByDepartmentEntry {
+  department_id: number | null;
+  department_name: string;
+  respondents: number;
+  total: number;
+  coverage_percent: number;
+}
+
 export interface TimelinePoint {
   date: string;
   global_percent: number;
@@ -364,6 +372,7 @@ export interface DashboardAnalyticsResponse {
   pillars: PillarDistribution[];
   heatmap: HeatmapRow[];
   distribution: DistributionData;
+  coverage_by_department: CoverageByDepartmentEntry[];
   timeline: TimelinePoint[];
   ranking: RankingData;
   employees: EmployeePoint[];

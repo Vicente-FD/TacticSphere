@@ -425,6 +425,14 @@ class DistributionData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CoverageByDepartmentEntry(BaseModel):
+    department_id: Optional[int] = None
+    department_name: str
+    respondents: int
+    total: int
+    coverage_percent: float
+
+
 class AnalyticsFilters(BaseModel):
     empresa_id: int
     fecha_desde: Optional[date] = None
@@ -442,6 +450,7 @@ class DashboardAnalyticsResponse(BaseModel):
     pillars: List[PillarDistribution]
     heatmap: List[HeatmapRow]
     distribution: DistributionData
+    coverage_by_department: List[CoverageByDepartmentEntry] = Field(default_factory=list)
     timeline: List[TimelinePoint]
     ranking: RankingData
     employees: List[EmployeePoint]
