@@ -147,6 +147,7 @@ export interface Pregunta {
   tipo: TipoPreguntaEnum;
   es_obligatoria: boolean;
   peso: number;
+  respuesta_esperada?: string | null;
 }
 
 export interface PreguntaCreate {
@@ -155,6 +156,7 @@ export interface PreguntaCreate {
   tipo: TipoPreguntaEnum;
   es_obligatoria: boolean;
   peso: number;
+  respuesta_esperada?: string | null;
 }
 
 // ===== Cuestionarios (mínimo útil) — opcional =====
@@ -220,6 +222,7 @@ export interface SurveyQuestionRead {
   es_obligatoria: boolean;
   peso: number;
   respuesta_actual?: string | null;
+  respuesta_esperada?: string | null;
 }
 
 export interface LikertLevel {

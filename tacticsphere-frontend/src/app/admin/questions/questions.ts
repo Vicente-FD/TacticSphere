@@ -99,6 +99,18 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
                   </label>
                 </div>
 
+
+                <label class="block space-y-2">
+                  <span class="ts-label">Respuesta esperada (opcional)</span>
+                  <input
+                    class="ts-input"
+                    type="text"
+                    maxlength="500"
+                    [(ngModel)]="form.respuesta_esperada"
+                    placeholder="Ej.: Referencia a casos concretos o proceso objetivo"
+                  />
+                </label>
+
                 <label class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2">
                   <input
                     type="checkbox"
@@ -158,6 +170,9 @@ import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
                   <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="space-y-2">
                       <p class="text-base font-medium text-ink">{{ q.enunciado }}</p>
+                      <p class="text-xs text-accent" *ngIf="q.respuesta_esperada">
+                        Respuesta esperada: {{ q.respuesta_esperada }}
+                      </p>
                       <div class="flex flex-wrap gap-2 text-xs text-neutral-400">
                         <span class="ts-badge uppercase">{{ q.tipo }}</span>
                         <span class="ts-chip">Peso {{ q.peso }}</span>
@@ -223,11 +238,13 @@ export class QuestionsComponent implements OnInit {
     tipo: TipoPreguntaEnum;
     es_obligatoria: boolean;
     peso: number;
+    respuesta_esperada: string;
   } = {
     enunciado: '',
     tipo: 'LIKERT',
     es_obligatoria: true,
     peso: 1,
+    respuesta_esperada: '',
   };
 
   ngOnInit(): void {
@@ -270,9 +287,13 @@ export class QuestionsComponent implements OnInit {
       tipo: this.form.tipo,
       es_obligatoria: this.form.es_obligatoria,
       peso: this.form.peso || 1,
+      respuesta_esperada: this.form.respuesta_esperada?.trim() || undefined,
     };
 
     if (!payload.enunciado) return;
+    if (!payload.respuesta_esperada) {
+      delete payload.respuesta_esperada;
+    }
 
     this.creatingQuestion = true;
 
@@ -282,6 +303,7 @@ export class QuestionsComponent implements OnInit {
         this.form.tipo = 'LIKERT';
         this.form.es_obligatoria = true;
         this.form.peso = 1;
+        this.form.respuesta_esperada = '';
         this.cargarPreguntas(this.selectedPilarId!);
       },
       error: (error) => {

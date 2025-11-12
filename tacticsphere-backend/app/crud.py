@@ -345,8 +345,24 @@ def delete_pilar(db: Session, pilar_id: int, cascade: bool = False) -> Tuple[boo
     db.commit()
     return True, None
 
-def create_pregunta(db: Session, pilar_id: int, enunciado: str, tipo, es_obligatoria: bool, peso: int) -> Pregunta:
-    q = Pregunta(pilar_id=pilar_id, enunciado=enunciado, tipo=tipo, es_obligatoria=es_obligatoria, peso=peso)
+def create_pregunta(
+    db: Session,
+    pilar_id: int,
+    enunciado: str,
+    tipo,
+    es_obligatoria: bool,
+    peso: int,
+    respuesta_esperada: Optional[str] = None,
+) -> Pregunta:
+    sanitized_expected = (respuesta_esperada or "").strip() or None
+    q = Pregunta(
+        pilar_id=pilar_id,
+        enunciado=enunciado,
+        tipo=tipo,
+        es_obligatoria=es_obligatoria,
+        peso=peso,
+        respuesta_esperada=sanitized_expected,
+    )
     db.add(q)
     db.commit()
     db.refresh(q)
@@ -1587,6 +1603,7 @@ def list_responses_for_export(
             Asignacion.alcance_id,
             Pregunta.id.label("pregunta_id"),
             Pregunta.enunciado.label("pregunta_enunciado"),
+            Pregunta.respuesta_esperada.label("pregunta_respuesta_esperada"),
             Pilar.id.label("pilar_id"),
             Pilar.nombre.label("pilar_nombre"),
             Empleado.id.label("empleado_id"),
@@ -1628,6 +1645,7 @@ def list_responses_for_export(
                 "alcance_id": row["alcance_id"],
                 "pregunta_id": row["pregunta_id"],
                 "pregunta_enunciado": row["pregunta_enunciado"],
+                "pregunta_respuesta_esperada": row["pregunta_respuesta_esperada"],
                 "pilar_id": row["pilar_id"],
                 "pilar_nombre": row["pilar_nombre"],
                 "empleado_id": row["empleado_id"],

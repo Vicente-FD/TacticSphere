@@ -190,6 +190,7 @@ class Pregunta(Base):
     tipo: Mapped[TipoPreguntaEnum] = mapped_column(SAEnum(TipoPreguntaEnum, name="tipo_pregunta_enum"), nullable=False)
     es_obligatoria: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     peso: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    respuesta_esperada: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     pilar: Mapped["Pilar"] = relationship("Pilar", back_populates="preguntas")
 

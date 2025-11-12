@@ -34,6 +34,7 @@ export class QuestionService {
     tipo: TipoPreguntaEnum; // 'LIKERT' | 'ABIERTA' | 'SI_NO'
     es_obligatoria: boolean;
     peso: number;
+    respuesta_esperada?: string | null;
   }): Observable<Pregunta> {
     return this.http.post<Pregunta>(`${this.base}/questions`, input);
   }

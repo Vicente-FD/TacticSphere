@@ -151,6 +151,8 @@ class PreguntaCreate(BaseModel):
     tipo: TipoPreguntaEnum
     es_obligatoria: bool = True
     peso: int = 1
+    respuesta_esperada: Optional[str] = Field(default=None, max_length=500)
+
 
 class PreguntaRead(BaseModel):
     id: int
@@ -159,6 +161,7 @@ class PreguntaRead(BaseModel):
     tipo: TipoPreguntaEnum
     es_obligatoria: bool
     peso: int
+    respuesta_esperada: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 # ======================================================
@@ -306,6 +309,7 @@ class SurveyQuestionRead(BaseModel):
     peso: int
     # valor ya respondido por el empleado (o por sesión anónima) si existe:
     respuesta_actual: Optional[str] = None
+    respuesta_esperada: Optional[str] = None
 
 class PillarQuestionsResponse(BaseModel):
     pilar_id: int

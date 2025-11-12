@@ -1296,7 +1296,15 @@ def create_question(
 
 
 
-    pregunta = crud.create_pregunta(db, data.pilar_id, data.enunciado, data.tipo, data.es_obligatoria, data.peso)
+    pregunta = crud.create_pregunta(
+        db,
+        data.pilar_id,
+        data.enunciado,
+        data.tipo,
+        data.es_obligatoria,
+        data.peso,
+        data.respuesta_esperada,
+    )
 
     audit_log(
 
@@ -1690,7 +1698,15 @@ def seed_demo_survey(db: Session = Depends(get_db)):
 
     if not crud.list_preguntas(db, pil.id):
 
-        crud.create_pregunta(db, pil.id, "Â¿RecomendarÃ­as la empresa?", TipoPreguntaEnum.LIKERT, True, 1)
+        crud.create_pregunta(
+            db,
+            pil.id,
+            "Â¿RecomendarÃ­as la empresa?",
+            TipoPreguntaEnum.LIKERT,
+            True,
+            1,
+            None,
+        )
 
 
 
@@ -1875,21 +1891,16 @@ def survey_pillar_questions(
 
 
     preguntas, rmap = crud.get_pilar_questions_with_answers(db, asignacion_id, pilar_id, empleado_id)
+    include_expected = current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN, RolEnum.ANALISTA)
 
     items = [{
-
         "id": q.id,
-
         "enunciado": q.enunciado,
-
         "tipo": q.tipo,
-
         "es_obligatoria": q.es_obligatoria,
-
         "peso": q.peso,
-
         "respuesta_actual": (rmap[q.id].valor if q.id in rmap else None),
-
+        "respuesta_esperada": q.respuesta_esperada if include_expected else None,
     } for q in preguntas]
 
     return PillarQuestionsResponse(
@@ -1939,6 +1950,7 @@ def analytics_responses_export(
     current: Usuario = Depends(get_current_user),
 ):
     _ensure_company_access(current, empresa_id)
+    include_expected = current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN, RolEnum.ANALISTA)
     rows = crud.list_responses_for_export(
         db,
         empresa_id=empresa_id,
@@ -1964,6 +1976,8 @@ def analytics_responses_export(
         "departamento_nombre",
         "valor",
     ]
+    if include_expected:
+        headers.insert(headers.index("pilar_id"), "respuesta_esperada")
 
     def iter_rows():
         buffer = io.StringIO()
@@ -1973,15 +1987,19 @@ def analytics_responses_export(
         buffer.seek(0)
         buffer.truncate(0)
         for row in rows:
-            writer.writerow(
+            record = [
+                row["respuesta_id"],
+                row["fecha_respuesta"],
+                row["asignacion_id"],
+                row["alcance_tipo"],
+                row["alcance_id"],
+                row["pregunta_id"],
+                row["pregunta_enunciado"],
+            ]
+            if include_expected:
+                record.append(row.get("pregunta_respuesta_esperada"))
+            record.extend(
                 [
-                    row["respuesta_id"],
-                    row["fecha_respuesta"],
-                    row["asignacion_id"],
-                    row["alcance_tipo"],
-                    row["alcance_id"],
-                    row["pregunta_id"],
-                    row["pregunta_enunciado"],
                     row["pilar_id"],
                     row["pilar_nombre"],
                     row["empleado_id"],
@@ -1990,6 +2008,7 @@ def analytics_responses_export(
                     row["valor"],
                 ]
             )
+            writer.writerow(record)
             yield buffer.getvalue()
             buffer.seek(0)
             buffer.truncate(0)
@@ -2518,6 +2537,8 @@ def crear_usuario_simple(
         "rol": nuevo_usuario.rol
 
     }
+
+
 
 
 

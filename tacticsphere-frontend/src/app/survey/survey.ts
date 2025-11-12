@@ -25,6 +25,7 @@ import { SurveyService } from '../survey.service';
 import { CompanyService } from '../company.service';
 import { EmployeeService } from '../employee.service';
 import { AssignmentsService } from '../assignments.service';
+import { AuthService } from '../auth.service';
 
 @Component({
   standalone: true,
@@ -427,6 +428,9 @@ import { AssignmentsService } from '../assignments.service';
                     class="rounded-xl border border-neutral-200 p-4 space-y-3"
                   >
                     <div class="font-medium text-ink">{{ q.enunciado }}</div>
+                    <p class="text-xs text-accent" *ngIf="canViewExpectedAnswer && q.respuesta_esperada">
+                      Respuesta esperada: {{ q.respuesta_esperada }}
+                    </p>
                     <ng-container [ngSwitch]="q.tipo">
                       <div *ngSwitchCase="'LIKERT'" class="flex flex-wrap gap-3">
                         <label
@@ -601,13 +605,17 @@ export class SurveyComponent implements OnInit, OnDestroy {
   private ensuringAssignment = false;
   private autoBeginHandle: ReturnType<typeof setTimeout> | null = null;
   private searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  readonly canViewExpectedAnswer: boolean;
 
   constructor(
     private survey: SurveyService,
     private company: CompanyService,
     private employee: EmployeeService,
-    private assignmentsSvc: AssignmentsService
-  ) {}
+    private assignmentsSvc: AssignmentsService,
+    private auth: AuthService
+  ) {
+    this.canViewExpectedAnswer = this.auth.hasRole(['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA']);
+  }
 
   ngOnInit(): void {
     this.company.list().subscribe({
