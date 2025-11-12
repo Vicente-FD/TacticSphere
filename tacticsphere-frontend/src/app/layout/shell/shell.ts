@@ -1,5 +1,5 @@
 ﻿// src/app/layout/shell/shell.ts
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { Router, RouterLink, RouterOutlet, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../auth.service';
@@ -16,20 +16,44 @@ import { AuthService } from '../../auth.service';
             <img src="assets/logo_ts.png" alt="TacticSphere" class="h-8 w-auto" />
             <span class="text-lg font-semibold tracking-tight text-ink">TacticSphere</span>
           </a>
-          <div class="flex items-center gap-4 text-sm">
+          <div class="flex items-center gap-3 text-sm">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary px-3 py-2 text-xs font-medium uppercase tracking-wide lg:hidden"
+              (click)="toggleSidebar(true)"
+            >
+              Menú
+            </button>
             <span class="text-muted">Rol: <span class="text-ink">{{ rol }}</span></span>
             <button type="button" class="ts-btn ts-btn--secondary" (click)="logout()">Salir</button>
           </div>
         </div>
       </header>
 
-      <div class="flex min-h-[calc(100vh-4rem)] bg-bg">
-        <aside class="w-64 shrink-0 border-r border-border bg-white">
-          <nav class="flex flex-col gap-1 px-4 py-6 text-sm">
+      <div class="relative flex min-h-[calc(100vh-4rem)] bg-bg">
+        <div
+          class="fixed inset-0 z-30 bg-black/40 transition-opacity lg:hidden"
+          *ngIf="sidebarOpen"
+          (click)="toggleSidebar(false)"
+        ></div>
+
+        <aside
+          class="fixed inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-border bg-white transition-transform duration-200 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:translate-x-0 lg:bg-white lg:shadow-none"
+          [class.-translate-x-full]="!sidebarOpen"
+          [class.translate-x-0]="sidebarOpen"
+        >
+          <div class="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
+            <span class="text-sm font-semibold text-ink">Navegación</span>
+            <button type="button" class="ts-btn ts-btn--secondary px-3 py-1 text-xs" (click)="toggleSidebar(false)">
+              Cerrar
+            </button>
+          </div>
+          <nav class="flex h-full flex-col gap-1 overflow-y-auto px-4 py-6 text-sm">
             <a
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/results"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Resultados</a
             >
             <a
@@ -37,6 +61,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/dashboards"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Panel admin</a
             >
             <a
@@ -44,6 +69,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/companies"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Empresas</a
             >
             <a
@@ -51,6 +77,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/pillars"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Pilares</a
             >
             <a
@@ -58,6 +85,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/questions"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Preguntas</a
             >
             <a
@@ -65,6 +93,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/users"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Usuarios</a
             >
             <a
@@ -72,6 +101,7 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/admin/auditoria"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Registro de auditoría</a
             >
             <a
@@ -79,12 +109,13 @@ import { AuthService } from '../../auth.service';
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
               routerLink="/survey"
               routerLinkActive="bg-[#f6f6f6] text-ink"
+              (click)="handleNavClick()"
               >Encuesta</a
             >
           </nav>
         </aside>
 
-        <div class="flex min-w-0 flex-1 flex-col bg-bg">
+        <div class="flex min-w-0 flex-1 flex-col bg-bg lg:ml-0">
           <main class="flex-1 overflow-y-auto px-4 py-6 md:px-8">
             <router-outlet></router-outlet>
           </main>
@@ -112,9 +143,32 @@ export class ShellComponent {
   readonly canSeeSurvey = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA', 'ANALISTA']);
   readonly isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
   readonly defaultRoute = this.auth.getDefaultRoute() || '/results';
+  private readonly desktopBreakpoint = 1024;
+  sidebarOpen = typeof window === 'undefined' ? true : window.innerWidth >= this.desktopBreakpoint;
 
   logout(): void {
     this.auth.logout();
     this.router.navigateByUrl('/login');
+  }
+
+  toggleSidebar(open?: boolean): void {
+    if (typeof open === 'boolean') {
+      this.sidebarOpen = open;
+    } else {
+      this.sidebarOpen = !this.sidebarOpen;
+    }
+  }
+
+  handleNavClick(): void {
+    if (typeof window !== 'undefined' && window.innerWidth < this.desktopBreakpoint) {
+      this.sidebarOpen = false;
+    }
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    if (window.innerWidth >= this.desktopBreakpoint) {
+      this.sidebarOpen = true;
+    }
   }
 }
