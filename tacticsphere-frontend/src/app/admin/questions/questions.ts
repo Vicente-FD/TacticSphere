@@ -250,7 +250,7 @@ interface QuestionView {
                   [ngClass]="{ 'ring-2 ring-accent shadow-card': isEditingQuestion(item.id) }"
                 >
                   <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="space-y-2">
+                    <div class="space-y-2 lg:flex-1">
                       <p class="text-base font-medium text-ink">
                         {{ item.title }}
                       </p>
@@ -266,7 +266,7 @@ interface QuestionView {
                       </div>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
+                    <div class="flex w-full flex-wrap justify-end gap-2 lg:w-auto">
                       <button
                         class="ts-btn ts-btn--secondary"
                         type="button"

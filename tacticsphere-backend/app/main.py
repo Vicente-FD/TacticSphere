@@ -768,13 +768,9 @@ def users_list(
 
 ):
 
-    # ADMIN_SISTEMA ve todos; ADMIN solo su empresa
+    # ADMIN_SISTEMA y ADMIN pueden consultar cualquier empresa (o todas si no se indica)
 
-    if current.rol == RolEnum.ADMIN:
-
-        empresa_id = current.empresa_id
-
-    elif current.rol not in (RolEnum.ADMIN, RolEnum.ADMIN_SISTEMA):
+    if current.rol not in (RolEnum.ADMIN, RolEnum.ADMIN_SISTEMA):
 
         raise HTTPException(status_code=403, detail="Permisos insuficientes")
 

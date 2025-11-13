@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { LucideAngularModule } from 'lucide-angular';
+import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { CompanyService } from '../../company.service';
 import { AuditService } from '../../services/audit.service';
@@ -14,7 +15,7 @@ type FilterValue = string | number | null;
 @Component({
   standalone: true,
   selector: 'app-audit-admin',
-  imports: [CommonModule, FormsModule, LucideAngularModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule, ModalComponent],
   template: `
     <div class="ts-page">
       <div class="ts-container space-y-6">
@@ -153,7 +154,7 @@ type FilterValue = string | number | null;
                     <button
                       type="button"
                       class="ts-btn ts-btn--danger text-xs"
-                      (click)="deleteLog(log)"
+                      (click)="openDeleteDialog(log)"
                       [disabled]="deletingId === log.id"
                     >
                       {{ deletingId === log.id ? 'Eliminando...' : 'Eliminar' }}
@@ -165,6 +166,52 @@ type FilterValue = string | number | null;
           </div>
         </div>
       </div>
+      <ts-modal title="Eliminar registro" [open]="deleteDialogOpen" (close)="closeDeleteDialog()">
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            Confirma la eliminación definitiva del registro seleccionado. Esta acción no se puede deshacer.
+          </p>
+          <div
+            *ngIf="deleteDialogTarget"
+            class="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600"
+          >
+            <div class="font-semibold text-ink">Registro #{{ deleteDialogTarget?.id }}</div>
+            <div>Acción: {{ deleteDialogTarget?.action }}</div>
+            <div>Usuario: {{ deleteDialogTarget?.user_email || '--' }}</div>
+          </div>
+          <label class="block space-y-2">
+            <span class="ts-label">Tu contraseña</span>
+            <input
+              type="password"
+              class="ts-input"
+              [(ngModel)]="deleteDialogPassword"
+              placeholder="Ingresa tu contraseña para confirmar"
+            />
+          </label>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeDeleteDialog()"
+              [disabled]="deletingId !== null"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--danger"
+              (click)="confirmDeleteLog()"
+              [disabled]="
+                deletingId !== null ||
+                !deleteDialogPassword.trim().length ||
+                !deleteDialogTarget
+              "
+            >
+              {{ deletingId !== null && deleteDialogTarget ? 'Eliminando...' : 'Eliminar' }}
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -183,6 +230,9 @@ export class AuditAdminComponent implements OnInit {
   deletingId: number | null = null;
   showFilters = false;
   readonly isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
+  deleteDialogOpen = false;
+  deleteDialogPassword = '';
+  deleteDialogTarget: AuditLog | null = null;
 
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
   auditActions: string[] = [
@@ -311,22 +361,46 @@ export class AuditAdminComponent implements OnInit {
       });
   }
 
-  deleteLog(log: AuditLog): void {
-    if (!this.isAdminSistema) {
+  openDeleteDialog(log: AuditLog): void {
+    if (!this.isAdminSistema || this.deletingId) {
       return;
     }
-    const password = prompt(`Ingresa tu contraseña para eliminar el registro #${log.id}:`);
+    this.deleteDialogTarget = log;
+    this.deleteDialogPassword = '';
+    this.deleteDialogOpen = true;
+  }
+
+  closeDeleteDialog(force = false): void {
+    if (this.deletingId && !force) {
+      return;
+    }
+    this.deleteDialogOpen = false;
+    this.deleteDialogPassword = '';
+    this.deleteDialogTarget = null;
+  }
+
+  confirmDeleteLog(): void {
+    if (!this.isAdminSistema || !this.deleteDialogTarget || this.deletingId) {
+      return;
+    }
+    const password = this.deleteDialogPassword.trim();
     if (!password) {
       return;
     }
     this.error = '';
     this.message = '';
-    this.deletingId = log.id;
+    const target = this.deleteDialogTarget;
+    this.deletingId = target.id;
     this.audit
-      .deleteLog(log.id, password)
-      .pipe(finalize(() => (this.deletingId = null)))
+      .deleteLog(target.id, password)
+      .pipe(
+        finalize(() => {
+          this.deletingId = null;
+        })
+      )
       .subscribe({
         next: () => {
+          this.closeDeleteDialog(true);
           this.message = 'Registro eliminado correctamente.';
           this.loadLogs(true);
         },

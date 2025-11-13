@@ -8,8 +8,19 @@ import { finalize } from 'rxjs/operators';
 import { CompanyService } from '../../company.service';
 import { UserService } from '../../user.service';
 import { AuthService } from '../../auth.service';
+import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from '../../types';
+
+type PasswordDialogMode = 'user' | 'request';
+
+interface PasswordDialogState {
+  open: boolean;
+  mode: PasswordDialogMode;
+  user: Usuario | null;
+  request: PasswordChangeRequest | null;
+  value: string;
+}
 
 @Component({
   standalone: true,
@@ -19,6 +30,7 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from 
     FormsModule,
     NgxSkeletonLoaderModule,
     LucideAngularModule,
+    ModalComponent,
   ],
   template: `
     <div class="ts-page">
@@ -199,29 +211,42 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from 
                       <td>
                         <select
                           class="ts-select"
-                          [(ngModel)]="u.rol"
-                          [ngModelOptions]="{ standalone: true }"
-                          (change)="changeRole(u, u.rol)"
-                          [disabled]="updatingRoleId === u.id"
+                          [ngModel]="u.rol"
+                          (ngModelChange)="onRoleChange(u, $event)"
+                          [disabled]="updatingRoleId === u.id || (!isAdminSistema && u.rol === 'ADMIN_SISTEMA')"
                         >
-                          <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
+                          <option
+                            *ngFor="let r of roles"
+                            [ngValue]="r"
+                            [disabled]="!isAdminSistema && r === 'ADMIN_SISTEMA' && u.rol !== 'ADMIN_SISTEMA'"
+                          >
+                            {{ r }}
+                          </option>
                         </select>
                       </td>
                       <td>{{ empresaName(u.empresa_id) }}</td>
                       <td>
                         <button
-                          class="ts-chip"
+                          type="button"
+                          class="ts-chip inline-flex items-center gap-2"
                           [class.bg-success/10]="u.activo"
                           [class.bg-error/10]="!u.activo"
                           (click)="toggleActive(u)"
-                          [disabled]="togglingActiveId === u.id"
+                          [disabled]="togglingActiveId === u.id || u.rol === 'ADMIN_SISTEMA'"
                         >
                           <lucide-icon
-                            [name]="u.activo ? 'Check' : 'X'"
+                            *ngIf="togglingActiveId !== u.id"
+                            [name]="u.activo ? 'Check' : 'Slash'"
                             class="h-4 w-4"
                             strokeWidth="1.75"
                           ></lucide-icon>
-                          {{ u.activo ? 'Activo' : 'Inactivo' }}
+                          <lucide-icon
+                            *ngIf="togglingActiveId === u.id"
+                            name="Loader2"
+                            class="h-4 w-4 animate-spin"
+                            strokeWidth="1.75"
+                          ></lucide-icon>
+                          <span>{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
                         </button>
                       </td>
                       <td>
@@ -229,7 +254,8 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from 
                           <button
                             class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
                             (click)="resetPassword(u)"
-                            [disabled]="resettingId === u.id"
+                            type="button"
+                            [disabled]="resettingId === u.id || passwordDialogBusy"
                           >
                             <lucide-icon
                               *ngIf="resettingId !== u.id"
@@ -321,7 +347,8 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from 
                         <button
                           class="ts-btn ts-btn--positive"
                           (click)="handlePasswordRequest(req)"
-                          [disabled]="resolvingRequestId === req.id"
+                          type="button"
+                          [disabled]="resolvingRequestId === req.id || passwordDialogBusy"
                         >
                           <lucide-icon
                             *ngIf="resolvingRequestId !== req.id"
@@ -358,6 +385,57 @@ import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from 
           </ng-template>
         </div>
       </div>
+      <ts-modal
+        [title]="passwordDialog.mode === 'request' ? 'Atender cambio de contraseña' : 'Cambiar contraseña'"
+        [open]="passwordDialog.open"
+        (close)="closePasswordDialog()"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            {{
+              passwordDialog.mode === 'request'
+                ? 'Ingresa la nueva contraseña que se enviará al usuario que solicitó el cambio.'
+                : 'Define una nueva contraseña temporal para el usuario seleccionado.'
+            }}
+          </p>
+          <div
+            *ngIf="passwordDialogMessage"
+            class="rounded-md bg-neutral-100 px-3 py-2 text-sm text-neutral-600"
+          >
+            {{ passwordDialogMessage }}
+          </div>
+          <label class="block space-y-2">
+            <span class="ts-label">Nueva contraseña</span>
+            <input
+              type="password"
+              class="ts-input"
+              minlength="10"
+              [(ngModel)]="passwordDialog.value"
+              placeholder="Mínimo 10 caracteres"
+            />
+          </label>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closePasswordDialog()"
+              [disabled]="passwordDialogBusy"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--positive"
+              (click)="confirmPasswordDialog()"
+              [disabled]="
+                passwordDialogBusy || passwordDialog.value.trim().length < passwordMinLength
+              "
+            >
+              {{ passwordDialogBusy ? 'Guardando...' : 'Confirmar' }}
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -385,6 +463,16 @@ export class UsersComponent implements OnInit {
   isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
   showCreateCard = false;
   showFiltersCard = false;
+  readonly passwordMinLength = 10;
+  passwordDialog: PasswordDialogState = {
+    open: false,
+    mode: 'user',
+    user: null,
+    request: null,
+    value: '',
+  };
+  passwordDialogMessage = '';
+  passwordDialogBusy = false;
 
   form: UsuarioCreate = {
     nombre: '',
@@ -477,6 +565,7 @@ export class UsersComponent implements OnInit {
     this.usersApi.create(this.form).subscribe({
       next: () => {
         this.form = { nombre: '', email: '', password: '', rol: 'USUARIO', empresa_id: null };
+        this.showCreateCard = false;
         this.loadUsers();
       },
       error: (error) => {
@@ -487,8 +576,44 @@ export class UsersComponent implements OnInit {
     });
   }
 
-  changeRole(u: Usuario, rol: RolEnum): void {
-    if (this.updatingRoleId) return;
+  onRoleChange(u: Usuario, nextRole: RolEnum): void {
+    const previousRole = u.rol;
+    if (nextRole === previousRole) {
+      return;
+    }
+    if (!this.isAdminSistema) {
+      if (nextRole === 'ADMIN_SISTEMA' && previousRole !== 'ADMIN_SISTEMA') {
+        return;
+      }
+      if (previousRole === 'ADMIN_SISTEMA' && nextRole !== 'ADMIN_SISTEMA') {
+        return;
+      }
+    }
+    u.rol = nextRole;
+    this.changeRole(u, nextRole, previousRole);
+  }
+
+  changeRole(u: Usuario, rol: RolEnum, previousRole?: RolEnum): void {
+    if (this.updatingRoleId) {
+      if (previousRole && u.rol !== previousRole) {
+        u.rol = previousRole;
+      }
+      return;
+    }
+    if (!this.isAdminSistema) {
+      if (rol === 'ADMIN_SISTEMA' && previousRole !== 'ADMIN_SISTEMA') {
+        if (previousRole) {
+          u.rol = previousRole;
+        }
+        return;
+      }
+      if (previousRole === 'ADMIN_SISTEMA' && rol !== 'ADMIN_SISTEMA') {
+        if (previousRole) {
+          u.rol = previousRole;
+        }
+        return;
+      }
+    }
     this.updatingRoleId = u.id;
     this.usersApi.update(u.id, { rol }).subscribe({
       next: (updated) => {
@@ -496,6 +621,9 @@ export class UsersComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error actualizando rol', error);
+        if (previousRole) {
+          u.rol = previousRole;
+        }
         this.updatingRoleId = null;
       },
       complete: () => {
@@ -523,39 +651,106 @@ export class UsersComponent implements OnInit {
   }
 
   resetPassword(u: Usuario): void {
-    const pwd = prompt(`Nueva contraseña para ${u.email}:`, '');
-    if (!pwd) return;
-    this.resettingId = u.id;
-    this.usersApi.setPassword(u.id, pwd).subscribe({
-      next: () => {},
-      error: (error) => {
-        console.error('Error reseteando contraseÃ±a', error);
-        this.resettingId = null;
-      },
-      complete: () => {
-        this.resettingId = null;
-      },
-    });
+    if (this.passwordDialogBusy) {
+      return;
+    }
+    this.passwordDialog = {
+      open: true,
+      mode: 'user',
+      user: u,
+      request: null,
+      value: '',
+    };
+    this.passwordDialogMessage = `Se enviará una nueva contraseña temporal a ${u.email}.`;
   }
 
   handlePasswordRequest(req: PasswordChangeRequest): void {
-    if (this.resolvingRequestId) return;
+    if (!this.isAdminSistema || this.passwordDialogBusy) {
+      return;
+    }
     const targetEmail = req.user?.email ?? req.user_email;
-    const pwd = prompt(`Nueva contraseña para ${targetEmail} (solicitud #${req.id}):`, '');
-    if (!pwd) return;
-    this.resolvingRequestId = req.id;
-    this.usersApi.setPassword(req.user_id, pwd, req.id).subscribe({
-      next: () => {
-        this.loadPasswordRequests();
-      },
-      error: (error) => {
-        console.error('Error completando solicitud de contraseÃ±a', error);
-        this.resolvingRequestId = null;
-      },
-      complete: () => {
-        this.resolvingRequestId = null;
-      },
-    });
+    this.passwordDialog = {
+      open: true,
+      mode: 'request',
+      user: req.user ?? null,
+      request: req,
+      value: '',
+    };
+    this.passwordDialogMessage = `Solicitud #${req.id} para ${targetEmail}.`;
+  }
+
+  closePasswordDialog(force = false): void {
+    if (this.passwordDialogBusy && !force) {
+      return;
+    }
+    this.passwordDialog = {
+      open: false,
+      mode: 'user',
+      user: null,
+      request: null,
+      value: '',
+    };
+    this.passwordDialogMessage = '';
+  }
+
+  confirmPasswordDialog(): void {
+    const password = this.passwordDialog.value.trim();
+    if (this.passwordDialogBusy || password.length < this.passwordMinLength) {
+      return;
+    }
+    this.passwordDialogBusy = true;
+
+    if (this.passwordDialog.mode === 'user' && this.passwordDialog.user) {
+      const userId = this.passwordDialog.user.id;
+      this.resettingId = userId;
+      this.usersApi
+        .setPassword(userId, password)
+        .pipe(
+          finalize(() => {
+            if (this.resettingId === userId) {
+              this.resettingId = null;
+            }
+            this.passwordDialogBusy = false;
+          })
+        )
+        .subscribe({
+          next: () => {
+            this.closePasswordDialog(true);
+          },
+          error: (error) => {
+            console.error('Error reseteando contraseña', error);
+          },
+        });
+      return;
+    }
+
+    if (this.passwordDialog.mode === 'request' && this.passwordDialog.request) {
+      const requestId = this.passwordDialog.request.id;
+      const userId = this.passwordDialog.request.user_id;
+      this.resolvingRequestId = requestId;
+      this.usersApi
+        .setPassword(userId, password, requestId)
+        .pipe(
+          finalize(() => {
+            if (this.resolvingRequestId === requestId) {
+              this.resolvingRequestId = null;
+            }
+            this.passwordDialogBusy = false;
+          })
+        )
+        .subscribe({
+          next: () => {
+            this.closePasswordDialog(true);
+            this.loadPasswordRequests();
+          },
+          error: (error) => {
+            console.error('Error completando solicitud de contraseña', error);
+          },
+        });
+      return;
+    }
+
+    this.passwordDialogBusy = false;
   }
 
   deleteUser(u: Usuario): void {
