@@ -32,8 +32,8 @@ import { AuthService } from '../auth.service';
   selector: 'app-survey',
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="ts-page pb-28">
-      <div class="ts-container space-y-6">
+    <div class="ts-page pb-28" style="overflow: visible;">
+      <div class="ts-container space-y-6 relative" style="overflow: visible;">
         <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div class="space-y-1">
             <h1 class="ts-title">Encuesta</h1>
@@ -67,7 +67,7 @@ import { AuthService } from '../auth.service';
           </div>
         </div>
 
-        <div class="space-y-6">
+        <div class="space-y-6" style="overflow: visible;">
           <div class="ts-card space-y-6">
             <div class="space-y-1">
               <h2 class="text-xl font-semibold text-ink">Datos del encuestado</h2>
@@ -298,11 +298,11 @@ import { AuthService } from '../auth.service';
             </div>
           </div>
 
-          <div class="ts-card space-y-6 survey-sticky-progress">
+          <div class="ts-card space-y-6 survey-sticky-progress" *ngIf="progress">
             <div class="space-y-2">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between gap-2">
                 <h2 class="text-xl font-semibold text-ink">Progreso general</h2>
-                <div *ngIf="progress" class="ts-chip">
+                <div class="ts-chip whitespace-nowrap">
                   {{ realtimeRespondidas }} / {{ totalQuestions }} respondidas
                 </div>
               </div>
@@ -360,7 +360,7 @@ import { AuthService } from '../auth.service';
             </div>
 
             <div class="grid gap-6 lg:grid-cols-[minmax(0,_0.3fr)_minmax(0,_1fr)]">
-              <div class="space-y-3">
+              <div class="space-y-3 survey-sticky-pillars">
                 <h3 class="text-lg font-semibold text-ink">Pilares</h3>
                 <div class="space-y-2">
                   <button
@@ -539,17 +539,145 @@ import { AuthService } from '../auth.service';
         display: block;
       }
 
-      .survey-sticky-progress {
-        position: sticky;
-        top: 1rem;
-        z-index: 30;
+      /* Asegurar que los contenedores padre no rompan el sticky */
+      :host {
+        overflow: visible !important;
       }
 
-      @media (max-width: 767px) {
-        .survey-sticky-progress {
+      :host ::ng-deep .ts-container,
+      :host ::ng-deep .ts-page {
+        overflow: visible !important;
+      }
+
+      /* Asegurar que el contenedor padre directo no tenga overflow */
+      :host ::ng-deep .space-y-6 {
+        overflow: visible !important;
+      }
+
+      /* Forzar sticky - debe estar en el nivel correcto */
+      .survey-sticky-progress {
+        position: -webkit-sticky !important; /* Safari */
+        position: sticky !important;
+        top: 1rem !important;
+        z-index: 30 !important;
+        background: white !important;
+        align-self: flex-start !important;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        will-change: transform;
+        transition: box-shadow 0.2s ease-out;
+        margin-bottom: 1rem;
+      }
+
+      .survey-sticky-pillars {
+        position: -webkit-sticky !important; /* Safari */
+        position: sticky !important;
+        top: 1rem !important;
+        z-index: 20 !important;
+        background: white !important;
+        align-self: flex-start !important;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        will-change: transform;
+        transition: box-shadow 0.2s ease-out;
+      }
+
+      .survey-sticky-progress:not(:hover) {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+      }
+
+      .survey-sticky-pillars:not(:hover) {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+      }
+
+      /* Sombra suave cuando están "pegados" */
+      @supports (position: sticky) {
+        .survey-sticky-progress,
+        .survey-sticky-pillars {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+        }
+      }
+
+      /* Versión compacta/colapsable en pantallas pequeñas */
+      @media (max-width: 1023px) {
+        .survey-sticky-progress,
+        .survey-sticky-pillars {
           position: static;
           top: auto;
+          bottom: auto;
+          max-height: none;
+          overflow-y: visible;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
         }
+
+        /* Versión compacta del progreso general en móviles */
+        .survey-sticky-progress {
+          margin-bottom: 1rem;
+        }
+
+        .survey-sticky-progress .space-y-2 > div:first-child h2 {
+          font-size: 1.125rem;
+        }
+
+        .survey-sticky-progress .space-y-2 > div:first-child p {
+          font-size: 0.75rem;
+        }
+
+        .survey-sticky-progress .space-y-4 > .grid {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.5rem;
+        }
+
+        .survey-sticky-progress .space-y-4 > .grid > div {
+          padding: 0.75rem 0.5rem;
+        }
+
+        .survey-sticky-progress .space-y-4 > .grid > div span:first-child {
+          font-size: 0.625rem;
+          line-height: 1.2;
+        }
+
+        .survey-sticky-progress .space-y-4 > .grid > div span:last-child {
+          font-size: 0.875rem;
+        }
+
+        /* Versión compacta de pilares en móviles */
+        .survey-sticky-pillars h3 {
+          font-size: 1rem;
+        }
+
+        .survey-sticky-pillars .space-y-2 > button {
+          padding: 0.5rem 0.75rem;
+        }
+
+        .survey-sticky-pillars .space-y-2 > button > div:first-child {
+          font-size: 0.875rem;
+        }
+
+        .survey-sticky-pillars .space-y-2 > button > div:last-child {
+          margin-top: 0.25rem;
+          height: 0.125rem;
+        }
+      }
+
+      /* Ajustes para tablets */
+      @media (min-width: 768px) and (max-width: 1023px) {
+        .survey-sticky-progress,
+        .survey-sticky-pillars {
+          position: -webkit-sticky;
+          position: sticky;
+          top: 1rem;
+          max-height: calc(100vh - 2rem);
+          overflow-y: auto;
+        }
+      }
+
+      /* Evitar saltos visuales con contain */
+      .survey-sticky-progress,
+      .survey-sticky-pillars {
+        contain: layout style paint;
       }
     `,
   ],

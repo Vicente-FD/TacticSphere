@@ -136,6 +136,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   dateFrom: string | null = null;
   dateTo: string | null = null;
   employeeSearch = "";
+  private employeeSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private resizeScheduled = false;
   private rafId: number | null = null;
@@ -150,6 +151,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const search = this.employeeSearch.trim().toLowerCase();
     if (!search) return this.employees();
     return this.employees().filter((employee) => {
+      if (!employee) return false;
       const name = employee.nombre?.toLowerCase() ?? "";
       const lastName = employee.apellidos?.toLowerCase() ?? "";
       const email = employee.email?.toLowerCase() ?? "";
@@ -304,6 +306,10 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.filterEffect.destroy();
     this.subscriptions.forEach((sub) => sub.unsubscribe());
     this.filterUpdates$.complete();
+    if (this.employeeSearchDebounce) {
+      clearTimeout(this.employeeSearchDebounce);
+      this.employeeSearchDebounce = null;
+    }
     if (this.resizeTimer) {
       clearTimeout(this.resizeTimer);
       this.resizeTimer = null;
@@ -357,8 +363,35 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   onEmployeeChange(employeeId: number | null): void {
-    this.selectedEmployeeId = employeeId;
+    // Ensure we always have a number or null, never an object
+    if (employeeId != null && typeof employeeId !== 'number') {
+      const emp = employeeId as any;
+      if (emp && typeof emp.id === 'number') {
+        this.selectedEmployeeId = emp.id;
+      } else {
+        this.selectedEmployeeId = null;
+      }
+    } else {
+      this.selectedEmployeeId = employeeId;
+    }
     this.updateFilter();
+  }
+
+  onEmployeeSearchChange(value: string): void {
+    // Ensure we always work with strings
+    const searchValue = typeof value === 'string' ? value : String(value ?? '');
+    this.employeeSearch = searchValue;
+    
+    // Clear previous debounce
+    if (this.employeeSearchDebounce) {
+      clearTimeout(this.employeeSearchDebounce);
+    }
+    
+    // Debounce the filter update
+    this.employeeSearchDebounce = setTimeout(() => {
+      this.employeeSearchDebounce = null;
+      // The computed filteredEmployees will automatically update
+    }, 300);
   }
 
   onDateChange(): void {
@@ -618,13 +651,19 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     ];
     const series = [1, 2, 3, 4, 5].map((level, idx) => {
       const levelIndex = level - 1;
+      const isTopLevel = level === 5;
       return {
         name: this.formatLikertLabel(level),
         type: "bar" as const,
         stack: "total",
         emphasis: { focus: "series" },
         barWidth: 32,
-        itemStyle: { color: levelColors[idx] ?? "#94a3b8" },
+        barGap: 0,
+        itemStyle: {
+          color: levelColors[idx] ?? "#94a3b8",
+          borderWidth: 0,
+          borderRadius: isTopLevel ? [6, 6, 0, 0] : 0,
+        },
         data: distributions.map((item) => {
           const value = this.round(item.levels[levelIndex]);
           return level >= 5

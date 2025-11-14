@@ -91,8 +91,8 @@
                   panelClass="ts-select-panel"
                 >
                   <option [ngValue]="null">Todos los empleados</option>
-                  <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp.id">
-                    {{ formatEmployeeIdentity(emp) }}
+                  <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp?.id ?? null">
+                    {{ emp ? formatEmployeeIdentity(emp) : 'Empleado inválido' }}
                   </option>
                 </select>
               </label>
@@ -103,7 +103,8 @@
                   class="ts-input rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
                   type="text"
                   placeholder="Nombre, correo o RUT"
-                  [(ngModel)]="employeeSearch"
+                  [ngModel]="employeeSearch"
+                  (ngModelChange)="onEmployeeSearchChange($event)"
                 />
               </label>
             </div>
