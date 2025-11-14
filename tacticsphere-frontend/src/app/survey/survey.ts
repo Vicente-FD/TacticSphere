@@ -68,7 +68,49 @@ import { AuthService } from '../auth.service';
         </div>
 
         <div class="space-y-6" style="overflow: visible;">
-          <div class="ts-card space-y-6">
+          <!-- Barra superior con botón y búsqueda -->
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              class="ts-btn ts-btn--positive w-full sm:w-auto px-6 py-3 text-base"
+              (click)="toggleEmployeeForm()"
+            >
+              {{ showEmployeeForm ? 'Ocultar formulario' : 'Ingresar colaborador' }}
+            </button>
+            
+            <div class="flex-1 sm:max-w-md">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <span class="ts-label">Buscar colaboradores</span>
+                    <p class="text-xs text-neutral-500">
+                      Busca por nombre, correo o RUT. Si no seleccionas empresa, usaremos tu alcance actual.
+                    </p>
+                  </div>
+                  <span class="ts-chip" *ngIf="employees.length">{{ employees.length }} coincidencias</span>
+                </div>
+                <div class="relative">
+                  <input
+                    type="search"
+                    class="ts-input pr-28"
+                    placeholder="Ej: maria@empresa.com o 12.345.678-9"
+                    [(ngModel)]="searchTerm"
+                    (ngModelChange)="onSearchTermChange($event)"
+                    (keyup.enter)="forceEmployeeSearch()"
+                  />
+                  <button
+                    type="button"
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+                    (click)="forceEmployeeSearch()"
+                  >
+                    Buscar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card de datos del encuestado (plegable) -->
+          <div class="ts-card space-y-6" *ngIf="showEmployeeForm">
             <div class="space-y-1">
               <h2 class="text-xl font-semibold text-ink">Datos del encuestado</h2>
               <p class="text-sm text-neutral-400">
@@ -137,7 +179,7 @@ import { AuthService } from '../auth.service';
                     (click)="ingresarEmpleado()"
                     [disabled]="creatingEmp || !formEmp.empresa_id || !formEmp.nombre || !formEmp.apellidos"
                   >
-                    {{ creatingEmp ? 'Ingresando...' : 'Ingresar empleado' }}
+                    {{ creatingEmp ? 'Ingresando...' : 'Ingresar colaborador' }}
                   </button>
                 </div>
 
@@ -167,135 +209,108 @@ import { AuthService } from '../auth.service';
                 </div>
               </div>
 
-              <div class="space-y-4">
-                <div class="space-y-2">
-                  <div class="flex items-center justify-between gap-3">
+            </div>
+          </div>
+
+          <!-- Resultados de búsqueda (fuera de la card, siempre visibles) -->
+          <div class="space-y-4" *ngIf="employees.length || hasEmployeeSearch || loadingEmployees">
+            <ng-container *ngIf="employees.length; else searchState">
+              <div class="space-y-3">
+                <div
+                  class="rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-accent/40 hover:shadow-card"
+                  *ngFor="let emp of employees"
+                  [ngClass]="{ 'border-accent shadow-card': selectedEmployee?.id === emp.id }"
+                >
+                  <div class="flex flex-wrap justify-between gap-3">
                     <div>
-                      <span class="ts-label">Buscar colaboradores</span>
-                      <p class="text-xs text-neutral-500">
-                        Busca por nombre, correo o RUT. Si no seleccionas empresa, usaremos tu alcance actual.
+                      <p class="text-base font-semibold text-ink">
+                        {{ emp.nombre }} {{ emp.apellidos || '' }}
+                      </p>
+                      <p class="text-sm text-neutral-500">
+                        {{ emp.email || 'Sin correo registrado' }} - {{ emp.cargo || 'Sin cargo' }}
                       </p>
                     </div>
-                    <span class="ts-chip" *ngIf="employees.length">{{ employees.length }} coincidencias</span>
-                  </div>
-                  <div class="relative">
-                    <input
-                      type="search"
-                      class="ts-input pr-28"
-                      placeholder="Ej: maria@empresa.com o 12.345.678-9"
-                      [(ngModel)]="searchTerm"
-                      (ngModelChange)="onSearchTermChange($event)"
-                      (keyup.enter)="forceEmployeeSearch()"
-                    />
-                    <button
-                      type="button"
-                      class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
-                      (click)="forceEmployeeSearch()"
-                    >
-                      Buscar
-                    </button>
-                  </div>
-                </div>
-
-                <ng-container *ngIf="employees.length; else searchState">
-                  <div class="space-y-3">
-                    <div
-                      class="rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-accent/40 hover:shadow-card"
-                      *ngFor="let emp of employees"
-                      [ngClass]="{ 'border-accent shadow-card': selectedEmployee?.id === emp.id }"
-                    >
-                      <div class="flex flex-wrap justify-between gap-3">
-                        <div>
-                          <p class="text-base font-semibold text-ink">
-                            {{ emp.nombre }} {{ emp.apellidos || '' }}
-                          </p>
-                          <p class="text-sm text-neutral-500">
-                            {{ emp.email || 'Sin correo registrado' }} - {{ emp.cargo || 'Sin cargo' }}
-                          </p>
-                        </div>
-                        <div class="text-right text-sm text-neutral-500">
-                          <p>ID #{{ emp.id }}</p>
-                          <p>RUT: {{ emp.rut || '--' }}</p>
-                        </div>
-                      </div>
-
-                      <div class="mt-3 flex flex-wrap gap-2">
-                        <button
-                          class="ts-btn ts-btn--secondary"
-                          type="button"
-                          (click)="seleccionarEmpleado(emp)"
-                          [disabled]="selectedEmployee?.id === emp.id"
-                        >
-                          {{ selectedEmployee?.id === emp.id ? 'Seleccionado' : 'Usar en encuesta' }}
-                        </button>
-                        <button
-                          class="ts-btn ts-btn--ghost"
-                          type="button"
-                          *ngIf="editId !== emp.id"
-                          (click)="iniciarEdicion(emp)"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          class="ts-btn ts-btn--ghost"
-                          type="button"
-                          *ngIf="editId === emp.id"
-                          (click)="cancelarEdicion()"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-
-                      <div class="mt-4 grid gap-3 md:grid-cols-2" *ngIf="editId === emp.id">
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">Nombre</span>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.nombre" />
-                        </label>
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">Apellidos</span>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.apellidos" />
-                        </label>
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">RUT</span>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.rut" />
-                        </label>
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">Email</span>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.email" />
-                        </label>
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">Cargo</span>
-                          <input class="ts-input text-sm" [(ngModel)]="editBuffer.cargo" />
-                        </label>
-                        <label class="block space-y-1 text-sm">
-                          <span class="text-neutral-500">Departamento</span>
-                          <select class="ts-select text-sm" [(ngModel)]="editBuffer.departamento_id">
-                            <option [ngValue]="null">Ninguno</option>
-                            <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
-                          </select>
-                        </label>
-                        <div class="md:col-span-2 flex flex-wrap gap-2">
-                          <button class="ts-btn ts-btn--positive" type="button" (click)="guardarEdicion(emp)">
-                            Guardar cambios
-                          </button>
-                        </div>
-                      </div>
+                    <div class="text-right text-sm text-neutral-500">
+                      <p>ID #{{ emp.id }}</p>
+                      <p>RUT: {{ emp.rut || '--' }}</p>
                     </div>
                   </div>
-                </ng-container>
-                <ng-template #searchState>
-                  <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 px-4 py-3 text-sm text-neutral-500">
-                    <ng-container *ngIf="loadingEmployees">Buscando colaboradores...</ng-container>
-                    <ng-container *ngIf="!loadingEmployees && hasEmployeeSearch">
-                      No encontramos coincidencias para "{{ searchTerm }}".
-                    </ng-container>
-                    <ng-container *ngIf="!loadingEmployees && !hasEmployeeSearch">
-                      Ingresa un termino para comenzar la busqueda.
-                    </ng-container>
+
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      class="ts-btn ts-btn--secondary"
+                      type="button"
+                      (click)="seleccionarEmpleado(emp)"
+                      [disabled]="selectedEmployee?.id === emp.id"
+                    >
+                      {{ selectedEmployee?.id === emp.id ? 'Seleccionado' : 'Usar en encuesta' }}
+                    </button>
+                    <button
+                      class="ts-btn ts-btn--ghost"
+                      type="button"
+                      *ngIf="editId !== emp.id"
+                      (click)="iniciarEdicion(emp)"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      class="ts-btn ts-btn--ghost"
+                      type="button"
+                      *ngIf="editId === emp.id"
+                      (click)="cancelarEdicion()"
+                    >
+                      Cancelar
+                    </button>
                   </div>
-                </ng-template>
+
+                  <div class="mt-4 grid gap-3 md:grid-cols-2" *ngIf="editId === emp.id">
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">Nombre</span>
+                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.nombre" />
+                    </label>
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">Apellidos</span>
+                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.apellidos" />
+                    </label>
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">RUT</span>
+                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.rut" />
+                    </label>
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">Email</span>
+                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.email" />
+                    </label>
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">Cargo</span>
+                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.cargo" />
+                    </label>
+                    <label class="block space-y-1 text-sm">
+                      <span class="text-neutral-500">Departamento</span>
+                      <select class="ts-select text-sm" [(ngModel)]="editBuffer.departamento_id">
+                        <option [ngValue]="null">Ninguno</option>
+                        <option *ngFor="let d of departamentos" [ngValue]="d.id">{{ d.nombre }}</option>
+                      </select>
+                    </label>
+                    <div class="md:col-span-2 flex flex-wrap gap-2">
+                      <button class="ts-btn ts-btn--positive" type="button" (click)="guardarEdicion(emp)">
+                        Guardar cambios
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            </ng-container>
+            <ng-template #searchState>
+              <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 px-4 py-3 text-sm text-neutral-500">
+                <ng-container *ngIf="loadingEmployees">Buscando colaboradores...</ng-container>
+                <ng-container *ngIf="!loadingEmployees && hasEmployeeSearch">
+                  No encontramos coincidencias para "{{ searchTerm }}".
+                </ng-container>
+                <ng-container *ngIf="!loadingEmployees && !hasEmployeeSearch">
+                  Ingresa un termino para comenzar la busqueda.
+                </ng-container>
+              </div>
+            </ng-template>
           </div>
 
           <div class="ts-card space-y-6 survey-sticky-progress" *ngIf="progress">
@@ -714,6 +729,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
     departamento_id: null,
   };
   creatingEmp = false;
+  showEmployeeForm = false; // Controla si el formulario está expandido
   editId: number | null = null;
   editBuffer: Partial<Empleado> = {};
 
@@ -834,12 +850,14 @@ export class SurveyComponent implements OnInit, OnDestroy {
         this.selectedEmployee = emp;
         this.clearSurveyData();
         const fullName = [emp.nombre, emp.apellidos].filter((v) => !!v).join(' ');
-        this.message = `Empleado ingresado (#${emp.id})${fullName ? ` - ${fullName}` : ''}`;
+        this.message = `Colaborador ingresado (#${emp.id})${fullName ? ` - ${fullName}` : ''}`;
         this.triggerAutoBeginIfReady();
+        // Minimizar el formulario después de guardar exitosamente
+        this.showEmployeeForm = false;
       },
       error: (err) => {
         this.creatingEmp = false;
-        this.error = err?.error?.detail ?? 'No se pudo crear el empleado';
+        this.error = err?.error?.detail ?? 'No se pudo crear el colaborador';
       },
     });
   }
@@ -866,12 +884,15 @@ export class SurveyComponent implements OnInit, OnDestroy {
   buscarEmpleados(term?: string, manualTrigger = false): void {
     const rawValue = term ?? this.searchTerm;
     const query = rawValue?.trim() ?? '';
-    const empresaFiltro = this.formEmp.empresa_id || this.selectedAssignment?.empresa_id || null;
 
-    if (!query && empresaFiltro == null) {
+    // La búsqueda es independiente del formulario - solo usa el término de búsqueda
+    if (!query) {
       if (manualTrigger) {
-        this.error = 'Ingresa un termino de busqueda o selecciona una empresa.';
+        this.error = 'Ingresa un termino de busqueda.';
       }
+      this.employees = [];
+      this.hasEmployeeSearch = false;
+      this.loadingEmployees = false;
       return;
     }
 
@@ -879,15 +900,8 @@ export class SurveyComponent implements OnInit, OnDestroy {
     this.hasEmployeeSearch = true;
     this.loadingEmployees = true;
 
-    const request$ = empresaFiltro
-      ? this.employee.listByCompany(
-          empresaFiltro,
-          this.formEmp.departamento_id ?? undefined,
-          query || undefined
-        )
-      : this.employee.search(query);
-
-    request$.subscribe({
+    // Usar solo el método search que busca globalmente sin filtros del formulario
+    this.employee.search(query).subscribe({
       next: (list) => {
         this.employees = list ?? [];
         if (this.empleadoId != null) {
@@ -928,6 +942,32 @@ export class SurveyComponent implements OnInit, OnDestroy {
     this.clearSurveyData();
     this.cancelAutoBegin();
     this.clearFeedback();
+  }
+
+  toggleEmployeeForm(): void {
+    const wasHidden = !this.showEmployeeForm;
+    this.showEmployeeForm = !this.showEmployeeForm;
+    
+    // Si se está mostrando el formulario (cambió de oculto a visible), limpiar los campos
+    if (wasHidden && this.showEmployeeForm) {
+      this.clearEmployeeForm();
+    }
+  }
+
+  private clearEmployeeForm(): void {
+    // Limpiar todos los campos del formulario
+    this.formEmp = {
+      empresa_id: 0,
+      nombre: '',
+      apellidos: '',
+      rut: '',
+      email: '',
+      cargo: '',
+      departamento_id: null,
+    };
+    // También limpiar el empleado seleccionado si existe
+    this.selectedEmployee = null;
+    this.empleadoId = null;
   }
 
   onEmpleadoIdInput(value: number | null): void {
