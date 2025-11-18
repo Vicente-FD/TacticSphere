@@ -797,6 +797,48 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       return `${this.formatEmployeeIdentity(identity, emp.name)}<br/>${this.formatNumber(emp.percent)}% · ${label}`;
     };
     const dimmedData = focusPoint ? baseData.filter((item) => item[2] !== focusIndex) : baseData;
+    
+    // Calcular regresión lineal para la línea de tendencia
+    const calculateLinearRegression = (data: number[][]): { slope: number; intercept: number } => {
+      const n = data.length;
+      if (n === 0) return { slope: 0, intercept: 0 };
+      if (n === 1) {
+        // Si solo hay un punto, la línea es horizontal en ese valor
+        return { slope: 0, intercept: data[0][1] };
+      }
+      
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumX2 = 0;
+      
+      for (const point of data) {
+        const x = point[0];
+        const y = point[1];
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumX2 += x * x;
+      }
+      
+      const denominator = n * sumX2 - sumX * sumX;
+      if (Math.abs(denominator) < 1e-10) {
+        // Si el denominador es muy pequeño, usar el promedio de Y como línea horizontal
+        return { slope: 0, intercept: sumY / n };
+      }
+      
+      const slope = (n * sumXY - sumX * sumY) / denominator;
+      const intercept = (sumY - slope * sumX) / n;
+      
+      return { slope, intercept };
+    };
+    
+    const regression = calculateLinearRegression(baseData);
+    const trendLineData = employees.map((_, index) => [
+      index,
+      this.round(regression.slope * index + regression.intercept),
+    ]);
+    
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 800,
@@ -833,6 +875,22 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           },
           emphasis: { focus: focusPoint ? "none" : "series" },
           silent: !!focusPoint,
+        },
+        {
+          type: "line",
+          name: "Línea de tendencia",
+          data: trendLineData,
+          symbol: "none",
+          lineStyle: {
+            color: "#64748B",
+            width: 2.5,
+            type: "dashed",
+            dashOffset: 5,
+          },
+          tooltip: {
+            show: false,
+          },
+          z: 1,
         },
         ...(focusPoint
           ? [

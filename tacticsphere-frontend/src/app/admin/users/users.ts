@@ -228,7 +228,7 @@ interface PasswordDialogState {
                       <td>
                         <button
                           type="button"
-                          class="ts-chip inline-flex items-center gap-2"
+                          class="ts-chip inline-flex items-center justify-center gap-2 w-[110px] px-3 py-1.5 text-sm"
                           [class.bg-success/10]="u.activo"
                           [class.bg-error/10]="!u.activo"
                           (click)="toggleActive(u)"
@@ -237,16 +237,16 @@ interface PasswordDialogState {
                           <lucide-icon
                             *ngIf="togglingActiveId !== u.id"
                             [name]="u.activo ? 'Check' : 'Slash'"
-                            class="h-4 w-4"
+                            class="h-4 w-4 flex-shrink-0"
                             strokeWidth="1.75"
                           ></lucide-icon>
                           <lucide-icon
                             *ngIf="togglingActiveId === u.id"
                             name="Loader2"
-                            class="h-4 w-4 animate-spin"
+                            class="h-4 w-4 flex-shrink-0 animate-spin"
                             strokeWidth="1.75"
                           ></lucide-icon>
-                          <span>{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
+                          <span class="text-sm font-medium">{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
                         </button>
                       </td>
                       <td>
