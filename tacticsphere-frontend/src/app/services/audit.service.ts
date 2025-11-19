@@ -37,6 +37,12 @@ export class AuditService {
     });
   }
 
+  clearAll(password: string) {
+    return this.http.request<{ deleted_count: number }>('DELETE', `${this.base}/audit`, {
+      body: { password },
+    });
+  }
+
   private toParams(filters: AuditFilters): HttpParams {
     let params = new HttpParams();
     Object.entries(filters ?? {}).forEach(([key, value]) => {

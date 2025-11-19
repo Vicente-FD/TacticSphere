@@ -2493,6 +2493,37 @@ def delete_audit_entry(
     return None
 
 
+@app.delete("/audit", status_code=200)
+def clear_all_audit_logs(
+    payload: AuditDeleteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    if current.rol != RolEnum.ADMIN_SISTEMA:
+        raise HTTPException(status_code=403, detail="Solo ADMIN_SISTEMA puede vaciar el registro de auditoría")
+    if not verify_password(payload.password, current.password_hash):
+        raise HTTPException(status_code=403, detail="Contraseña inválida")
+    
+    scope_empresa_id = None
+    if current.rol == RolEnum.ADMIN:
+        scope_empresa_id = current.empresa_id
+    
+    deleted_count = crud.clear_all_audit_logs(db, scope_empresa_id=scope_empresa_id)
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.AUDIT_DELETE,
+        current_user=current,
+        empresa_id=current.empresa_id,
+        entity_type="AuditLog",
+        notes=f"Vació el registro de auditoría ({deleted_count} registros eliminados)",
+        request=request,
+    )
+    
+    return {"deleted_count": deleted_count}
+
+
 # ======================================================
 
 # â Crear usuario simple (con bcrypt y RolEnum)

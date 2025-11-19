@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Tuple, Iterable
 from datetime import datetime, timedelta, timezone, date  # usamos naive UTC
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, delete
 
 from .auth import hash_password, validate_password
 from .models import (
@@ -966,6 +966,20 @@ def delete_audit_log(db: Session, log_id: int) -> bool:
     db.delete(record)
     db.commit()
     return True
+
+
+def clear_all_audit_logs(db: Session, scope_empresa_id: Optional[int] = None) -> int:
+    """
+    Elimina todos los registros de auditoría.
+    Si scope_empresa_id está definido, solo elimina los de esa empresa.
+    Retorna el número de registros eliminados.
+    """
+    stmt = delete(AuditLog)
+    if scope_empresa_id is not None:
+        stmt = stmt.where(AuditLog.empresa_id == scope_empresa_id)
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount
 
 def compute_assignment_progress(
     db: Session,
