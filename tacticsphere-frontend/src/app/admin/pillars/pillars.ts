@@ -2,6 +2,7 @@ import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
+import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { PilarService } from '../../pillar.service';
 import { Pilar } from '../../types';
@@ -9,7 +10,7 @@ import { Pilar } from '../../types';
 @Component({
   standalone: true,
   selector: 'app-pillars',
-  imports: [CommonModule, FormsModule, LucideAngularModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule, ModalComponent],
   template: `
     <div class="ts-page">
       <div class="ts-container space-y-6">
@@ -136,59 +137,18 @@ import { Pilar } from '../../types';
                       Aún no se han configurado pilares.
                     </td>
                   </tr>
-                  <tr
-                    *ngFor="let pilar of pilares()"
-                    [ngClass]="{ 'bg-accent/5': editingId === pilar.id }"
-                  >
+                  <tr *ngFor="let pilar of pilares()">
                     <td class="font-medium text-ink">#{{ pilar.id }}</td>
-                    <td>
-                      <ng-container *ngIf="editingId !== pilar.id; else editNombre">
-                        {{ pilar.nombre }}
-                      </ng-container>
-                      <ng-template #editNombre>
-                        <input class="ts-input text-sm" [(ngModel)]="editBuffer.nombre" />
-                      </ng-template>
-                    </td>
-                    <td>
-                      <ng-container *ngIf="editingId !== pilar.id; else editDescripcion">
-                        {{ pilar.descripcion || '--' }}
-                      </ng-container>
-                      <ng-template #editDescripcion>
-                        <textarea class="ts-input text-sm" rows="2" [(ngModel)]="editBuffer.descripcion"></textarea>
-                      </ng-template>
-                    </td>
-                    <td class="w-20">
-                      <ng-container *ngIf="editingId !== pilar.id; else editPeso">
-                        {{ pilar.peso }}
-                      </ng-container>
-                      <ng-template #editPeso>
-                        <input class="ts-input text-sm" type="number" min="1" step="1" [(ngModel)]="editBuffer.peso" />
-                      </ng-template>
-                    </td>
+                    <td>{{ pilar.nombre }}</td>
+                    <td>{{ pilar.descripcion || '--' }}</td>
+                    <td class="w-20">{{ pilar.peso }}</td>
                     <td>
                       <div class="flex flex-wrap justify-end gap-2">
                         <button
-                          *ngIf="editingId !== pilar.id"
                           class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
                           (click)="iniciarEdicion(pilar)"
                         >
                           Editar
-                        </button>
-                        <button
-                          *ngIf="editingId === pilar.id"
-                          class="ts-btn ts-btn--positive"
-                          (click)="guardarEdicion(pilar)"
-                          [disabled]="saving"
-                        >
-                          {{ saving ? 'Guardando...' : 'Guardar' }}
-                        </button>
-                        <button
-                          *ngIf="editingId === pilar.id"
-                          class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
-                          (click)="cancelarEdicion()"
-                          [disabled]="saving"
-                        >
-                          Cancelar
                         </button>
                         <button
                           class="ts-btn ts-btn--danger"
@@ -210,6 +170,62 @@ import { Pilar } from '../../types';
           </div>
         </div>
       </div>
+
+      <!-- Modal de edición -->
+      <ts-modal title="Editar pilar" [open]="editModalOpen" (close)="cerrarModalEdicion()">
+        <div class="space-y-4">
+          <label class="block space-y-2">
+            <span class="ts-label">Nombre</span>
+            <input
+              class="ts-input"
+              [(ngModel)]="editBuffer.nombre"
+              name="editNombre"
+              placeholder="Estrategia, Talento, Cultura..."
+            />
+          </label>
+
+          <label class="block space-y-2">
+            <span class="ts-label">Descripción (opcional)</span>
+            <textarea
+              class="ts-input min-h-[96px] resize-y"
+              [(ngModel)]="editBuffer.descripcion"
+              name="editDescripcion"
+              placeholder="Detalles que ayuden a entender el alcance del pilar"
+            ></textarea>
+          </label>
+
+          <label class="block space-y-2">
+            <span class="ts-label">Peso relativo</span>
+            <input
+              class="ts-input"
+              type="number"
+              min="1"
+              step="1"
+              [(ngModel)]="editBuffer.peso"
+              name="editPeso"
+            />
+          </label>
+
+          <div class="flex justify-end gap-3 pt-4 border-t border-border">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="cerrarModalEdicion()"
+              [disabled]="saving"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--positive"
+              (click)="guardarEdicion()"
+              [disabled]="saving || !editBuffer.nombre.trim()"
+            >
+              {{ saving ? 'Guardando...' : 'Guardar' }}
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -224,6 +240,7 @@ export class PillarsComponent implements OnInit {
   deletingId: number | null = null;
 
   editingId: number | null = null;
+  editModalOpen = false;
   editBuffer: { nombre: string; descripcion: string; peso: number } = {
     nombre: '',
     descripcion: '',
@@ -293,15 +310,18 @@ export class PillarsComponent implements OnInit {
       descripcion: pilar.descripcion ?? '',
       peso: pilar.peso,
     };
+    this.editModalOpen = true;
   }
 
-  cancelarEdicion(): void {
+  cerrarModalEdicion(): void {
+    if (this.saving) return;
+    this.editModalOpen = false;
     this.editingId = null;
     this.editBuffer = { nombre: '', descripcion: '', peso: 1 };
   }
 
-  guardarEdicion(pilar: Pilar): void {
-    if (this.editingId !== pilar.id || this.saving) return;
+  guardarEdicion(): void {
+    if (!this.editingId || this.saving) return;
 
     const body = {
       nombre: this.editBuffer.nombre.trim(),
@@ -319,10 +339,10 @@ export class PillarsComponent implements OnInit {
     this.saving = true;
     this.clearFeedback();
 
-    this.pillarsSrv.update(pilar.id, body).subscribe({
+    this.pillarsSrv.update(this.editingId, body).subscribe({
       next: (updated) => {
         this.message = `Pilar "${updated.nombre}" actualizado.`;
-        this.cancelarEdicion();
+        this.cerrarModalEdicion();
         this.loadPilares();
       },
       error: (err) => {

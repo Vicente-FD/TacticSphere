@@ -113,6 +113,7 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
   readonly modalOpen = signal(false);
   readonly submitState = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   readonly sectionState = signal<Record<string, boolean>>({});
+  readonly showScrollIndicator = signal(true);
 
   readonly sectionVisible = computed(() => this.sectionState());
 
@@ -125,10 +126,12 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.setupObserver();
+    this.setupScrollListener();
   }
 
   ngOnDestroy(): void {
     this.observer?.disconnect();
+    this.removeScrollListener();
   }
 
   openModal(): void {
@@ -170,6 +173,16 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
   trackBySection = (_: number, item: SectionContent) => item.id;
 
+  scrollToContent(): void {
+    const contentSection = document.getElementById('content-section');
+    if (contentSection) {
+      contentSection.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+  }
+
   private setupObserver(): void {
     this.observer = new IntersectionObserver(
       (entries) => {
@@ -201,5 +214,31 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
           this.observer?.observe(ref.nativeElement),
         );
       });
+  }
+
+  private setupScrollListener(): void {
+    if (typeof window === 'undefined') return;
+
+    const handleScroll = () => {
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+      const threshold = 50; // Umbral en píxeles para considerar que se hizo scroll
+      this.showScrollIndicator.set(scrollY < threshold);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Guardar referencia para poder remover el listener
+    (this as any)._scrollHandler = handleScroll;
+    
+    // Verificar posición inicial
+    handleScroll();
+  }
+
+  private removeScrollListener(): void {
+    if (typeof window === 'undefined') return;
+    const handler = (this as any)._scrollHandler;
+    if (handler) {
+      window.removeEventListener('scroll', handler);
+    }
   }
 }

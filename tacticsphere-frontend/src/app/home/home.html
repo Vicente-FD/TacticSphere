@@ -39,10 +39,29 @@
           ></lucide-icon>
         </button>
       </div>
+
+      <button
+        type="button"
+        class="scroll-indicator mt-8 flex flex-col items-center gap-2 text-neutral-400 transition-all duration-300 rounded-full p-2"
+        [class.opacity-0]="!showScrollIndicator()"
+        [class.pointer-events-none]="!showScrollIndicator()"
+        [class.opacity-100]="showScrollIndicator()"
+        [class.pointer-events-auto]="showScrollIndicator()"
+        aria-label="Ver más contenido"
+        (click)="scrollToContent()"
+        @fadeUp
+      >
+        <lucide-icon
+          name="ChevronDown"
+          class="h-6 w-6 transition-colors hover:text-ink"
+          strokeWidth="1.5"
+        ></lucide-icon>
+        <span class="text-xs font-medium transition-colors hover:text-ink">Ver más</span>
+      </button>
     </div>
   </section>
 
-  <section class="bg-white py-20">
+  <section class="bg-white py-20" id="content-section">
     <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6">
       <article
         *ngFor="let section of sections; trackBy: trackBySection"

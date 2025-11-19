@@ -764,8 +764,8 @@ export class SurveyComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.company.list().subscribe({
       next: (rows) => (this.empresas = rows ?? []),
-      error: () => {
-        this.error = 'No se pudieron cargar las empresas.';
+      error: (err) => {
+        this.error = this.formatError(err, 'No se pudieron cargar las empresas.');
       },
     });
   }
@@ -857,7 +857,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.creatingEmp = false;
-        this.error = err?.error?.detail ?? 'No se pudo crear el colaborador';
+        this.error = this.formatError(err, 'No se pudo crear el colaborador');
       },
     });
   }
@@ -888,7 +888,18 @@ export class SurveyComponent implements OnInit, OnDestroy {
     // La búsqueda es independiente del formulario - solo usa el término de búsqueda
     if (!query) {
       if (manualTrigger) {
-        this.error = 'Ingresa un termino de busqueda.';
+        this.error = 'Ingresa un término de búsqueda.';
+      }
+      this.employees = [];
+      this.hasEmployeeSearch = false;
+      this.loadingEmployees = false;
+      return;
+    }
+
+    // Validar mínimo 2 caracteres
+    if (query.length < 2) {
+      if (manualTrigger) {
+        this.error = 'Por favor escribe al menos 2 caracteres para buscar.';
       }
       this.employees = [];
       this.hasEmployeeSearch = false;
@@ -912,7 +923,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loadingEmployees = false;
-        this.error = err?.error?.detail ?? 'No se pudieron listar empleados';
+        this.error = this.formatError(err, 'No se pudieron listar empleados');
       },
     });
   }
@@ -1014,7 +1025,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
         this.error = '';
       },
       error: (err) => {
-        this.error = err?.error?.detail ?? 'No se pudo actualizar el empleado';
+        this.error = this.formatError(err, 'No se pudo actualizar el empleado');
       },
     });
   }
@@ -1066,7 +1077,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
           this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de continuar.';
           this.beginRetried = false;
         } else {
-          this.error = err?.error?.detail ?? 'No se pudo iniciar la encuesta';
+          this.error = this.formatError(err, 'No se pudo iniciar la encuesta');
           this.beginRetried = false;
         }
       },
@@ -1180,7 +1191,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loadingBegin = false;
-        this.error = err?.error?.detail ?? 'Error al cargar progreso';
+        this.error = this.formatError(err, 'Error al cargar progreso');
       },
     });
   }
@@ -1258,7 +1269,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loadingQuestions = false;
-        this.error = err?.error?.detail ?? 'Error al cargar preguntas del pilar';
+        this.error = this.formatError(err, 'Error al cargar preguntas del pilar');
       },
     });
   }
@@ -1297,9 +1308,9 @@ export class SurveyComponent implements OnInit, OnDestroy {
         if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
           this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de guardar.';
         } else if (err?.status === 403) {
-          this.error = 'Asignacion fuera de vigencia';
+          this.error = 'Asignación fuera de vigencia';
         } else {
-          this.error = err?.error?.detail ?? 'No se pudo guardar';
+          this.error = this.formatError(err, 'No se pudo guardar');
         }
       },
     });
@@ -1325,9 +1336,9 @@ export class SurveyComponent implements OnInit, OnDestroy {
         if (err?.status === 400 && /empleado_id/i.test(err?.error?.detail ?? '')) {
           this.error = 'Esta asignacion requiere Empleado ID. Seleccionalo o ingresalo antes de enviar.';
         } else if (err?.status === 403) {
-          this.error = 'Asignacion fuera de vigencia';
+          this.error = 'Asignación fuera de vigencia';
         } else {
-          this.error = err?.error?.detail ?? 'No se pudo enviar el formulario completo';
+          this.error = this.formatError(err, 'No se pudo enviar el formulario completo');
         }
       },
     });
@@ -1547,6 +1558,62 @@ export class SurveyComponent implements OnInit, OnDestroy {
       return !Number.isNaN(value);
     }
     return true;
+  }
+
+  private formatError(err: unknown, fallback: string): string {
+    if (!err || typeof err !== 'object') {
+      return fallback;
+    }
+
+    const errorObj = err as { error?: unknown; status?: number };
+    const detail = errorObj.error;
+
+    // Si detail es un string, usarlo directamente
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    // Si detail es un objeto con una propiedad 'detail' que es string
+    if (detail && typeof detail === 'object' && 'detail' in detail) {
+      const innerDetail = (detail as { detail?: unknown }).detail;
+      if (typeof innerDetail === 'string') {
+        return innerDetail;
+      }
+      // Si detail es un array (errores de validación de FastAPI)
+      if (Array.isArray(innerDetail)) {
+        const messages = innerDetail
+          .map((item) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object' && 'msg' in item) {
+              return String((item as { msg?: unknown }).msg ?? '');
+            }
+            return '';
+          })
+          .filter((msg) => msg.length > 0);
+        return messages.length > 0 ? messages.join('. ') : fallback;
+      }
+    }
+
+    // Si detail es un array directamente (errores de validación)
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && 'msg' in item) {
+            return String((item as { msg?: unknown }).msg ?? '');
+          }
+          return '';
+        })
+        .filter((msg) => msg.length > 0);
+      return messages.length > 0 ? messages.join('. ') : fallback;
+    }
+
+    // Si hay un mensaje genérico
+    if (errorObj.status === 400) {
+      return 'Error en la solicitud. Verifica que el término de búsqueda tenga al menos 2 caracteres.';
+    }
+
+    return fallback;
   }
 }
 

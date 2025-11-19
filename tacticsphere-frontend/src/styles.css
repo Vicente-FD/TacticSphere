@@ -89,6 +89,15 @@
   }
 }
 
+@keyframes scrollIndicator {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
 @layer components {
   .ts-page {
     @apply min-h-[calc(100vh-4rem)] bg-bg py-8 px-4 md:px-8;
@@ -182,6 +191,25 @@
 
 .ts-card:hover {
   transform: translateY(-1px);
+}
+
+.scroll-indicator {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.scroll-indicator:focus,
+.scroll-indicator:focus-visible,
+.scroll-indicator:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.scroll-indicator > lucide-icon {
+  animation: scrollIndicator 2s ease-in-out infinite;
 }
 
 .ts-btn:hover {

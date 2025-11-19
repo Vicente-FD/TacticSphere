@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { LucideAngularModule } from 'lucide-angular';
+import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { PilarService } from '../../pillar.service';
 import { QuestionService } from '../../question.service';
@@ -27,6 +28,7 @@ interface QuestionView {
     FormsModule,
     NgxSkeletonLoaderModule,
     LucideAngularModule,
+    ModalComponent,
   ],
   template: `
     <div class="ts-page">
@@ -153,77 +155,6 @@ interface QuestionView {
             </div>
             </div>
 
-            <div class="ts-card space-y-5" *ngIf="editingQuestionId">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-lg font-semibold text-ink">Editar pregunta</h2>
-                  <p class="text-sm text-neutral-400">Ajusta el contenido sin afectar los resultados históricos.</p>
-                </div>
-                <span class="text-xs text-neutral-400">ID #{{ editingQuestionId }}</span>
-              </div>
-
-              <div class="space-y-4">
-                <label class="block space-y-2">
-                  <span class="ts-label">Enunciado</span>
-                  <textarea
-                    class="ts-input min-h-[120px] resize-y"
-                    [(ngModel)]="editForm.enunciado"
-                    placeholder="Actualiza la pregunta"
-                  ></textarea>
-                </label>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                  <label class="block space-y-2">
-                    <span class="ts-label">Tipo de respuesta</span>
-                    <select class="ts-select" [(ngModel)]="editForm.tipo">
-                      <option [ngValue]="'LIKERT'">Likert (1 a 5)</option>
-                      <option [ngValue]="'ABIERTA'">Respuesta abierta</option>
-                      <option [ngValue]="'SI_NO'">Sí / No</option>
-                    </select>
-                  </label>
-
-                  <label class="block space-y-2">
-                    <span class="ts-label">Peso</span>
-                    <input class="ts-input" type="number" min="1" [(ngModel)]="editForm.peso" />
-                  </label>
-                </div>
-
-                <label class="block space-y-2">
-                  <span class="ts-label">Respuesta esperada (opcional)</span>
-                  <input
-                    class="ts-input"
-                    type="text"
-                    maxlength="500"
-                    [(ngModel)]="editForm.respuesta_esperada"
-                    placeholder="Pista o guía interna"
-                  />
-                </label>
-
-                <label class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2">
-                  <input
-                    type="checkbox"
-                    class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
-                    [(ngModel)]="editForm.es_obligatoria"
-                  />
-                  <span class="text-sm text-neutral-700">Respuesta obligatoria</span>
-                </label>
-              </div>
-
-              <div class="flex flex-wrap gap-3">
-                <button
-                  class="ts-btn ts-btn--positive"
-                  type="button"
-                  (click)="guardarEdicion()"
-                  [disabled]="updatingQuestion || !editForm.enunciado.trim()"
-                >
-                  {{ updatingQuestion ? 'Actualizando...' : 'Guardar cambios' }}
-                </button>
-                <button class="ts-btn ts-btn--secondary" type="button" (click)="cancelarEdicion()" [disabled]="updatingQuestion">
-                  Cancelar
-                </button>
-              </div>
-            </div>
-
             <div class="ts-card space-y-5">
               <div class="flex items-center justify-between">
               <div>
@@ -247,7 +178,6 @@ interface QuestionView {
                 <div
                   *ngFor="let item of preguntasView(); trackBy: trackByQuestionView"
                   class="rounded-xl border border-neutral-200 p-4 transition-all duration-120 ease-smooth hover:border-accent/40 hover:shadow-card"
-                  [ngClass]="{ 'ring-2 ring-accent shadow-card': isEditingQuestion(item.id) }"
                 >
                   <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="space-y-2 lg:flex-1">
@@ -311,6 +241,82 @@ interface QuestionView {
           </div>
         </div>
       </div>
+
+      <!-- Modal de edición -->
+      <ts-modal title="Editar pregunta" [open]="editModalOpen" (close)="cerrarModalEdicion()">
+        <div class="space-y-4">
+          <div class="text-xs text-neutral-400 mb-2" *ngIf="editingQuestionId">
+            ID #{{ editingQuestionId }}
+          </div>
+
+          <label class="block space-y-2">
+            <span class="ts-label">Enunciado</span>
+            <textarea
+              class="ts-input min-h-[120px] resize-y"
+              [(ngModel)]="editForm.enunciado"
+              name="editEnunciado"
+              placeholder="Actualiza la pregunta"
+            ></textarea>
+          </label>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="block space-y-2">
+              <span class="ts-label">Tipo de respuesta</span>
+              <select class="ts-select" [(ngModel)]="editForm.tipo" name="editTipo">
+                <option [ngValue]="'LIKERT'">Likert (1 a 5)</option>
+                <option [ngValue]="'ABIERTA'">Respuesta abierta</option>
+                <option [ngValue]="'SI_NO'">Sí / No</option>
+              </select>
+            </label>
+
+            <label class="block space-y-2">
+              <span class="ts-label">Peso</span>
+              <input class="ts-input" type="number" min="1" [(ngModel)]="editForm.peso" name="editPeso" />
+            </label>
+          </div>
+
+          <label class="block space-y-2">
+            <span class="ts-label">Respuesta esperada (opcional)</span>
+            <input
+              class="ts-input"
+              type="text"
+              maxlength="500"
+              [(ngModel)]="editForm.respuesta_esperada"
+              name="editRespuestaEsperada"
+              placeholder="Pista o guía interna"
+            />
+          </label>
+
+          <label class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-neutral-300 text-accent focus:ring-accent"
+              [(ngModel)]="editForm.es_obligatoria"
+              name="editEsObligatoria"
+            />
+            <span class="text-sm text-neutral-700">Respuesta obligatoria</span>
+          </label>
+
+          <div class="flex justify-end gap-3 pt-4 border-t border-border">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="cerrarModalEdicion()"
+              [disabled]="updatingQuestion"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--positive"
+              (click)="guardarEdicion()"
+              [disabled]="updatingQuestion || !editForm.enunciado.trim()"
+            >
+              {{ updatingQuestion ? 'Actualizando...' : 'Guardar cambios' }}
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -371,6 +377,7 @@ export class QuestionsComponent implements OnInit {
     respuesta_esperada: '',
   };
   editingQuestionId: number | null = null;
+  editModalOpen = false;
   updatingQuestion = false;
   editForm: {
     enunciado: string;
@@ -499,10 +506,16 @@ export class QuestionsComponent implements OnInit {
       peso: question.peso,
       respuesta_esperada: question.respuesta_esperada ?? '',
     };
+    this.editModalOpen = true;
+  }
+
+  cerrarModalEdicion(): void {
+    if (this.updatingQuestion) return;
+    this.resetEditingState();
   }
 
   cancelarEdicion(): void {
-    this.resetEditingState();
+    this.cerrarModalEdicion();
   }
 
   guardarEdicion(): void {
@@ -540,12 +553,9 @@ export class QuestionsComponent implements OnInit {
     });
   }
 
-  isEditingQuestion(id: number): boolean {
-    return this.editingQuestionId != null && this.editingQuestionId === id;
-  }
-
   private resetEditingState(): void {
     this.editingQuestionId = null;
+    this.editModalOpen = false;
     this.updatingQuestion = false;
     this.editForm = {
       enunciado: '',
