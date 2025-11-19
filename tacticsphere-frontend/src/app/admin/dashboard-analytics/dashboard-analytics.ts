@@ -44,6 +44,7 @@ import {
   LikertBucketsComponent,
   LikertBucketsFilter,
 } from "./likert-buckets/likert-buckets.component";
+import { ModalComponent } from "../../shared/ui/modal/modal.component";
 
 const TS_MONO_THEME = "tsMono";
 let echartsReady = false;
@@ -86,7 +87,7 @@ interface KpiCard {
 @Component({
   standalone: true,
   selector: "app-dashboard-analytics",
-  imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent],
+  imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent, ModalComponent],
   templateUrl: "./dashboard-analytics.html",
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -118,6 +119,32 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private likertLevelsSignal = signal<LikertLevel[]>([]);
   private filterUpdates$ = new Subject<AnalyticsQueryParams>();
   private analyticsCache = new Map<string, DashboardAnalyticsResponse>();
+
+  // Report generation signals
+  private reportModalOpenSignal = signal<boolean>(false);
+  private receiptModalOpenSignal = signal<boolean>(false);
+  private generatingReportsSignal = signal<boolean>(false);
+  private reportErrorSignal = signal<string>("");
+  private exportReceiptSignal = signal<{
+    usuario: string;
+    fechaHora: string;
+    filtros: string[];
+    formatos: string[];
+  } | null>(null);
+
+  reportModalOpen = this.reportModalOpenSignal.asReadonly();
+  receiptModalOpen = this.receiptModalOpenSignal.asReadonly();
+  generatingReports = this.generatingReportsSignal.asReadonly();
+  reportError = this.reportErrorSignal.asReadonly();
+  exportReceipt = this.exportReceiptSignal.asReadonly();
+
+  selectedFormats = {
+    pdf: false,
+    csv: false,
+    json: false,
+    xml: false,
+    excel: false,
+  };
 
   analytics = this.analyticsSignal.asReadonly();
   companies = this.companiesSignal.asReadonly();
@@ -1303,5 +1330,865 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const levels = this.likertLevelsSignal();
     const match = levels.find((item) => item.valor === level);
     return match ? `${match.valor} - ${match.nombre}` : `Nivel ${level}`;
+  }
+
+  private async generateChartFromData(options: {
+    type: 'bar' | 'line';
+    title: string;
+    data: Array<{ label: string; value: number }>;
+  }): Promise<ArrayBuffer> {
+    const echartsModule = await import('echarts');
+    const echarts = echartsModule as unknown as {
+      init: (dom: HTMLElement, theme?: string) => {
+        setOption: (option: EChartsOption) => void;
+        getDataURL: (opts: { type: string; pixelRatio: number; backgroundColor: string }) => string;
+        dispose: () => void;
+      };
+    };
+    
+    // Create a temporary container
+    const container = document.createElement('div');
+    container.style.width = '800px';
+    container.style.height = '500px';
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+
+    try {
+      const chart = echarts.init(container, TS_MONO_THEME);
+      
+      const chartOption: EChartsOption = {
+        title: {
+          text: options.title,
+          left: 'center',
+          textStyle: { fontSize: 16, fontWeight: 600, color: TS_COLORS.text },
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+        },
+        grid: { left: '10%', right: '10%', top: '20%', bottom: '15%', containLabel: true },
+        xAxis: {
+          type: options.type === 'bar' ? 'category' : 'value',
+          data: options.type === 'bar' ? options.data.map((d) => d.label) : undefined,
+          axisLabel: { rotate: options.type === 'bar' ? 45 : 0, color: TS_COLORS.text },
+        },
+        yAxis: {
+          type: options.type === 'bar' ? 'value' : 'category',
+          data: options.type === 'line' ? options.data.map((d) => d.label) : undefined,
+          axisLabel: { formatter: '{value}%', color: TS_COLORS.text },
+        },
+        series: [
+          {
+            type: options.type,
+            data: options.data.map((d) => d.value),
+            itemStyle: { color: TS_COLORS.primary },
+            label: {
+              show: true,
+              position: options.type === 'bar' ? 'right' : 'top',
+              formatter: '{c}%',
+              color: TS_COLORS.text,
+            },
+          },
+        ],
+      };
+
+      chart.setOption(chartOption);
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Wait for chart to render
+
+      // Get chart as data URL and convert to buffer
+      const dataUrl = chart.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+      
+      // Convert data URL to ArrayBuffer
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      chart.dispose();
+      document.body.removeChild(container);
+
+      return await blob.arrayBuffer();
+    } catch (error) {
+      document.body.removeChild(container);
+      throw error;
+    }
+  }
+
+  private async generateStackedChartFromData(options: {
+    type: 'bar';
+    title: string;
+    categories: string[];
+    series: Array<{ name: string; data: number[] }>;
+  }): Promise<ArrayBuffer> {
+    const echartsModule = await import('echarts');
+    const echarts = echartsModule as unknown as {
+      init: (dom: HTMLElement, theme?: string) => {
+        setOption: (option: EChartsOption) => void;
+        getDataURL: (opts: { type: string; pixelRatio: number; backgroundColor: string }) => string;
+        dispose: () => void;
+      };
+    };
+    
+    const container = document.createElement('div');
+    container.style.width = '900px';
+    container.style.height = '500px';
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+
+    try {
+      const chart = echarts.init(container, TS_MONO_THEME);
+      
+      const levelColors = [
+        TS_COLORS.danger,
+        TS_COLORS.warning,
+        '#FACC15',
+        TS_COLORS.positive,
+        TS_COLORS.primary,
+      ];
+
+      const chartOption: EChartsOption = {
+        title: {
+          text: options.title,
+          left: 'center',
+          textStyle: { fontSize: 16, fontWeight: 600, color: TS_COLORS.text },
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+        },
+        legend: {
+          data: options.series.map((s) => s.name),
+          top: 40,
+        },
+        grid: { left: '10%', right: '10%', top: '25%', bottom: '15%', containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: options.categories,
+          axisLabel: { rotate: 45, color: TS_COLORS.text },
+        },
+        yAxis: {
+          type: 'value',
+          max: 100,
+          axisLabel: { formatter: '{value}%', color: TS_COLORS.text },
+        },
+        series: options.series.map((serie, idx) => ({
+          name: serie.name,
+          type: 'bar',
+          stack: 'total',
+          data: serie.data,
+          itemStyle: { color: levelColors[idx] || TS_COLORS.primary },
+        })),
+      };
+
+      chart.setOption(chartOption);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Get chart as data URL and convert to buffer
+      const dataUrl = chart.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+      
+      // Convert data URL to ArrayBuffer
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      chart.dispose();
+      document.body.removeChild(container);
+
+      return await blob.arrayBuffer();
+    } catch (error) {
+      document.body.removeChild(container);
+      throw error;
+    }
+  }
+
+  // ======================================================
+  // Report Generation Functions
+  // ======================================================
+
+  openReportModal(): void {
+    this.reportModalOpenSignal.set(true);
+    this.reportErrorSignal.set("");
+    // Reset formats
+    this.selectedFormats = {
+      pdf: false,
+      csv: false,
+      json: false,
+      xml: false,
+      excel: false,
+    };
+  }
+
+  closeReportModal(): void {
+    this.reportModalOpenSignal.set(false);
+    this.reportErrorSignal.set("");
+  }
+
+  closeReceiptModal(): void {
+    this.receiptModalOpenSignal.set(false);
+  }
+
+  hasSelectedFormats(): boolean {
+    return Object.values(this.selectedFormats).some((v) => v === true);
+  }
+
+  async generateReports(): Promise<void> {
+    if (!this.hasSelectedFormats()) {
+      this.reportErrorSignal.set("Selecciona al menos un formato para exportar.");
+      return;
+    }
+
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      this.reportErrorSignal.set("Selecciona una empresa para exportar.");
+      return;
+    }
+
+    this.generatingReportsSignal.set(true);
+    this.reportErrorSignal.set("");
+
+    try {
+      const selectedFormatNames: string[] = [];
+      const exportPromises: Promise<void>[] = [];
+
+      if (this.selectedFormats.pdf) {
+        selectedFormatNames.push("PDF");
+        exportPromises.push(this.exportPdfImproved());
+      }
+
+      if (this.selectedFormats.csv) {
+        selectedFormatNames.push("CSV");
+        exportPromises.push(this.exportCsvForReport());
+      }
+
+      if (this.selectedFormats.json) {
+        selectedFormatNames.push("JSON");
+        exportPromises.push(this.exportJson());
+      }
+
+      if (this.selectedFormats.xml) {
+        selectedFormatNames.push("XML");
+        exportPromises.push(this.exportXml());
+      }
+
+      if (this.selectedFormats.excel) {
+        selectedFormatNames.push("Excel");
+        exportPromises.push(this.exportExcel());
+      }
+
+      await Promise.all(exportPromises);
+
+      // Generate receipt
+      await this.ensureCurrentUser();
+      const receipt = {
+        usuario: `${this.currentUserName ?? "--"} (${this.currentUserEmail ?? "--"})`,
+        fechaHora: new Date().toLocaleString("es-ES"),
+        filtros: this.filterSummary(),
+        formatos: selectedFormatNames,
+      };
+      this.exportReceiptSignal.set(receipt);
+      this.closeReportModal();
+      this.receiptModalOpenSignal.set(true);
+    } catch (error) {
+      console.error("Error generating reports", error);
+      this.reportErrorSignal.set("Ocurrió un error al generar los informes. Intenta nuevamente.");
+    } finally {
+      this.generatingReportsSignal.set(false);
+    }
+  }
+
+  private async exportCsvForReport(): Promise<void> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) return;
+
+    return new Promise((resolve, reject) => {
+      this.analyticsSvc.exportResponsesCsv(filter).subscribe({
+        next: (blob) => {
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = `tacticsphere-informe-${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          resolve();
+        },
+        error: (err) => {
+          console.error("Export CSV failed", err);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  private async exportJson(): Promise<void> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) return;
+
+    return new Promise((resolve, reject) => {
+      this.analyticsSvc.exportResponsesCsv(filter).subscribe({
+        next: async (blob) => {
+          try {
+            const text = await blob.text();
+            const lines = text.split("\n");
+            const headers = lines[0].split(",");
+            const data: any[] = [];
+
+            for (let i = 1; i < lines.length; i++) {
+              if (!lines[i].trim()) continue;
+              const values = this.parseCsvLine(lines[i]);
+              if (values.length === headers.length) {
+                const obj: any = {};
+                headers.forEach((header, idx) => {
+                  obj[header.trim()] = values[idx]?.trim() || "";
+                });
+                data.push(obj);
+              }
+            }
+
+            const jsonData = {
+              metadata: {
+                generatedAt: new Date().toISOString(),
+                filters: this.filterSummary(),
+                totalRecords: data.length,
+              },
+              data,
+            };
+
+            const jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(jsonBlob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `tacticsphere-informe-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(url);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        },
+        error: (err) => {
+          console.error("Export JSON failed", err);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  private async exportXml(): Promise<void> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) return;
+
+    return new Promise((resolve, reject) => {
+      this.analyticsSvc.exportResponsesCsv(filter).subscribe({
+        next: async (blob) => {
+          try {
+            const text = await blob.text();
+            const lines = text.split("\n");
+            const headers = lines[0].split(",");
+            const data: any[] = [];
+
+            for (let i = 1; i < lines.length; i++) {
+              if (!lines[i].trim()) continue;
+              const values = this.parseCsvLine(lines[i]);
+              if (values.length === headers.length) {
+                const obj: any = {};
+                headers.forEach((header, idx) => {
+                  obj[header.trim()] = values[idx]?.trim() || "";
+                });
+                data.push(obj);
+              }
+            }
+
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            xml += "<report>\n";
+            xml += "  <metadata>\n";
+            xml += `    <generatedAt>${new Date().toISOString()}</generatedAt>\n`;
+            xml += "    <filters>\n";
+            this.filterSummary().forEach((filter) => {
+              xml += `      <filter>${this.escapeXml(filter)}</filter>\n`;
+            });
+            xml += "    </filters>\n";
+            xml += `    <totalRecords>${data.length}</totalRecords>\n`;
+            xml += "  </metadata>\n";
+            xml += "  <data>\n";
+
+            data.forEach((record) => {
+              xml += "    <record>\n";
+              Object.keys(record).forEach((key) => {
+                const value = record[key];
+                const safeKey = key.replace(/[^a-zA-Z0-9_]/g, "_");
+                xml += `      <${safeKey}>${this.escapeXml(String(value))}</${safeKey}>\n`;
+              });
+              xml += "    </record>\n";
+            });
+
+            xml += "  </data>\n";
+            xml += "</report>";
+
+            const xmlBlob = new Blob([xml], { type: "application/xml" });
+            const url = URL.createObjectURL(xmlBlob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `tacticsphere-informe-${new Date().toISOString().slice(0, 10)}.xml`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(url);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        },
+        error: (err) => {
+          console.error("Export XML failed", err);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        result.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
+  private escapeXml(str: string): string {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  private async exportPdfImproved(): Promise<void> {
+    if (this.exporting()) return;
+    const container = document.getElementById("analytics-export");
+    if (!container) {
+      throw new Error("No pudimos encontrar el contenido para exportar.");
+    }
+
+    this.exportingSignal.set(true);
+    try {
+      this.resizeAllCharts();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await this.ensureLogo();
+      await this.ensureCurrentUser();
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - 2 * margin;
+      let currentY = margin;
+
+      // Header
+      if (this.logoDataUrl) {
+        pdf.addImage(this.logoDataUrl, "PNG", margin, currentY, 20, 20);
+        pdf.setFontSize(18);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text("TacticSphere - Informe Analítico", margin + 22, currentY + 12);
+      } else {
+        pdf.setFontSize(18);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text("TacticSphere - Informe Analítico", margin, currentY + 8);
+      }
+
+      currentY += 25;
+
+      // Metadata
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139);
+      const generatedAt = new Date();
+      const metadataLines = this.buildMetadataLines(generatedAt);
+      metadataLines.forEach((line) => {
+        pdf.text(line, margin, currentY);
+        currentY += 5;
+      });
+
+      currentY += 5;
+
+      // KPIs Section
+      const kpis = this.kpiCards();
+      if (kpis.length > 0) {
+        pdf.setFontSize(14);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text("Indicadores Clave (KPIs)", margin, currentY);
+        currentY += 8;
+
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 116, 139);
+        const kpiCols = 2;
+        const kpiWidth = (contentWidth - 5) / kpiCols;
+        kpis.slice(0, 6).forEach((kpi, idx) => {
+          const col = idx % kpiCols;
+          const row = Math.floor(idx / kpiCols);
+          const x = margin + col * (kpiWidth + 5);
+          const y = currentY + row * 12;
+
+          pdf.setFontSize(8);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(kpi.label, x, y);
+          pdf.setFontSize(10);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text(`${kpi.value}${kpi.suffix ? " " + kpi.suffix : ""}`, x, y + 5);
+        });
+        currentY += Math.ceil(Math.min(kpis.length, 6) / kpiCols) * 12 + 5;
+      }
+
+      // Charts - we'll capture them individually
+      const chartElements = container.querySelectorAll("echarts");
+      const chartPromises: Promise<{ dataUrl: string; title: string; height: number }>[] = [];
+
+      chartElements.forEach((chartEl, idx) => {
+        const chartCard = chartEl.closest(".ts-card");
+        const titleEl = chartCard?.querySelector("h2");
+        const title = titleEl?.textContent?.trim() || `Gráfico ${idx + 1}`;
+
+        chartPromises.push(
+          html2canvas(chartEl as HTMLElement, { scale: 2, backgroundColor: "#FFFFFF" }).then((canvas) => ({
+            dataUrl: canvas.toDataURL("image/png"),
+            title,
+            height: (canvas.height * contentWidth) / canvas.width,
+          }))
+        );
+      });
+
+      const charts = await Promise.all(chartPromises);
+
+      for (const chart of charts) {
+        if (currentY + chart.height + 20 > pageHeight - margin) {
+          pdf.addPage();
+          currentY = margin;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(chart.title, margin, currentY);
+        currentY += 7;
+
+        const chartHeight = Math.min(chart.height, pageHeight - currentY - margin);
+        const chartWidth = (chart.height * contentWidth) / chart.height;
+        pdf.addImage(chart.dataUrl, "PNG", margin, currentY, contentWidth, chartHeight);
+        currentY += chartHeight + 10;
+      }
+
+      pdf.save(`tacticsphere-informe-${new Date().toISOString().slice(0, 10)}.pdf`);
+
+      try {
+        await firstValueFrom(this.auditSvc.logReportExport("dashboard-analytics"));
+      } catch {
+        // ignore log errors
+      }
+    } finally {
+      this.exportingSignal.set(false);
+    }
+  }
+
+  private async exportExcel(): Promise<void> {
+    // Dynamic import for exceljs (supports native charts)
+    const ExcelJS = await import("exceljs").catch(() => null);
+    if (!ExcelJS) {
+      throw new Error("La librería Excel no está disponible. Por favor, instala 'exceljs'.");
+    }
+
+    const filter = this.filterSignal();
+    if (!filter?.companyId) return;
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Get data
+        const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
+        const text = await csvBlob.text();
+        const lines = text.split("\n");
+        const headers = lines[0].split(",");
+        const data: any[][] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          const values = this.parseCsvLine(lines[i]);
+          if (values.length === headers.length) {
+            data.push(values.map((v) => v.trim()));
+          }
+        }
+
+        // Create workbook
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = "TacticSphere";
+        workbook.created = new Date();
+
+        // Sheet 1: Summary
+        const summarySheet = workbook.addWorksheet("Resumen");
+        summarySheet.addRow(["Informe TacticSphere"]);
+        summarySheet.addRow(["Generado:", new Date().toLocaleString("es-ES")]);
+        summarySheet.addRow(["Filtros aplicados:"]);
+        this.filterSummary().forEach((f) => summarySheet.addRow(["", f]));
+        summarySheet.addRow([]);
+        summarySheet.addRow(["Total de registros:", data.length]);
+
+        // Sheet 2: Data
+        const dataSheet = workbook.addWorksheet("Datos");
+        dataSheet.addRow(headers.map((h) => h.trim()));
+        data.forEach((row) => dataSheet.addRow(row));
+
+        // Charts data sheets with native Excel charts
+        const analytics = this.analytics();
+        if (analytics) {
+          // 1. Pillar Performance Chart (Bar Chart)
+          if (analytics.pillars.length > 0) {
+            const pillarsSheet = workbook.addWorksheet("Desempeño por Pilar");
+            const sortedPillars = [...analytics.pillars].sort((a, b) => b.percent - a.percent);
+            
+            pillarsSheet.addRow(["Pilar", "Porcentaje"]);
+            sortedPillars.forEach((p) => {
+              pillarsSheet.addRow([p.pillar_name, p.percent]);
+            });
+
+            // Generate chart from data (not from dashboard) and add as image
+            try {
+              const chartCanvas = await this.generateChartFromData({
+                type: 'bar',
+                title: 'Desempeño por Pilar',
+                data: sortedPillars.map((p) => ({ label: p.pillar_name, value: p.percent })),
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              pillarsSheet.addImage(imageId, {
+                tl: { col: 2.5, row: 0 },
+                ext: { width: 600, height: 400 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 2. Coverage Chart (Bar Chart)
+          if (analytics.coverage_by_department.length > 0) {
+            const coverageSheet = workbook.addWorksheet("Cobertura por Área");
+            const sortedCoverage = [...analytics.coverage_by_department]
+              .filter((c) => c.total > 0)
+              .sort((a, b) => b.coverage_percent - a.coverage_percent)
+              .slice(0, 15);
+
+            coverageSheet.addRow(["Departamento", "Cobertura %", "Respondentes", "Total"]);
+            sortedCoverage.forEach((c) => {
+              coverageSheet.addRow([c.department_name, c.coverage_percent, c.respondents, c.total]);
+            });
+
+            // Generate chart from data and add as image
+            try {
+              const chartCanvas = await this.generateChartFromData({
+                type: 'bar',
+                title: 'Cobertura por Área',
+                data: sortedCoverage.map((c) => ({ label: c.department_name, value: c.coverage_percent })),
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              coverageSheet.addImage(imageId, {
+                tl: { col: 4, row: 0 },
+                ext: { width: 600, height: 400 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 3. Distribution Chart (Stacked Bar Chart)
+          if (analytics.distribution?.global?.length > 0) {
+            const distSheet = workbook.addWorksheet("Distribución por Nivel");
+            const sortedDist = [...analytics.distribution.global].sort((a, b) => b.pct_ge4 - a.pct_ge4);
+
+            distSheet.addRow(["Pilar", "Nivel 1", "Nivel 2", "Nivel 3", "Nivel 4", "Nivel 5"]);
+            sortedDist.forEach((d) => {
+              distSheet.addRow([
+                d.pillar_name,
+                d.levels[0] || 0,
+                d.levels[1] || 0,
+                d.levels[2] || 0,
+                d.levels[3] || 0,
+                d.levels[4] || 0,
+              ]);
+            });
+
+            // Generate stacked bar chart from data and add as image
+            try {
+              const chartCanvas = await this.generateStackedChartFromData({
+                type: 'bar',
+                title: 'Distribución por Nivel',
+                categories: sortedDist.map((d) => d.pillar_name),
+                series: [
+                  { name: 'Nivel 1', data: sortedDist.map((d) => d.levels[0] || 0) },
+                  { name: 'Nivel 2', data: sortedDist.map((d) => d.levels[1] || 0) },
+                  { name: 'Nivel 3', data: sortedDist.map((d) => d.levels[2] || 0) },
+                  { name: 'Nivel 4', data: sortedDist.map((d) => d.levels[3] || 0) },
+                  { name: 'Nivel 5', data: sortedDist.map((d) => d.levels[4] || 0) },
+                ],
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              distSheet.addImage(imageId, {
+                tl: { col: 6, row: 0 },
+                ext: { width: 700, height: 400 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 4. Ranking Chart (Bar Chart)
+          if (analytics.ranking) {
+            const rankingSheet = workbook.addWorksheet("Ranking Departamentos");
+            rankingSheet.addRow(["Tipo", "Departamento", "Porcentaje"]);
+            analytics.ranking.top.forEach((r) => rankingSheet.addRow(["Top 5", r.name, r.value]));
+            analytics.ranking.bottom.forEach((r) => rankingSheet.addRow(["A reforzar", r.name, r.value]));
+
+            // Generate chart from data and add as image
+            if (analytics.ranking.top.length > 0) {
+              try {
+                const chartCanvas = await this.generateChartFromData({
+                  type: 'bar',
+                  title: 'Top 5 Departamentos',
+                  data: analytics.ranking.top.map((r) => ({ label: r.name, value: r.value })),
+                });
+                const imageId = workbook.addImage({
+                  buffer: chartCanvas,
+                  extension: 'png',
+                });
+                rankingSheet.addImage(imageId, {
+                  tl: { col: 3, row: 0 },
+                  ext: { width: 500, height: 300 },
+                });
+              } catch (chartError) {
+                console.warn("Chart generation failed, data is available in sheet:", chartError);
+              }
+            }
+          }
+
+          // 5. Heatmap Data
+          if (analytics.heatmap?.length > 0) {
+            const heatmapSheet = workbook.addWorksheet("Heatmap Pilar × Depto");
+            const pillars = analytics.pillars;
+            const departments = analytics.heatmap.slice(0, 10);
+
+            // Header row
+            heatmapSheet.addRow(["Departamento", ...pillars.map((p) => p.pillar_name)]);
+            
+            // Data rows
+            departments.forEach((row) => {
+              const deptRow: (string | number)[] = [row.department_name || ""];
+              pillars.forEach((p) => {
+                const cell = row.values.find((v) => v.pillar_id === p.pillar_id);
+                deptRow.push(cell?.percent || 0);
+              });
+              heatmapSheet.addRow(deptRow);
+            });
+
+            // Generate chart from data and add as image
+            if (pillars.length > 0 && departments.length > 0) {
+              try {
+                const firstPillarData = departments.map((row) => {
+                  const cell = row.values.find((v) => v.pillar_id === pillars[0].pillar_id);
+                  return { label: row.department_name || '', value: cell?.percent || 0 };
+                });
+                const chartCanvas = await this.generateChartFromData({
+                  type: 'bar',
+                  title: `Heatmap - ${pillars[0].pillar_name}`,
+                  data: firstPillarData,
+                });
+                const imageId = workbook.addImage({
+                  buffer: chartCanvas,
+                  extension: 'png',
+                });
+                const colOffset = pillars.length + 2;
+                heatmapSheet.addImage(imageId, {
+                  tl: { col: colOffset, row: 0 },
+                  ext: { width: 500, height: 400 },
+                });
+              } catch (chartError) {
+                console.warn("Chart generation failed, data is available in sheet:", chartError);
+              }
+            }
+          }
+
+          // 6. Balance Chart (Line Chart as approximation of radar)
+          if (analytics.pillars.length > 0) {
+            const balanceSheet = workbook.addWorksheet("Equilibrio Organizacional");
+            balanceSheet.addRow(["Pilar", "Porcentaje"]);
+            analytics.pillars.forEach((p) => {
+              balanceSheet.addRow([p.pillar_name, p.percent]);
+            });
+
+            // Generate line chart from data and add as image
+            try {
+              const chartCanvas = await this.generateChartFromData({
+                type: 'line',
+                title: 'Equilibrio Organizacional',
+                data: analytics.pillars.map((p) => ({ label: p.pillar_name, value: p.percent })),
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              balanceSheet.addImage(imageId, {
+                tl: { col: 2, row: 0 },
+                ext: { width: 600, height: 400 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+        }
+
+        // Generate buffer and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `tacticsphere-informe-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        resolve();
+      } catch (error) {
+        console.error("Export Excel failed", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        reject(new Error(`Error al generar Excel: ${errorMessage}`));
+      }
+    });
   }
 }

@@ -23,11 +23,8 @@
           <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
             Actualizar datos
           </button>
-          <button class="ts-btn ts-btn--outline" type="button" (click)="exportCsv()" [disabled]="loading() || exportingCsv() || !analytics()">
-            {{ exportingCsv() ? 'Exportando CSV...' : 'Exportar CSV' }}
-          </button>
-          <button class="ts-btn" type="button" (click)="exportPdf()" [disabled]="exportPdfUrlDisabled()">
-            {{ exporting() ? 'Generando PDF...' : 'Exportar PDF' }}
+          <button class="ts-btn" type="button" (click)="openReportModal()" [disabled]="loading() || !analytics()">
+            Generar informes
           </button>
         </div>
 
@@ -328,4 +325,129 @@
       </section>
     </ng-template>
   </div>
+
+  <!-- Modal de generación de informes -->
+  <ts-modal title="Generar informes" [open]="reportModalOpen()" (close)="closeReportModal()">
+    <div class="space-y-6">
+      <div class="space-y-3">
+        <p class="text-sm text-muted">Selecciona uno o varios formatos para exportar:</p>
+        <div class="space-y-2">
+          <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-border p-3 hover:bg-[#F8FAFC] transition-colors">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+              [(ngModel)]="selectedFormats.pdf"
+            />
+            <div class="flex-1">
+              <span class="font-semibold text-ink">PDF</span>
+              <p class="text-xs text-muted">Informe visual con gráficos bien distribuidos</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-border p-3 hover:bg-[#F8FAFC] transition-colors">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+              [(ngModel)]="selectedFormats.csv"
+            />
+            <div class="flex-1">
+              <span class="font-semibold text-ink">CSV</span>
+              <p class="text-xs text-muted">Todos los datos de encuestas en formato CSV</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-border p-3 hover:bg-[#F8FAFC] transition-colors">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+              [(ngModel)]="selectedFormats.json"
+            />
+            <div class="flex-1">
+              <span class="font-semibold text-ink">JSON</span>
+              <p class="text-xs text-muted">Todos los datos de encuestas en formato JSON</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-border p-3 hover:bg-[#F8FAFC] transition-colors">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+              [(ngModel)]="selectedFormats.xml"
+            />
+            <div class="flex-1">
+              <span class="font-semibold text-ink">XML</span>
+              <p class="text-xs text-muted">Todos los datos de encuestas en formato XML</p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-border p-3 hover:bg-[#F8FAFC] transition-colors">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary"
+              [(ngModel)]="selectedFormats.excel"
+            />
+            <div class="flex-1">
+              <span class="font-semibold text-ink">Excel</span>
+              <p class="text-xs text-muted">Datos y gráficos combinados en archivo Excel</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div *ngIf="reportError()" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+        {{ reportError() }}
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <button
+          type="button"
+          class="ts-btn ts-btn--secondary"
+          (click)="closeReportModal()"
+          [disabled]="generatingReports()"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="ts-btn"
+          (click)="generateReports()"
+          [disabled]="generatingReports() || !hasSelectedFormats()"
+        >
+          {{ generatingReports() ? 'Generando...' : 'Generar informes' }}
+        </button>
+      </div>
+    </div>
+  </ts-modal>
+
+  <!-- Modal de comprobante -->
+  <ts-modal title="Comprobante de exportación" [open]="receiptModalOpen()" (close)="closeReceiptModal()">
+    <div class="space-y-4" *ngIf="exportReceipt()">
+      <div class="rounded-xl border border-border bg-[#F8FAFC] p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-border pb-2">
+          <span class="text-sm font-semibold text-ink">Usuario:</span>
+          <span class="text-sm text-muted">{{ exportReceipt()!.usuario }}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-border pb-2">
+          <span class="text-sm font-semibold text-ink">Fecha y hora:</span>
+          <span class="text-sm text-muted">{{ exportReceipt()!.fechaHora }}</span>
+        </div>
+        <div class="space-y-2">
+          <span class="text-sm font-semibold text-ink block">Filtros aplicados:</span>
+          <ul class="text-sm text-muted space-y-1 ml-4">
+            <li *ngFor="let filter of exportReceipt()!.filtros" class="list-disc">{{ filter }}</li>
+          </ul>
+        </div>
+        <div class="space-y-2 pt-2 border-t border-border">
+          <span class="text-sm font-semibold text-ink block">Formatos generados:</span>
+          <div class="flex flex-wrap gap-2">
+            <span
+              *ngFor="let format of exportReceipt()!.formatos"
+              class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+            >
+              {{ format }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <button type="button" class="ts-btn" (click)="closeReceiptModal()">Cerrar</button>
+      </div>
+    </div>
+  </ts-modal>
 </div>
