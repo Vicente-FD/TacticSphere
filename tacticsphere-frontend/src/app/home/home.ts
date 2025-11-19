@@ -144,7 +144,10 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
   }
 
   sectionIsVisible(id: string): boolean {
-    return this.sectionVisible()[id] ?? false;
+    // Si la sección ya fue detectada por el observer, usar ese estado
+    // Si no, mostrar por defecto (para evitar que queden ocultas)
+    const state = this.sectionVisible();
+    return state[id] ?? true;
   }
 
   onSubmitConsulting(): void {
@@ -200,19 +203,30 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
         });
       },
       {
-        threshold: 0.25,
-        rootMargin: '0px 0px -10% 0px',
+        threshold: 0.1,
+        rootMargin: '0px 0px 0px 0px',
       },
     );
 
-    this.sectionBlocks.forEach((ref) => this.observer?.observe(ref.nativeElement));
+    // Esperar a que las secciones estén en el DOM antes de observarlas
+    setTimeout(() => {
+      if (this.sectionBlocks && this.observer) {
+        this.sectionBlocks.forEach((ref) => {
+          if (ref?.nativeElement) {
+            this.observer?.observe(ref.nativeElement);
+          }
+        });
+      }
+    }, 100);
 
     this.sectionBlocks.changes
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((list: QueryList<ElementRef<HTMLElement>>) => {
-        list.forEach((ref: ElementRef<HTMLElement>) =>
-          this.observer?.observe(ref.nativeElement),
-        );
+        list.forEach((ref: ElementRef<HTMLElement>) => {
+          if (ref?.nativeElement && this.observer) {
+            this.observer.observe(ref.nativeElement);
+          }
+        });
       });
   }
 
@@ -222,7 +236,8 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     const handleScroll = () => {
       const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
       const threshold = 50; // Umbral en píxeles para considerar que se hizo scroll
-      this.showScrollIndicator.set(scrollY < threshold);
+      const shouldShow = scrollY < threshold;
+      this.showScrollIndicator.set(shouldShow);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });

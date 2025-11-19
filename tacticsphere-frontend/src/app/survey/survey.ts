@@ -159,7 +159,13 @@ import { AuthService } from '../auth.service';
 
                   <label class="block space-y-2">
                     <span class="ts-label">RUT</span>
-                    <input class="ts-input" [(ngModel)]="formEmp.rut" name="emp_rut" placeholder="12.345.678-9" />
+                    <input
+                      class="ts-input"
+                      [(ngModel)]="formEmp.rut"
+                      name="emp_rut"
+                      placeholder="12.345.678-9"
+                      (blur)="formatRutField('formEmp')"
+                    />
                   </label>
 
                   <label class="block space-y-2">
@@ -274,7 +280,11 @@ import { AuthService } from '../auth.service';
                     </label>
                     <label class="block space-y-1 text-sm">
                       <span class="text-neutral-500">RUT</span>
-                      <input class="ts-input text-sm" [(ngModel)]="editBuffer.rut" />
+                      <input
+                        class="ts-input text-sm"
+                        [(ngModel)]="editBuffer.rut"
+                        (blur)="formatRutField('editBuffer')"
+                      />
                     </label>
                     <label class="block space-y-1 text-sm">
                       <span class="text-neutral-500">Email</span>
@@ -313,7 +323,7 @@ import { AuthService } from '../auth.service';
             </ng-template>
           </div>
 
-          <div class="ts-card space-y-6 survey-sticky-progress" *ngIf="progress">
+          <div class="ts-card space-y-6 survey-sticky-progress" *ngIf="progress" id="progress-general-card">
             <div class="space-y-2">
               <div class="flex items-center justify-between gap-2">
                 <h2 class="text-xl font-semibold text-ink">Progreso general</h2>
@@ -363,7 +373,7 @@ import { AuthService } from '../auth.service';
         </div>
 
         <ng-container *ngIf="progress as pr; else noProgress">
-          <div class="ts-card space-y-6">
+          <div class="ts-card space-y-6" id="preguntas-por-pilar">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div class="space-y-1">
                 <h2 class="text-xl font-semibold text-ink">Preguntas por pilar</h2>
@@ -440,7 +450,10 @@ import { AuthService } from '../auth.service';
                 <ng-container *ngIf="hasQuestions; else noPreguntas">
                   <div
                     *ngFor="let q of questions?.preguntas ?? []"
-                    class="rounded-xl border border-neutral-200 p-4 space-y-3"
+                    class="rounded-xl border border-neutral-200 p-4 space-y-3 transition-all duration-200"
+                    [id]="'pregunta-' + q.id"
+                    [class.question-incomplete]="isQuestionIncomplete(q)"
+                    [class.question-error]="highlightedQuestionId === q.id"
                   >
                     <div class="font-medium text-ink">{{ q.enunciado }}</div>
                     <p class="text-xs text-accent" *ngIf="canViewExpectedAnswer && q.respuesta_esperada">
@@ -458,6 +471,7 @@ import { AuthService } from '../auth.service';
                             [name]="'q' + q.id"
                             [value]="v"
                             [(ngModel)]="answers[q.id]"
+                            (change)="onAnswerChange(q.id)"
                             required
                           />
                           <span>
@@ -478,6 +492,7 @@ import { AuthService } from '../auth.service';
                             [name]="'q' + q.id"
                             value="SI"
                             [(ngModel)]="answers[q.id]"
+                            (change)="onAnswerChange(q.id)"
                             required
                           />
                           SI
@@ -491,6 +506,7 @@ import { AuthService } from '../auth.service';
                             [name]="'q' + q.id"
                             value="NO"
                             [(ngModel)]="answers[q.id]"
+                            (change)="onAnswerChange(q.id)"
                             required
                           />
                           NO
@@ -502,6 +518,7 @@ import { AuthService } from '../auth.service';
                           rows="3"
                           [(ngModel)]="answers[q.id]"
                           [name]="'q' + q.id"
+                          (blur)="onAnswerChange(q.id)"
                           [required]="q.es_obligatoria"
                         ></textarea>
                       </div>
@@ -694,6 +711,17 @@ import { AuthService } from '../auth.service';
       .survey-sticky-pillars {
         contain: layout style paint;
       }
+
+      /* Estilos para preguntas incompletas */
+      .question-incomplete {
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+
+      .question-error {
+        border-color: rgba(239, 68, 68, 0.6) !important;
+        background-color: rgba(239, 68, 68, 0.05);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+      }
     `,
   ],
 })
@@ -719,6 +747,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
   searchTerm = '';
   hasEmployeeSearch = false;
   loadingEmployees = false;
+  highlightedQuestionId: number | null = null;
   formEmp: EmpleadoCreate = {
     empresa_id: 0,
     nombre: '',
@@ -838,7 +867,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
     this.formEmp.nombre = this.formEmp.nombre.trim();
     this.formEmp.apellidos = (this.formEmp.apellidos ?? '').trim();
     if (this.formEmp.rut) {
-      this.formEmp.rut = this.formEmp.rut.trim();
+      this.formEmp.rut = this.formatRUT(this.formEmp.rut);
     }
 
     this.clearFeedback();
@@ -1002,10 +1031,11 @@ export class SurveyComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const rutValue = this.editBuffer.rut ?? emp.rut;
     const payload = {
       nombre: this.editBuffer.nombre ?? emp.nombre,
       apellidos: this.editBuffer.apellidos ?? emp.apellidos,
-      rut: this.editBuffer.rut ?? emp.rut,
+      rut: rutValue ? this.formatRUT(rutValue) : rutValue,
       email: this.editBuffer.email ?? emp.email,
       cargo: this.editBuffer.cargo ?? emp.cargo,
       departamento_id: this.editBuffer.departamento_id ?? emp.departamento_id,
@@ -1253,6 +1283,7 @@ export class SurveyComponent implements OnInit, OnDestroy {
     this.loadingQuestions = true;
     this.questions = null;
     this.answers = {};
+    this.highlightedQuestionId = null;
 
     this.survey.getPillarQuestions(this.asignacionId, p.pilar_id, this.empleadoId).subscribe({
       next: (pq) => {
@@ -1280,6 +1311,38 @@ export class SurveyComponent implements OnInit, OnDestroy {
     }
 
     this.clearFeedback();
+    this.highlightedQuestionId = null;
+
+    // Validar si todas las preguntas obligatorias están respondidas
+    const incompleteQuestions = this.questions.preguntas.filter((q) => {
+      if (!q.es_obligatoria) {
+        return false; // Las no obligatorias no se validan
+      }
+      const answer = this.answers[q.id];
+      return !this.hasAnswerValue(answer);
+    });
+
+    // Si hay preguntas incompletas, no guardar y resaltar la primera
+    if (incompleteQuestions.length > 0) {
+      const firstIncomplete = incompleteQuestions[0];
+      this.highlightedQuestionId = firstIncomplete.id;
+      this.error = `Faltan ${incompleteQuestions.length} pregunta${incompleteQuestions.length > 1 ? 's' : ''} por responder. Por favor completa todas las preguntas obligatorias.`;
+
+      // Hacer scroll suave a la primera pregunta incompleta
+      setTimeout(() => {
+        const questionElement = document.getElementById(`pregunta-${firstIncomplete.id}`);
+        if (questionElement) {
+          questionElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }, 100);
+
+      return;
+    }
+
+    // Si todas están respondidas, proceder a guardar
     const body: BulkAnswersRequest = {
       respuestas: this.questions.preguntas
         .filter((q) => this.answers[q.id] != null)
@@ -1302,6 +1365,17 @@ export class SurveyComponent implements OnInit, OnDestroy {
         if (this.currentPilar) {
           this.loadPilar(this.currentPilar);
         }
+
+        // Hacer scroll suave al inicio de "Preguntas por pilar"
+        setTimeout(() => {
+          const preguntasSection = document.getElementById('preguntas-por-pilar');
+          if (preguntasSection) {
+            preguntasSection.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          }
+        }, 300);
       },
       error: (err) => {
         this.loadingSubmit = false;
@@ -1547,6 +1621,37 @@ export class SurveyComponent implements OnInit, OnDestroy {
     return Math.min(100, Math.max(0, ratio * 100));
   }
 
+  onAnswerChange(questionId: number): void {
+    // Limpiar el resaltado si la pregunta ahora está completa
+    if (this.highlightedQuestionId === questionId && this.questions) {
+      const question = this.questions.preguntas.find((q) => q.id === questionId);
+      if (question) {
+        const answer = this.answers[questionId];
+        if (this.hasAnswerValue(answer)) {
+          this.highlightedQuestionId = null;
+          // Limpiar el mensaje de error si todas las preguntas están completas ahora
+          const incompleteQuestions = this.questions.preguntas.filter((q) => {
+            if (!q.es_obligatoria) {
+              return false;
+            }
+            return !this.hasAnswerValue(this.answers[q.id]);
+          });
+          if (incompleteQuestions.length === 0) {
+            this.error = '';
+          }
+        }
+      }
+    }
+  }
+
+  isQuestionIncomplete(question: SurveyQuestionRead): boolean {
+    if (!question.es_obligatoria) {
+      return false;
+    }
+    const answer = this.answers[question.id];
+    return !this.hasAnswerValue(answer);
+  }
+
   private hasAnswerValue(value: unknown): boolean {
     if (value === null || value === undefined) {
       return false;
@@ -1558,6 +1663,41 @@ export class SurveyComponent implements OnInit, OnDestroy {
       return !Number.isNaN(value);
     }
     return true;
+  }
+
+  formatRutField(source: 'formEmp' | 'editBuffer'): void {
+    if (source === 'formEmp' && this.formEmp.rut) {
+      this.formEmp.rut = this.formatRUT(this.formEmp.rut);
+    } else if (source === 'editBuffer' && this.editBuffer.rut) {
+      this.editBuffer.rut = this.formatRUT(this.editBuffer.rut);
+    }
+  }
+
+  formatRUT(value: string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+
+    // Quitar puntos, guiones y espacios
+    const cleaned = value.replace(/[.\s-]/g, '');
+
+    if (!cleaned || cleaned.length < 2) {
+      return cleaned;
+    }
+
+    // El último carácter es el dígito verificador
+    const digitoVerificador = cleaned.slice(-1);
+    const numero = cleaned.slice(0, -1);
+
+    if (!numero) {
+      return cleaned;
+    }
+
+    // Formatear el número con puntos como separadores de miles desde la derecha
+    const numeroFormateado = numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    // Unir número y dígito verificador con guion
+    return `${numeroFormateado}-${digitoVerificador}`;
   }
 
   private formatError(err: unknown, fallback: string): string {

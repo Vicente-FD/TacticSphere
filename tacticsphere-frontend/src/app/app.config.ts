@@ -13,6 +13,7 @@ import {
   LucideAngularModule,
   BellRing,
   Building2,
+  ChevronDown,
   Download,
   HelpCircle,
   KeyRound,
@@ -50,6 +51,7 @@ export const appConfig: ApplicationConfig = {
       LucideAngularModule.pick({
         BellRing,
         Building2,
+        ChevronDown,
         Download,
         HelpCircle,
         KeyRound,

@@ -1,32 +1,13 @@
 ﻿<div class="ts-page">
   <div class="ts-container space-y-6">
+    <!-- Card 1: Filtros -->
     <section class="ts-card space-y-6 animate-subtleUp">
       <div class="space-y-1">
-        <h1 class="ts-title">Dashboard analitico</h1>
-        <p class="ts-subtitle">Explora la madurez digital por empresa, departamentos, empleados y pilares.</p>
+        <h2 class="text-lg font-semibold text-ink">Filtros</h2>
+        <p class="text-sm text-muted">Selecciona los criterios para analizar los datos.</p>
       </div>
 
       <div class="grid gap-6">
-        <div class="grid gap-4 md:grid-cols-2">
-          <ng-container *ngFor="let card of kpiCards().slice(0, 4); trackBy: trackByIndex">
-            <div class="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(2,6,23,0.06)]">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748B]">{{ card.label }}</p>
-              <div class="mt-1 flex items-baseline gap-2">
-                <span class="text-2xl font-semibold text-[#0F172A]">{{ card.value }}</span>
-                <span *ngIf="card.suffix" class="text-xs font-medium text-[#94A3B8]">{{ card.suffix }}</span>
-              </div>
-            </div>
-          </ng-container>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-center gap-3">
-          <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
-            Actualizar datos
-          </button>
-          <button class="ts-btn" type="button" (click)="openReportModal()" [disabled]="loading() || !analytics()">
-            Generar informes
-          </button>
-        </div>
 
         <div class="grid gap-6 xl:grid-cols-3">
           <div class="rounded-2xl border border-[#E2E8F0] bg-white/80 p-5 shadow-sm">
@@ -139,17 +120,58 @@
         <div *ngIf="error()" class="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
           {{ error() }}
         </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button class="ts-btn ts-btn--secondary" type="button" (click)="refreshCurrentFilter()" [disabled]="loading()">
+            Actualizar datos
+          </button>
+          <button class="ts-btn" type="button" (click)="openReportModal()" [disabled]="loading() || !analytics()">
+            Generar informes
+          </button>
+          <button class="ts-btn ts-btn--secondary" type="button" (click)="clearFilters()" [disabled]="loading()">
+            Limpiar filtros
+          </button>
+        </div>
+
       </div>
     </section>
 
-    <section id="analytics-export" class="space-y-6" *ngIf="!loading(); else loadingState">
+    <!-- Card 2: Resultados del dashboard -->
+    <section id="analytics-export" class="ts-card space-y-6 animate-subtleUp" *ngIf="!loading(); else loadingState">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-ink">Resultados del dashboard</h2>
+        <p class="text-sm text-muted">Métricas y visualizaciones basadas en los filtros aplicados.</p>
+      </div>
+
       <ng-container *ngIf="analytics(); else emptyState">
+        <!-- KPIs principales -->
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <ng-container *ngFor="let card of kpiCards(); trackBy: trackByIndex">
+            <div 
+              class="rounded-2xl border bg-white px-4 py-3 shadow-[0_6px_18px_rgba(2,6,23,0.06)]" 
+              [class.relative]="card.color"
+              [style.border-color]="card.color || '#E2E8F0'"
+              [style.border-width]="card.color ? '2px' : '1px'"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748B]">{{ card.label }}</p>
+              <div class="mt-1 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold" [style.color]="card.color || '#0F172A'">{{ card.value }}</span>
+                <span *ngIf="card.suffix" class="text-xs font-medium text-[#94A3B8]">{{ card.suffix }}</span>
+              </div>
+              <!-- Indicador de color para Estadio actual -->
+              <div *ngIf="card.color && card.label === 'Estadio actual'" class="absolute top-3 right-3 w-3 h-3 rounded-full" [style.background-color]="card.color"></div>
+            </div>
+          </ng-container>
+        </div>
+
+        <!-- Estadios Likert -->
         <app-likert-buckets
           [employees]="likertBucketEmployees()"
           [filter]="likertBucketsFilter()"
           (employeeClick)="onLikertEmployeeClick($event)"
         ></app-likert-buckets>
 
+        <!-- Resumen del filtro actual -->
         <div class="ts-card space-y-3 min-w-0 animate-subtleUp" *ngIf="shouldShowFilterSummary()">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold text-ink">Resumen del filtro actual</h2>
@@ -302,23 +324,17 @@
       </ng-container>
     </section>
 
+    <!-- Estado de carga -->
     <ng-template #loadingState>
-      <section class="space-y-4">
-        <div class="ts-card">
-          <div class="animate-pulse space-y-4">
-            <div class="h-4 w-1/4 rounded bg-border"></div>
-            <div class="h-72 rounded-lg bg-border"></div>
-          </div>
-        </div>
-        <div class="ts-card">
-          <div class="animate-pulse space-y-4">
-            <div class="h-4 w-1/5 rounded bg-border"></div>
-            <div class="h-72 rounded-lg bg-border"></div>
-          </div>
+      <section class="ts-card space-y-4">
+        <div class="animate-pulse space-y-4">
+          <div class="h-4 w-1/4 rounded bg-border"></div>
+          <div class="h-72 rounded-lg bg-border"></div>
         </div>
       </section>
     </ng-template>
 
+    <!-- Estado vacío -->
     <ng-template #emptyState>
       <section class="ts-card text-center text-sm text-muted">
         No encontramos resultados para los filtros aplicados. Ajusta los criterios o espera nuevas respuestas.

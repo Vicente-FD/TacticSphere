@@ -82,6 +82,7 @@ interface KpiCard {
   value: string;
   suffix?: string;
   tooltip?: string;
+  color?: string; // Para el color del estadio
 }
 
 @Component({
@@ -117,7 +118,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private exportingCsvSignal = signal<boolean>(false);
   private filterSignal = signal<AnalyticsQueryParams | null>(null);
   private likertLevelsSignal = signal<LikertLevel[]>([]);
-  private filterUpdates$ = new Subject<AnalyticsQueryParams>();
+  private filterUpdates$ = new Subject<AnalyticsQueryParams | null>();
   private analyticsCache = new Map<string, DashboardAnalyticsResponse>();
 
   // Report generation signals
@@ -248,6 +249,109 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   readonly shouldShowFilterSummary = computed(() => this.likertBucketsFilter().scope === "employee");
 
+  private getStageColor(level: number): string {
+    const colors: Record<number, string> = {
+      1: '#EF4444', // Inicial - rojo
+      2: '#EAB308', // Básico - amarillo
+      3: '#3B82F6', // Intermedio - azul
+      4: '#22C55E', // Avanzado - verde
+      5: '#0EA5E9', // Innovador - azul claro
+    };
+    return colors[level] ?? '#64748B';
+  }
+
+  private getStageColorByPercent(percent: number): string {
+    // Rangos de estadios basados en porcentaje
+    if (percent >= 0 && percent <= 20) {
+      return '#EF4444'; // Inicial - rojo
+    } else if (percent >= 21 && percent <= 40) {
+      return '#FACC15'; // Básico - amarillo
+    } else if (percent >= 41 && percent <= 60) {
+      return '#3B82F6'; // Intermedio - azul
+    } else if (percent >= 61 && percent <= 80) {
+      return '#22C55E'; // Avanzado - verde
+    } else if (percent >= 81 && percent <= 100) {
+      return '#A855F7'; // Innovador - morado
+    }
+    return '#64748B'; // Default gris
+  }
+
+  private getTextColorForContrast(backgroundColor: string): string {
+    // Determinar si usar texto negro o blanco según el contraste
+    const rgb = this.hexToRgb(backgroundColor);
+    if (!rgb) return '#1E293B'; // Default negro
+    
+    // Calcular luminosidad relativa
+    const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    return luminance > 0.5 ? '#1E293B' : '#FFFFFF'; // Negro si claro, blanco si oscuro
+  }
+
+  private calculatePredominantStage(): { level: number; name: string; color: string; count: number } | null {
+    const employees = this.likertBucketEmployees();
+    if (!employees.length) return null;
+
+    // Contar empleados por nivel (1-5)
+    const levelCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    employees.forEach((emp) => {
+      if (emp.level >= 1 && emp.level <= 5) {
+        levelCounts[emp.level] = (levelCounts[emp.level] || 0) + 1;
+      }
+    });
+
+    // Encontrar el nivel con más empleados
+    let maxLevel = 1;
+    let maxCount = levelCounts[1];
+    for (let level = 2; level <= 5; level++) {
+      if (levelCounts[level] > maxCount) {
+        maxCount = levelCounts[level];
+        maxLevel = level;
+      }
+    }
+
+    // Si no hay empleados en ningún nivel, retornar null
+    if (maxCount === 0) return null;
+
+    const levels = this.likertLevelsSignal();
+    const match = levels.find((item) => item.valor === maxLevel);
+    const name = match ? match.nombre : `Nivel ${maxLevel}`;
+    const color = this.getStageColor(maxLevel);
+
+    return { level: maxLevel, name, color, count: maxCount };
+  }
+
+  private calculateDepartmentMetrics(): {
+    strongest: { name: string; average: number } | null;
+    weakest: { name: string; average: number } | null;
+  } {
+    const data = this.analytics();
+    const heatmapRows = data?.heatmap ?? [];
+    if (!heatmapRows.length) {
+      return { strongest: null, weakest: null };
+    }
+
+    // Filtrar departamentos válidos (con average > 0)
+    const validDepartments = heatmapRows.filter((row) => row.average > 0);
+    if (!validDepartments.length) {
+      return { strongest: null, weakest: null };
+    }
+
+    // Ordenar por promedio
+    const sorted = [...validDepartments].sort((a, b) => b.average - a.average);
+    const strongest = sorted[0];
+    const weakest = sorted[sorted.length - 1];
+
+    return {
+      strongest: {
+        name: strongest.department_name,
+        average: strongest.average,
+      },
+      weakest: {
+        name: weakest.department_name,
+        average: weakest.average,
+      },
+    };
+  }
+
   readonly kpiCards = computed<KpiCard[]>(() => {
     const data = this.analytics();
     const kpis = data?.kpis;
@@ -256,6 +360,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const lowestCoverage = coverageAreas.length
       ? [...coverageAreas].sort((a, b) => a.coverage_percent - b.coverage_percent)[0]
       : null;
+    const predominantStage = this.calculatePredominantStage();
+    const departmentMetrics = this.calculateDepartmentMetrics();
     return [
       {
         label: "Promedio global",
@@ -279,6 +385,28 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         label: "Brecha entre pilares",
         value: `${this.formatNumber(kpis.pillar_gap)} pp`,
       },
+      predominantStage
+        ? {
+            label: "Estadio actual",
+            value: predominantStage.name,
+            suffix: "Calculado según las respuestas de los filtros seleccionados",
+            color: predominantStage.color,
+          }
+        : ({ label: "Estadio actual", value: "Sin datos suficientes" } as KpiCard),
+      departmentMetrics.strongest
+        ? {
+            label: "Departamento mas fuerte",
+            value: departmentMetrics.strongest.name,
+            suffix: `${this.formatNumber(departmentMetrics.strongest.average)}%`,
+          }
+        : ({ label: "Departamento mas fuerte", value: "Sin datos suficientes" } as KpiCard),
+      departmentMetrics.weakest
+        ? {
+            label: "Departamento mas debil",
+            value: departmentMetrics.weakest.name,
+            suffix: `${this.formatNumber(departmentMetrics.weakest.average)}%`,
+          }
+        : ({ label: "Departamento mas debil", value: "Sin datos suficientes" } as KpiCard),
       {
         label: "Cobertura",
         value: kpis.coverage_percent != null ? `${this.formatNumber(kpis.coverage_percent)}%` : "--",
@@ -301,7 +429,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   private readonly filterEffect = effect(() => {
     const filter = this.filterSignal();
-    if (!filter) return;
+    // Enviar el filtro al stream siempre, incluso si es null
+    // Esto asegura que todos los cambios se detecten correctamente
     this.filterUpdates$.next(filter);
   });
 
@@ -309,9 +438,25 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const filterSub = this.filterUpdates$
       .pipe(
         debounceTime(200),
-        distinctUntilChanged((prev, curr) => this.buildCacheKey(prev) === this.buildCacheKey(curr))
+        distinctUntilChanged((prev, curr) => {
+          // Si ambos son null, son iguales
+          if (!prev && !curr) return true;
+          // Si uno es null y el otro no, son diferentes
+          if (!prev || !curr) return false;
+          // Si ambos existen, comparar por cache key
+          return this.buildCacheKey(prev) === this.buildCacheKey(curr);
+        })
       )
-      .subscribe((filter) => this.fetchAnalytics(filter));
+      .subscribe((filter) => {
+        // Solo hacer fetch si hay un filtro válido
+        if (filter && filter.companyId) {
+          this.fetchAnalytics(filter);
+        } else if (!filter) {
+          // Si el filtro es null, limpiar los analytics
+          this.analyticsSignal.set(null);
+          this.loadingSignal.set(false);
+        }
+      });
     this.subscriptions.push(filterSub);
   }
 
@@ -357,6 +502,47 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     });
   }
 
+  clearFilters(): void {
+    // Limpiar todos los filtros
+    const previousCompanyId = this.selectedCompanyId;
+    this.selectedCompanyId = this.isUser ? this.empresaId : null;
+    this.selectedDepartmentId = null;
+    this.selectedEmployeeId = null;
+    this.selectedPillar = "ALL";
+    this.dateFrom = null;
+    this.dateTo = null;
+    this.employeeSearch = "";
+
+    // Limpiar el debounce si existe
+    if (this.employeeSearchDebounce) {
+      clearTimeout(this.employeeSearchDebounce);
+      this.employeeSearchDebounce = null;
+    }
+
+    // Limpiar el error y info signals para un estado limpio
+    this.errorSignal.set("");
+    this.infoSignal.set("");
+
+    // Resetear el filterSignal a null primero para forzar una actualización limpia
+    this.filterSignal.set(null);
+
+    // Si hay una empresa seleccionada, recargar departamentos y empleados
+    if (this.selectedCompanyId != null) {
+      // Recargar departamentos y empleados para asegurar que los datos estén actualizados
+      this.loadDepartments(this.selectedCompanyId);
+      this.loadEmployees(this.selectedCompanyId, null);
+    } else {
+      this.departmentsSignal.set([]);
+      this.employeesSignal.set([]);
+    }
+
+    // Recargar datos con filtros limpios
+    // Usar un pequeño delay para asegurar que el signal se haya actualizado
+    setTimeout(() => {
+      this.updateFilter();
+    }, 10);
+  }
+
   refreshCurrentFilter(): void {
     this.updateFilter();
   }
@@ -373,6 +559,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       this.departmentsSignal.set([]);
       this.employeesSignal.set([]);
     }
+    // Limpiar el error signal antes de actualizar
+    this.errorSignal.set("");
+    // Actualizar el filtro - esto disparará el effect y la consulta
     this.updateFilter();
   }
 
@@ -494,7 +683,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         },
       },
       grid: { left: 0, right: 16, bottom: 32, top: 24, containLabel: true },
-      color: [TS_COLORS.primary],
       xAxis: {
         type: "value",
         max: 100,
@@ -511,24 +699,30 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       series: [
         {
           type: "bar",
-          data: data.map((item) => ({
-            value: item.value,
-            pillarId: item.pillarId,
-            itemStyle: {
-              color:
-                selected !== "ALL" && item.pillarId === selected
-                  ? TS_COLORS.primary
-                  : "rgba(148,163,184,0.8)",
-            },
-          })),
+          data: data.map((item) => {
+            const barColor = this.getStageColorByPercent(item.value);
+            const textColor = this.getTextColorForContrast(barColor);
+            // Si hay un pilar seleccionado, destacar ese con opacidad mayor
+            const isSelected = selected !== "ALL" && item.pillarId === selected;
+            return {
+              value: item.value,
+              pillarId: item.pillarId,
+              itemStyle: {
+                color: isSelected ? barColor : barColor,
+                opacity: isSelected ? 1 : 0.9,
+                borderColor: barColor,
+                borderWidth: isSelected ? 2 : 1,
+              },
+              label: {
+                show: true,
+                position: "right",
+                formatter: "{c}%",
+                fontWeight: 600,
+                color: textColor,
+              },
+            };
+          }),
           barWidth: 24,
-          label: {
-            show: true,
-            position: "right",
-            formatter: "{c}%",
-            fontWeight: 600,
-            color: TS_COLORS.text,
-          },
         },
       ],
     };
@@ -669,12 +863,13 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     );
     if (!distributions.length) return this.emptyChartOption("Sin datos de distribucion");
     const categories = distributions.map((item) => item.pillar_name);
+    // Usar la misma paleta de colores que los estadios
     const levelColors = [
-      TS_COLORS.danger,
-      TS_COLORS.warning,
-      "#FACC15",
-      TS_COLORS.positive,
-      TS_COLORS.primary,
+      '#EF4444', // Inicial (0-20%) - rojo
+      '#FACC15', // Básico (21-40%) - amarillo
+      '#3B82F6', // Intermedio (41-60%) - azul
+      '#22C55E', // Avanzado (61-80%) - verde
+      '#A855F7', // Innovador (81-100%) - morado
     ];
     const series = [1, 2, 3, 4, 5].map((level, idx) => {
       const levelIndex = level - 1;
@@ -1153,9 +1348,12 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     if (companyId == null) {
       this.infoSignal.set("Selecciona una empresa para ver resultados.");
       this.analyticsSignal.set(null);
+      // Establecer el filtro como null para que el sistema sepa que no hay filtro activo
+      this.filterSignal.set(null);
       return;
     }
     this.infoSignal.set("");
+    // Crear un nuevo objeto filtro cada vez para asegurar que el signal detecte el cambio
     const filter: AnalyticsQueryParams = {
       companyId,
       dateFrom: this.dateFrom || undefined,
@@ -1165,7 +1363,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
       includeTimeline: false,
     };
-    this.filterSignal.set(filter);
+    // Establecer el filtro - el signal detectará el cambio automáticamente
+    // Usar un nuevo objeto para forzar la detección del cambio
+    this.filterSignal.set({ ...filter });
   }
 
   private buildCacheKey(filter: AnalyticsQueryParams): string {
@@ -1508,6 +1708,113 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     }
   }
 
+  private async generateScatterChartFromData(options: {
+    title: string;
+    data: Array<{ name: string; value: number; level: number }>;
+  }): Promise<ArrayBuffer> {
+    const echartsModule = await import('echarts');
+    const echarts = echartsModule as unknown as {
+      init: (dom: HTMLElement, theme?: string) => {
+        setOption: (option: EChartsOption) => void;
+        getDataURL: (opts: { type: string; pixelRatio: number; backgroundColor: string }) => string;
+        dispose: () => void;
+      };
+    };
+    
+    // Create a temporary container
+    const container = document.createElement('div');
+    container.style.width = '800px';
+    container.style.height = '500px';
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+
+    try {
+      const chart = echarts.init(container, TS_MONO_THEME);
+      
+      // Group data by level for color coding
+      const levelColors: Record<number, string> = {
+        1: '#EF4444',
+        2: '#EAB308',
+        3: '#3B82F6',
+        4: '#22C55E',
+        5: '#0EA5E9',
+      };
+
+      const seriesByLevel: Record<number, Array<[number, number, string]>> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+      options.data.forEach((item, idx) => {
+        const level = item.level;
+        if (level >= 1 && level <= 5) {
+          seriesByLevel[level].push([idx, item.value, item.name]);
+        }
+      });
+
+      const series = [1, 2, 3, 4, 5].map((level) => ({
+        type: 'scatter' as const,
+        name: this.formatLikertLabel(level),
+        data: seriesByLevel[level],
+        itemStyle: { color: levelColors[level] || TS_COLORS.primary },
+        symbolSize: 8,
+      }));
+
+      const chartOption: EChartsOption = {
+        title: {
+          text: options.title,
+          left: 'center',
+          textStyle: { fontSize: 16, fontWeight: 600, color: TS_COLORS.text },
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: (params: any) => {
+            const data = params.data;
+            if (Array.isArray(data) && data.length >= 3) {
+              return `${data[2]}<br/>Promedio: ${this.formatNumber(data[1])}%`;
+            }
+            return '';
+          },
+        },
+        legend: {
+          data: [1, 2, 3, 4, 5].map((l) => this.formatLikertLabel(l)),
+          bottom: 0,
+        },
+        grid: { left: '10%', right: '10%', top: '20%', bottom: '20%', containLabel: true },
+        xAxis: {
+          type: 'value',
+          name: 'Índice',
+          axisLabel: { color: TS_COLORS.text },
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Promedio (%)',
+          axisLabel: { formatter: '{value}%', color: TS_COLORS.text },
+        },
+        series: series as unknown as EChartsOption["series"],
+      };
+
+      chart.setOption(chartOption);
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Wait for chart to render
+
+      // Get chart as data URL and convert to buffer
+      const dataUrl = chart.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+      
+      // Convert data URL to ArrayBuffer
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      chart.dispose();
+      document.body.removeChild(container);
+
+      return await blob.arrayBuffer();
+    } catch (error) {
+      document.body.removeChild(container);
+      throw error;
+    }
+  }
+
   // ======================================================
   // Report Generation Functions
   // ======================================================
@@ -1786,15 +2093,37 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       .replace(/'/g, "&apos;");
   }
 
+  private hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+        }
+      : null;
+  }
+
   private async exportPdfImproved(): Promise<void> {
     if (this.exporting()) return;
-    const container = document.getElementById("analytics-export");
-    if (!container) {
-      throw new Error("No pudimos encontrar el contenido para exportar.");
-    }
 
     this.exportingSignal.set(true);
     try {
+      // Esperar a que el DOM se actualice y el elemento esté disponible
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      
+      // Intentar encontrar el contenedor varias veces si es necesario
+      let container = document.getElementById("analytics-export");
+      if (!container) {
+        // Esperar un poco más y volver a intentar
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        container = document.getElementById("analytics-export");
+      }
+      
+      if (!container) {
+        throw new Error("No pudimos encontrar el contenido para exportar. Asegúrate de que los datos estén cargados.");
+      }
+
       this.resizeAllCharts();
       await new Promise((resolve) => setTimeout(resolve, 100));
       await this.ensureLogo();
@@ -1804,22 +2133,26 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
+      const headerHeight = 25;
       const contentWidth = pageWidth - 2 * margin;
-      let currentY = margin;
+      let currentY = margin + headerHeight;
 
-      // Header
-      if (this.logoDataUrl) {
-        pdf.addImage(this.logoDataUrl, "PNG", margin, currentY, 20, 20);
-        pdf.setFontSize(18);
-        pdf.setTextColor(15, 23, 42);
-        pdf.text("TacticSphere - Informe Analítico", margin + 22, currentY + 12);
-      } else {
-        pdf.setFontSize(18);
-        pdf.setTextColor(15, 23, 42);
-        pdf.text("TacticSphere - Informe Analítico", margin, currentY + 8);
-      }
+      // Función helper para dibujar el header en cada página
+      const drawHeader = () => {
+        if (this.logoDataUrl) {
+          pdf.addImage(this.logoDataUrl, "PNG", margin, margin, 20, 20);
+          pdf.setFontSize(18);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text("TacticSphere - Informe Analítico", margin + 22, margin + 12);
+        } else {
+          pdf.setFontSize(18);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text("TacticSphere - Informe Analítico", margin, margin + 8);
+        }
+      };
 
-      currentY += 25;
+      // Dibujar header en la primera página
+      drawHeader();
 
       // Metadata
       pdf.setFontSize(10);
@@ -1845,20 +2178,56 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         pdf.setTextColor(100, 116, 139);
         const kpiCols = 2;
         const kpiWidth = (contentWidth - 5) / kpiCols;
-        kpis.slice(0, 6).forEach((kpi, idx) => {
+        const kpiRowHeight = 18; // Altura aumentada para acomodar el suffix
+        
+        // Mostrar todos los KPIs (ahora son más de 6)
+        kpis.forEach((kpi, idx) => {
           const col = idx % kpiCols;
           const row = Math.floor(idx / kpiCols);
           const x = margin + col * (kpiWidth + 5);
-          const y = currentY + row * 12;
+          const y = currentY + row * kpiRowHeight;
 
+          // Label
           pdf.setFontSize(8);
           pdf.setTextColor(100, 116, 139);
           pdf.text(kpi.label, x, y);
+          
+          // Value con color si aplica
           pdf.setFontSize(10);
-          pdf.setTextColor(15, 23, 42);
-          pdf.text(`${kpi.value}${kpi.suffix ? " " + kpi.suffix : ""}`, x, y + 5);
+          if (kpi.color) {
+            const rgb = this.hexToRgb(kpi.color);
+            if (rgb) {
+              pdf.setTextColor(rgb.r, rgb.g, rgb.b);
+            } else {
+              pdf.setTextColor(15, 23, 42);
+            }
+          } else {
+            pdf.setTextColor(15, 23, 42);
+          }
+          pdf.text(kpi.value, x, y + 5);
+          
+          // Suffix (texto pequeño y gris, con word-wrap)
+          if (kpi.suffix) {
+            pdf.setFontSize(7);
+            pdf.setTextColor(85, 85, 85); // #555
+            // Dividir el texto en líneas que quepan en el ancho de la columna
+            const maxWidth = kpiWidth - 2; // Margen interno
+            const suffixLines = pdf.splitTextToSize(kpi.suffix, maxWidth);
+            suffixLines.forEach((line: string, lineIdx: number) => {
+              pdf.text(line, x, y + 10 + (lineIdx * 3.5));
+            });
+          }
         });
-        currentY += Math.ceil(Math.min(kpis.length, 6) / kpiCols) * 12 + 5;
+        // Calcular la altura total basada en el KPI con más líneas de suffix
+        // Usar un PDF temporal solo para calcular el número de líneas
+        const tempPdf = new jsPDF("p", "mm", "a4");
+        const maxSuffixLines = Math.max(...kpis.map(kpi => {
+          if (!kpi.suffix) return 1;
+          const maxWidth = kpiWidth - 2;
+          return tempPdf.splitTextToSize(kpi.suffix, maxWidth).length;
+        }));
+        const suffixHeight = maxSuffixLines > 1 ? (maxSuffixLines - 1) * 3.5 : 0;
+        currentY += Math.ceil(kpis.length / kpiCols) * kpiRowHeight + suffixHeight + 5;
       }
 
       // Charts - we'll capture them individually
@@ -1882,9 +2251,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       const charts = await Promise.all(chartPromises);
 
       for (const chart of charts) {
+        // Verificar si necesitamos nueva página (considerando el header)
         if (currentY + chart.height + 20 > pageHeight - margin) {
           pdf.addPage();
-          currentY = margin;
+          drawHeader(); // Dibujar header en la nueva página
+          currentY = margin + headerHeight;
         }
 
         pdf.setFontSize(12);
@@ -2167,6 +2538,98 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
             } catch (chartError) {
               console.warn("Chart generation failed, data is available in sheet:", chartError);
             }
+          }
+
+          // 7. Employee Scatter Chart
+          if (analytics.employees.length > 0) {
+            const scatterSheet = workbook.addWorksheet("Dispersión de Empleados");
+            scatterSheet.addRow(["Empleado", "Porcentaje", "Estadio"]);
+            analytics.employees.forEach((emp) => {
+              const levelName = this.formatLikertLabel(emp.level).split(" - ")[1] || `Nivel ${emp.level}`;
+              scatterSheet.addRow([emp.name || `Empleado ${emp.id}`, emp.percent, levelName]);
+            });
+
+            // Generate scatter chart from data and add as image
+            try {
+              const chartCanvas = await this.generateScatterChartFromData({
+                title: 'Dispersión de Empleados',
+                data: analytics.employees.map((emp) => ({
+                  name: emp.name || `Empleado ${emp.id}`,
+                  value: emp.percent,
+                  level: emp.level,
+                })),
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              scatterSheet.addImage(imageId, {
+                tl: { col: 3, row: 0 },
+                ext: { width: 700, height: 500 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 8. Likert Distribution by Stage
+          const likertEmployees = this.likertBucketEmployees();
+          if (likertEmployees.length > 0) {
+            const likertSheet = workbook.addWorksheet("Distribución por Estadio");
+            const stageCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            likertEmployees.forEach((emp) => {
+              if (emp.level >= 1 && emp.level <= 5) {
+                stageCounts[emp.level] = (stageCounts[emp.level] || 0) + 1;
+              }
+            });
+
+            const levels = this.likertLevelsSignal();
+            likertSheet.addRow(["Estadio", "Cantidad de Empleados", "Porcentaje"]);
+            const total = likertEmployees.length;
+            [1, 2, 3, 4, 5].forEach((level) => {
+              const count = stageCounts[level] || 0;
+              const percent = total > 0 ? (count / total) * 100 : 0;
+              const levelName = levels.find((l) => l.valor === level)?.nombre || `Nivel ${level}`;
+              likertSheet.addRow([levelName, count, this.round(percent)]);
+            });
+
+            // Generate bar chart from data and add as image
+            try {
+              const chartCanvas = await this.generateChartFromData({
+                type: 'bar',
+                title: 'Distribución de Empleados por Estadio',
+                data: [1, 2, 3, 4, 5].map((level) => {
+                  const count = stageCounts[level] || 0;
+                  const percent = total > 0 ? (count / total) * 100 : 0;
+                  const levelName = levels.find((l) => l.valor === level)?.nombre || `Nivel ${level}`;
+                  return { label: levelName, value: this.round(percent) };
+                }),
+              });
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              likertSheet.addImage(imageId, {
+                tl: { col: 3, row: 0 },
+                ext: { width: 600, height: 400 },
+              });
+            } catch (chartError) {
+              console.warn("Chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 9. New KPIs (Estadio actual, Departamentos)
+          const kpis = this.kpiCards();
+          if (kpis.length > 0) {
+            const kpiSheet = workbook.addWorksheet("Indicadores Clave (KPIs)");
+            kpiSheet.addRow(["Indicador", "Valor", "Detalle"]);
+            kpis.forEach((kpi) => {
+              kpiSheet.addRow([
+                kpi.label,
+                kpi.value,
+                kpi.suffix || "",
+              ]);
+            });
           }
         }
 
