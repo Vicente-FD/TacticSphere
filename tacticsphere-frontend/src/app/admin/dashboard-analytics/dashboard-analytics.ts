@@ -134,6 +134,10 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     formatos: string[];
   } | null>(null);
 
+  // Comparación signals
+  private comparisonAnalyticsSignal = signal<DashboardAnalyticsResponse | null>(null);
+  private comparisonErrorSignal = signal<string>("");
+
   reportModalOpen = this.reportModalOpenSignal.asReadonly();
   receiptModalOpen = this.receiptModalOpenSignal.asReadonly();
   generatingReports = this.generatingReportsSignal.asReadonly();
@@ -149,6 +153,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   };
 
   analytics = this.analyticsSignal.asReadonly();
+  comparisonAnalytics = this.comparisonAnalyticsSignal.asReadonly();
   companies = this.companiesSignal.asReadonly();
   departments = this.departmentsSignal.asReadonly();
   employees = this.employeesSignal.asReadonly();
@@ -157,6 +162,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   info = this.infoSignal.asReadonly();
   exporting = this.exportingSignal.asReadonly();
   exportingCsv = this.exportingCsvSignal.asReadonly();
+  comparisonError = this.comparisonErrorSignal.asReadonly();
 
   selectedCompanyId: number | null = null;
   selectedDepartmentId: number | null = null;
@@ -165,6 +171,14 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   dateFrom: string | null = null;
   dateTo: string | null = null;
   employeeSearch = "";
+  
+  // Comparación
+  compareType: "DEPARTMENT" | "EMPLOYEE" | null = null;
+  compareDepartmentId: number | null = null;
+  compareEmployeeId: number | null = null;
+  private comparisonSectionExpandedSignal = signal<boolean>(false);
+  comparisonSectionExpanded = this.comparisonSectionExpandedSignal.asReadonly();
+  
   private employeeSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private resizeScheduled = false;
@@ -514,6 +528,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.dateTo = null;
     this.employeeSearch = "";
 
+    // Limpiar comparación también
+    this.clearComparison();
+
     // Limpiar el debounce si existe
     if (this.employeeSearchDebounce) {
       clearTimeout(this.employeeSearchDebounce);
@@ -594,6 +611,139 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.updateFilter();
   }
 
+  // Métodos de comparación
+  hasComparison(): boolean {
+    return (
+      (this.compareType === "DEPARTMENT" && this.compareDepartmentId != null) ||
+      (this.compareType === "EMPLOYEE" && this.compareEmployeeId != null)
+    );
+  }
+
+  onCompareTypeChange(type: "DEPARTMENT" | "EMPLOYEE" | null): void {
+    this.compareType = type;
+    this.compareDepartmentId = null;
+    this.compareEmployeeId = null;
+    this.comparisonAnalyticsSignal.set(null);
+    this.comparisonErrorSignal.set("");
+    if (type) {
+      this.loadComparisonData();
+    }
+  }
+
+  onCompareDepartmentChange(departmentId: number | null): void {
+    this.compareDepartmentId = departmentId;
+    this.comparisonErrorSignal.set("");
+    if (departmentId != null) {
+      this.validateAndLoadComparison();
+    } else {
+      this.comparisonAnalyticsSignal.set(null);
+    }
+  }
+
+  onCompareEmployeeChange(employeeId: number | null): void {
+    this.compareEmployeeId = employeeId;
+    this.comparisonErrorSignal.set("");
+    if (employeeId != null) {
+      this.validateAndLoadComparison();
+    } else {
+      this.comparisonAnalyticsSignal.set(null);
+    }
+  }
+
+  clearComparison(): void {
+    this.compareType = null;
+    this.compareDepartmentId = null;
+    this.compareEmployeeId = null;
+    this.comparisonAnalyticsSignal.set(null);
+    this.comparisonErrorSignal.set("");
+  }
+
+  toggleComparisonSection(): void {
+    this.comparisonSectionExpandedSignal.update((expanded) => !expanded);
+  }
+
+  private validateAndLoadComparison(): void {
+    if (!this.selectedCompanyId) {
+      this.comparisonErrorSignal.set("Selecciona una empresa primero.");
+      this.comparisonAnalyticsSignal.set(null);
+      return;
+    }
+
+    if (this.compareType === "DEPARTMENT" && this.compareDepartmentId != null) {
+      // Validar que el departamento de comparación sea diferente al principal
+      if (this.compareDepartmentId === this.selectedDepartmentId) {
+        this.comparisonErrorSignal.set("El departamento de comparación debe ser diferente al principal.");
+        this.comparisonAnalyticsSignal.set(null);
+        return;
+      }
+      
+      // Los departamentos ya están filtrados por empresa, así que si existe en la lista, pertenece a la empresa seleccionada
+      const compareDept = this.departments().find((d) => d.id === this.compareDepartmentId);
+      if (!compareDept) {
+        this.comparisonErrorSignal.set("El departamento seleccionado no está disponible.");
+        this.comparisonAnalyticsSignal.set(null);
+        return;
+      }
+      
+      this.comparisonErrorSignal.set("");
+      this.loadComparisonData();
+    } else if (this.compareType === "EMPLOYEE" && this.compareEmployeeId != null) {
+      // Validar que el empleado de comparación sea diferente al principal
+      if (this.compareEmployeeId === this.selectedEmployeeId) {
+        this.comparisonErrorSignal.set("El empleado de comparación debe ser diferente al principal.");
+        this.comparisonAnalyticsSignal.set(null);
+        return;
+      }
+      
+      // Los empleados ya están filtrados por empresa/departamento, así que si existe en la lista, pertenece a la empresa seleccionada
+      const compareEmp = this.employees().find((e) => e.id === this.compareEmployeeId);
+      if (!compareEmp) {
+        this.comparisonErrorSignal.set("El empleado seleccionado no está disponible.");
+        this.comparisonAnalyticsSignal.set(null);
+        return;
+      }
+      
+      this.comparisonErrorSignal.set("");
+      this.loadComparisonData();
+    }
+  }
+
+  private loadComparisonData(): void {
+    if (!this.selectedCompanyId) {
+      this.comparisonErrorSignal.set("Selecciona una empresa primero.");
+      return;
+    }
+
+    const filter: AnalyticsQueryParams = {
+      companyId: this.selectedCompanyId,
+      dateFrom: this.dateFrom || undefined,
+      dateTo: this.dateTo || undefined,
+      departmentIds: this.compareType === "DEPARTMENT" && this.compareDepartmentId
+        ? [this.compareDepartmentId]
+        : undefined,
+      employeeIds: this.compareType === "EMPLOYEE" && this.compareEmployeeId
+        ? [this.compareEmployeeId]
+        : undefined,
+      pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
+    };
+
+    this.loadingSignal.set(true);
+    this.comparisonErrorSignal.set("");
+
+    this.analyticsSvc.getDashboardAnalytics(filter).subscribe({
+      next: (data) => {
+        this.comparisonAnalyticsSignal.set(data);
+        this.loadingSignal.set(false);
+      },
+      error: (err) => {
+        console.error("Error loading comparison data", err);
+        this.comparisonErrorSignal.set("Error al cargar los datos de comparación.");
+        this.comparisonAnalyticsSignal.set(null);
+        this.loadingSignal.set(false);
+      },
+    });
+  }
+
   onEmployeeSearchChange(value: string): void {
     // Ensure we always work with strings
     const searchValue = typeof value === 'string' ? value : String(value ?? '');
@@ -668,6 +818,114 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     if (!pillars.length) {
       return this.emptyChartOption("Sin informacion de pilares");
     }
+    const comparisonPillars = this.comparisonAnalytics()?.pillars ?? [];
+    const hasComparison = this.hasComparison() && comparisonPillars.length > 0;
+    const comparisonMap = hasComparison ? new Map(comparisonPillars.map((p) => [p.pillar_id, p.percent])) : null;
+    
+    const categories = pillars.map((item) => item.pillar_name);
+    const data = pillars.map((item) => ({ value: this.round(item.percent), pillarId: item.pillar_id }));
+    const selected = this.selectedPillar;
+    
+    const mainSeries = {
+      type: "bar" as const,
+      data: data.map((item) => {
+        const barColor = this.getStageColorByPercent(item.value);
+        const textColor = this.getTextColorForContrast(barColor);
+        const isSelected = selected !== "ALL" && item.pillarId === selected;
+        return {
+          value: item.value,
+          pillarId: item.pillarId,
+          itemStyle: {
+            color: isSelected ? barColor : barColor,
+            opacity: isSelected ? 1 : 0.9,
+            borderColor: barColor,
+            borderWidth: isSelected ? 2 : 1,
+          },
+          label: {
+            show: true,
+            position: "right" as const,
+            formatter: "{c}%",
+            fontWeight: 600,
+            color: textColor,
+          },
+        };
+      }),
+      barWidth: 24,
+      z: 1, // Capa principal encima
+    };
+
+    const series: any[] = [mainSeries];
+
+    // Agregar capa de comparación con opacidad reducida
+    if (hasComparison && comparisonMap) {
+      const comparisonData = pillars.map((item) => {
+        const compareValue = comparisonMap.get(item.pillar_id) ?? 0;
+        const barColor = this.getStageColorByPercent(compareValue);
+        return {
+          value: this.round(compareValue),
+          pillarId: item.pillar_id,
+          itemStyle: {
+            color: barColor,
+            opacity: 0.3, // Opacidad reducida (30%)
+            borderColor: barColor,
+            borderWidth: 1,
+          },
+          label: {
+            show: false, // No mostrar etiquetas en la comparación
+          },
+        };
+      });
+      
+      series.push({
+        type: "bar" as const,
+        data: comparisonData,
+        barWidth: 24,
+        silent: true, // No interactivo
+        z: 0, // Detrás de la capa principal
+      });
+    }
+
+    return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      tooltip: {
+        trigger: "axis" as const,
+        axisPointer: { type: "shadow" as const },
+        formatter: (params: any) => {
+          // Solo mostrar tooltip para la serie principal
+          const mainParam = Array.isArray(params) 
+            ? params.find((p: any) => p.seriesIndex === 0)
+            : params.seriesIndex === 0 ? params : null;
+          
+          if (!mainParam) return "";
+          
+          return `${mainParam.name}: ${this.formatNumber(mainParam.value)}%`;
+        },
+      },
+      grid: { left: 0, right: 16, bottom: 32, top: 24, containLabel: true },
+      xAxis: {
+        type: "value" as const,
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
+        type: "category" as const,
+        data: categories,
+        axisLabel: { fontWeight: 600, color: TS_COLORS.text },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      series,
+    };
+  }
+
+  private barPillarOptionOld(): EChartsOption {
+    const pillars = [...(this.analytics()?.pillars ?? [])].sort((a, b) => b.percent - a.percent);
+    if (!pillars.length) {
+      return this.emptyChartOption("Sin informacion de pilares");
+    }
     const categories = pillars.map((item) => item.pillar_name);
     const data = pillars.map((item) => ({ value: this.round(item.percent), pillarId: item.pillar_id }));
     const selected = this.selectedPillar;
@@ -732,10 +990,51 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   radarBalanceOption(): EChartsOption {
     const pillars = this.analytics()?.pillars ?? [];
     if (!pillars.length) return this.emptyChartOption("Sin balance registrado", "radar");
+    const comparisonPillars = this.comparisonAnalytics()?.pillars ?? [];
+    const hasComparison = this.hasComparison() && comparisonPillars.length > 0;
+    
     const formatLabel = (label?: string) => {
       const value = label ?? "";
       return value.length > 22 ? `${value.slice(0, 22)}…` : value;
     };
+    
+    const seriesData: any[] = [
+      {
+        value: pillars.map((pillar) => this.round(pillar.percent)),
+        name: "Promedio",
+        areaStyle: { color: AREA_FILL },
+        lineStyle: { color: TS_COLORS.primary, width: 2 },
+        itemStyle: { color: TS_COLORS.primary },
+      },
+    ];
+
+    // Agregar capa de comparación con opacidad reducida
+    if (hasComparison) {
+      const comparisonMap = new Map(comparisonPillars.map((p) => [p.pillar_id, p.percent]));
+      seriesData.push({
+        value: pillars.map((pillar) => {
+          const compareValue = comparisonMap.get(pillar.pillar_id) ?? 0;
+          return this.round(compareValue);
+        }),
+        name: "Comparación",
+        areaStyle: { 
+          color: "rgba(59,130,246,0.15)", // Opacidad reducida (30%)
+          opacity: 0.3,
+        },
+        lineStyle: { 
+          color: TS_COLORS.primary, 
+          width: 1.5,
+          opacity: 0.3,
+        },
+        itemStyle: { 
+          color: TS_COLORS.primary,
+          opacity: 0.3,
+        },
+        silent: true, // No interactivo
+        z: 0, // Detrás de la capa principal
+      });
+    }
+
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 900,
@@ -744,6 +1043,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         trigger: "item",
         textStyle: { color: "#FFFFFF", fontWeight: 500 },
         formatter: (params: any) => {
+          // Solo mostrar tooltip para la serie principal
+          if (params.seriesName === "Comparación") return "";
           const values = Array.isArray(params.value) ? params.value : [];
           return values
             .map((value: number, idx: number) => `${pillars[idx].pillar_name}: ${this.formatNumber(value)}%`)
@@ -777,15 +1078,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       series: [
         {
           type: "radar",
-          data: [
-            {
-              value: pillars.map((pillar) => this.round(pillar.percent)),
-              name: "Promedio",
-              areaStyle: { color: AREA_FILL },
-              lineStyle: { color: TS_COLORS.primary, width: 2 },
-              itemStyle: { color: TS_COLORS.primary },
-            },
-          ],
+          data: seriesData,
         },
       ],
     };

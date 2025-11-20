@@ -114,6 +114,90 @@
           </div>
         </div>
 
+        <!-- Sección de Comparación -->
+        <div class="rounded-2xl border border-[#E2E8F0] bg-white/80 p-5 shadow-sm">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between"
+            (click)="toggleComparisonSection()"
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#64748B]">Comparación</p>
+            <svg
+              class="h-4 w-4 text-[#64748B] transition-transform"
+              [class.rotate-180]="comparisonSectionExpanded()"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          <div *ngIf="comparisonSectionExpanded()" class="mt-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-[#64748B]">Compara departamentos o empleados</span>
+              <button
+                *ngIf="hasComparison()"
+                type="button"
+                class="text-xs text-[#64748B] hover:text-[#0F172A] underline"
+                (click)="clearComparison()"
+              >
+                Limpiar comparación
+              </button>
+            </div>
+            
+            <div class="grid gap-4">
+              <label class="block space-y-2">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Comparar con</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="compareType"
+                  (ngModelChange)="onCompareTypeChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Sin comparación</option>
+                  <option [ngValue]="'DEPARTMENT'">Departamento</option>
+                  <option [ngValue]="'EMPLOYEE'">Empleado</option>
+                </select>
+              </label>
+
+              <label class="block space-y-2" *ngIf="compareType === 'DEPARTMENT'">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Departamento de comparación</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="compareDepartmentId"
+                  (ngModelChange)="onCompareDepartmentChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Selecciona departamento...</option>
+                  <option *ngFor="let dept of departments(); trackBy: trackById" [ngValue]="dept.id">
+                    {{ dept.nombre }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="block space-y-2" *ngIf="compareType === 'EMPLOYEE'">
+                <span class="ts-label text-sm font-semibold text-[#0F172A]">Empleado de comparación</span>
+                <select
+                  class="ts-select rounded-xl border border-[#D7DFEA] bg-white px-4 py-2.5 text-[#1E293B]"
+                  [(ngModel)]="compareEmployeeId"
+                  (ngModelChange)="onCompareEmployeeChange($event)"
+                  panelClass="ts-select-panel"
+                >
+                  <option [ngValue]="null">Selecciona empleado...</option>
+                  <option *ngFor="let emp of filteredEmployees(); trackBy: trackById" [ngValue]="emp?.id ?? null">
+                    {{ emp ? formatEmployeeIdentity(emp) : 'Empleado inválido' }}
+                  </option>
+                </select>
+              </label>
+
+              <div *ngIf="comparisonError()" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {{ comparisonError() }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div *ngIf="info()" class="rounded-2xl border border-border bg-[#F8FAFC] px-4 py-3 text-sm text-muted">
           {{ info() }}
         </div>
