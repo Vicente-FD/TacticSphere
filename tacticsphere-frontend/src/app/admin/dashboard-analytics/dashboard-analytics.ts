@@ -20,6 +20,7 @@ import { NgxEchartsDirective, NgxEchartsModule } from "ngx-echarts";
 import { EChartsOption } from "echarts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import JSZip from "jszip";
 import { Subject, Subscription, firstValueFrom } from "rxjs";
 import { debounceTime, distinctUntilChanged } from "rxjs/operators";
 
@@ -1862,34 +1863,70 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
     try {
       const selectedFormatNames: string[] = [];
-      const exportPromises: Promise<void>[] = [];
+      const selectedCount = Object.values(this.selectedFormats).filter((v) => v === true).length;
 
-      if (this.selectedFormats.pdf) {
-        selectedFormatNames.push("PDF");
-        exportPromises.push(this.exportPdfImproved());
+      // Si solo hay un formato, usar el comportamiento original (descarga directa)
+      if (selectedCount === 1) {
+        const exportPromises: Promise<void>[] = [];
+
+        if (this.selectedFormats.pdf) {
+          selectedFormatNames.push("PDF");
+          exportPromises.push(this.exportPdfImproved());
+        }
+
+        if (this.selectedFormats.csv) {
+          selectedFormatNames.push("CSV");
+          exportPromises.push(this.exportCsvForReport());
+        }
+
+        if (this.selectedFormats.json) {
+          selectedFormatNames.push("JSON");
+          exportPromises.push(this.exportJson());
+        }
+
+        if (this.selectedFormats.xml) {
+          selectedFormatNames.push("XML");
+          exportPromises.push(this.exportXml());
+        }
+
+        if (this.selectedFormats.excel) {
+          selectedFormatNames.push("Excel");
+          exportPromises.push(this.exportExcel());
+        }
+
+        await Promise.all(exportPromises);
+      } else {
+        // Si hay múltiples formatos, generar todos en memoria y crear un ZIP
+        const filePromises: Promise<{ blob: Blob; filename: string }>[] = [];
+
+        if (this.selectedFormats.pdf) {
+          selectedFormatNames.push("PDF");
+          filePromises.push(this.generatePdfBlob());
+        }
+
+        if (this.selectedFormats.csv) {
+          selectedFormatNames.push("CSV");
+          filePromises.push(this.generateCsvBlob());
+        }
+
+        if (this.selectedFormats.json) {
+          selectedFormatNames.push("JSON");
+          filePromises.push(this.generateJsonBlob());
+        }
+
+        if (this.selectedFormats.xml) {
+          selectedFormatNames.push("XML");
+          filePromises.push(this.generateXmlBlob());
+        }
+
+        if (this.selectedFormats.excel) {
+          selectedFormatNames.push("Excel");
+          filePromises.push(this.generateExcelBlob());
+        }
+
+        const files = await Promise.all(filePromises);
+        await this.downloadAsZip(files);
       }
-
-      if (this.selectedFormats.csv) {
-        selectedFormatNames.push("CSV");
-        exportPromises.push(this.exportCsvForReport());
-      }
-
-      if (this.selectedFormats.json) {
-        selectedFormatNames.push("JSON");
-        exportPromises.push(this.exportJson());
-      }
-
-      if (this.selectedFormats.xml) {
-        selectedFormatNames.push("XML");
-        exportPromises.push(this.exportXml());
-      }
-
-      if (this.selectedFormats.excel) {
-        selectedFormatNames.push("Excel");
-        exportPromises.push(this.exportExcel());
-      }
-
-      await Promise.all(exportPromises);
 
       // Generate receipt
       await this.ensureCurrentUser();
@@ -2653,5 +2690,361 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         reject(new Error(`Error al generar Excel: ${errorMessage}`));
       }
     });
+  }
+
+  // Métodos helper que retornan Blobs para crear ZIPs
+  private async generatePdfBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (this.exporting()) {
+      throw new Error("Ya se está generando un informe");
+    }
+
+    this.exportingSignal.set(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      
+      let container = document.getElementById("analytics-export");
+      if (!container) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        container = document.getElementById("analytics-export");
+      }
+      
+      if (!container) {
+        throw new Error("No pudimos encontrar el contenido para exportar.");
+      }
+
+      this.resizeAllCharts();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await this.ensureLogo();
+      await this.ensureCurrentUser();
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const headerHeight = 25;
+      const contentWidth = pageWidth - 2 * margin;
+      let currentY = margin + headerHeight;
+
+      const drawHeader = () => {
+        if (this.logoDataUrl) {
+          pdf.addImage(this.logoDataUrl, "PNG", margin, margin, 20, 20);
+          pdf.setFontSize(18);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text("TacticSphere - Informe Analítico", margin + 22, margin + 12);
+        } else {
+          pdf.setFontSize(18);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text("TacticSphere - Informe Analítico", margin, margin + 8);
+        }
+      };
+
+      drawHeader();
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139);
+      const generatedAt = new Date();
+      const metadataLines = this.buildMetadataLines(generatedAt);
+      metadataLines.forEach((line) => {
+        pdf.text(line, margin, currentY);
+        currentY += 5;
+      });
+
+      currentY += 5;
+
+      const kpis = this.kpiCards();
+      if (kpis.length > 0) {
+        pdf.setFontSize(14);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text("Indicadores Clave (KPIs)", margin, currentY);
+        currentY += 8;
+
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 116, 139);
+        const kpiCols = 2;
+        const kpiWidth = (contentWidth - 5) / kpiCols;
+        const kpiRowHeight = 18;
+        
+        kpis.forEach((kpi, idx) => {
+          const col = idx % kpiCols;
+          const row = Math.floor(idx / kpiCols);
+          const x = margin + col * (kpiWidth + 5);
+          const y = currentY + row * kpiRowHeight;
+
+          pdf.setFontSize(8);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(kpi.label, x, y);
+          
+          pdf.setFontSize(10);
+          if (kpi.color) {
+            const rgb = this.hexToRgb(kpi.color);
+            if (rgb) {
+              pdf.setTextColor(rgb.r, rgb.g, rgb.b);
+            } else {
+              pdf.setTextColor(15, 23, 42);
+            }
+          } else {
+            pdf.setTextColor(15, 23, 42);
+          }
+          pdf.text(kpi.value, x, y + 5);
+          
+          if (kpi.suffix) {
+            pdf.setFontSize(7);
+            pdf.setTextColor(85, 85, 85);
+            const maxWidth = kpiWidth - 2;
+            const suffixLines = pdf.splitTextToSize(kpi.suffix, maxWidth);
+            suffixLines.forEach((line: string, lineIdx: number) => {
+              pdf.text(line, x, y + 10 + (lineIdx * 3.5));
+            });
+          }
+        });
+        const tempPdf = new jsPDF("p", "mm", "a4");
+        const maxSuffixLines = Math.max(...kpis.map(kpi => {
+          if (!kpi.suffix) return 1;
+          const maxWidth = kpiWidth - 2;
+          return tempPdf.splitTextToSize(kpi.suffix, maxWidth).length;
+        }));
+        const suffixHeight = maxSuffixLines > 1 ? (maxSuffixLines - 1) * 3.5 : 0;
+        currentY += Math.ceil(kpis.length / kpiCols) * kpiRowHeight + suffixHeight + 5;
+      }
+
+      const chartElements = container.querySelectorAll("echarts");
+      const chartPromises: Promise<{ dataUrl: string; title: string; height: number }>[] = [];
+
+      chartElements.forEach((chartEl, idx) => {
+        const chartCard = chartEl.closest(".ts-card");
+        const titleEl = chartCard?.querySelector("h2");
+        const title = titleEl?.textContent?.trim() || `Gráfico ${idx + 1}`;
+
+        chartPromises.push(
+          html2canvas(chartEl as HTMLElement, { scale: 2, backgroundColor: "#FFFFFF" }).then((canvas) => ({
+            dataUrl: canvas.toDataURL("image/png"),
+            title,
+            height: (canvas.height * contentWidth) / canvas.width,
+          }))
+        );
+      });
+
+      const charts = await Promise.all(chartPromises);
+
+      for (const chart of charts) {
+        if (currentY + chart.height + 20 > pageHeight - margin) {
+          pdf.addPage();
+          drawHeader();
+          currentY = margin + headerHeight;
+        }
+
+        pdf.setFontSize(12);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(chart.title, margin, currentY);
+        currentY += 7;
+
+        const chartHeight = Math.min(chart.height, pageHeight - currentY - margin);
+        pdf.addImage(chart.dataUrl, "PNG", margin, currentY, contentWidth, chartHeight);
+        currentY += chartHeight + 10;
+      }
+
+      const pdfArrayBuffer = pdf.output("arraybuffer");
+      const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
+      const dateStr = new Date().toISOString().slice(0, 10);
+      return { blob: pdfBlob, filename: `tacticsphere-informe-${dateStr}.pdf` };
+    } finally {
+      this.exportingSignal.set(false);
+    }
+  }
+
+  private async generateCsvBlob(): Promise<{ blob: Blob; filename: string }> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      throw new Error("No se ha seleccionado una empresa");
+    }
+
+    const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return { blob: csvBlob, filename: `tacticsphere-informe-${dateStr}.csv` };
+  }
+
+  private async generateJsonBlob(): Promise<{ blob: Blob; filename: string }> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      throw new Error("No se ha seleccionado una empresa");
+    }
+
+    const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
+    const text = await csvBlob.text();
+    const lines = text.split("\n");
+    const headers = lines[0].split(",");
+    const data: any[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const values = this.parseCsvLine(lines[i]);
+      if (values.length === headers.length) {
+        const obj: any = {};
+        headers.forEach((header, idx) => {
+          obj[header.trim()] = values[idx]?.trim() || "";
+        });
+        data.push(obj);
+      }
+    }
+
+    const jsonData = {
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        filters: this.filterSummary(),
+        totalRecords: data.length,
+      },
+      data,
+    };
+
+    const jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return { blob: jsonBlob, filename: `tacticsphere-informe-${dateStr}.json` };
+  }
+
+  private async generateXmlBlob(): Promise<{ blob: Blob; filename: string }> {
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      throw new Error("No se ha seleccionado una empresa");
+    }
+
+    const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
+    const text = await csvBlob.text();
+    const lines = text.split("\n");
+    const headers = lines[0].split(",");
+    const data: any[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const values = this.parseCsvLine(lines[i]);
+      if (values.length === headers.length) {
+        const obj: any = {};
+        headers.forEach((header, idx) => {
+          obj[header.trim()] = values[idx]?.trim() || "";
+        });
+        data.push(obj);
+      }
+    }
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += "<report>\n";
+    xml += "  <metadata>\n";
+    xml += `    <generatedAt>${new Date().toISOString()}</generatedAt>\n`;
+    xml += "    <filters>\n";
+    this.filterSummary().forEach((filter) => {
+      xml += `      <filter>${this.escapeXml(filter)}</filter>\n`;
+    });
+    xml += "    </filters>\n";
+    xml += `    <totalRecords>${data.length}</totalRecords>\n`;
+    xml += "  </metadata>\n";
+    xml += "  <data>\n";
+
+    data.forEach((record) => {
+      xml += "    <record>\n";
+      Object.keys(record).forEach((key) => {
+        const value = record[key];
+        const safeKey = key.replace(/[^a-zA-Z0-9_]/g, "_");
+        xml += `      <${safeKey}>${this.escapeXml(String(value))}</${safeKey}>\n`;
+      });
+      xml += "    </record>\n";
+    });
+
+    xml += "  </data>\n";
+    xml += "</report>";
+
+    const xmlBlob = new Blob([xml], { type: "application/xml" });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return { blob: xmlBlob, filename: `tacticsphere-informe-${dateStr}.xml` };
+  }
+
+  private async generateExcelBlob(): Promise<{ blob: Blob; filename: string }> {
+    const ExcelJS = await import("exceljs").catch(() => null);
+    if (!ExcelJS) {
+      throw new Error("La librería Excel no está disponible.");
+    }
+
+    const filter = this.filterSignal();
+    if (!filter?.companyId) {
+      throw new Error("No se ha seleccionado una empresa");
+    }
+
+    const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
+    const text = await csvBlob.text();
+    const lines = text.split("\n");
+    const headers = lines[0].split(",");
+    const data: any[][] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const values = this.parseCsvLine(lines[i]);
+      if (values.length === headers.length) {
+        data.push(values.map((v) => v.trim()));
+      }
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "TacticSphere";
+    workbook.created = new Date();
+
+    const summarySheet = workbook.addWorksheet("Resumen");
+    summarySheet.addRow(["Informe TacticSphere"]);
+    summarySheet.addRow(["Generado:", new Date().toLocaleString("es-ES")]);
+    summarySheet.addRow(["Filtros aplicados:"]);
+    this.filterSummary().forEach((f) => summarySheet.addRow(["", f]));
+    summarySheet.addRow([]);
+    summarySheet.addRow(["Total de registros:", data.length]);
+
+    const dataSheet = workbook.addWorksheet("Datos");
+    dataSheet.addRow(headers.map((h) => h.trim()));
+    data.forEach((row) => dataSheet.addRow(row));
+
+    const analytics = this.analytics();
+    if (analytics) {
+      if (analytics.pillars.length > 0) {
+        const pillarsSheet = workbook.addWorksheet("Desempeño por Pilar");
+        const sortedPillars = [...analytics.pillars].sort((a, b) => b.percent - a.percent);
+        pillarsSheet.addRow(["Pilar", "Porcentaje"]);
+        sortedPillars.forEach((p) => {
+          pillarsSheet.addRow([p.pillar_name, p.percent]);
+        });
+      }
+
+      if (analytics.coverage_by_department.length > 0) {
+        const coverageSheet = workbook.addWorksheet("Cobertura por Área");
+        const sortedCoverage = [...analytics.coverage_by_department]
+          .filter((c) => c.total > 0)
+          .sort((a, b) => b.coverage_percent - a.coverage_percent)
+          .slice(0, 15);
+        coverageSheet.addRow(["Departamento", "Cobertura %", "Respondentes", "Total"]);
+        sortedCoverage.forEach((c) => {
+          coverageSheet.addRow([c.department_name, c.coverage_percent, c.respondents, c.total]);
+        });
+      }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const excelBlob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return { blob: excelBlob, filename: `tacticsphere-informe-${dateStr}.xlsx` };
+  }
+
+  private async downloadAsZip(files: { blob: Blob; filename: string }[]): Promise<void> {
+    const zip = new JSZip();
+    
+    for (const file of files) {
+      zip.file(file.filename, file.blob);
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(zipBlob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    anchor.download = `tacticsphere-informes-${dateStr}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 }
