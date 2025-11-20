@@ -235,8 +235,25 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
     const handleScroll = () => {
       const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-      const threshold = 50; // Umbral en píxeles para considerar que se hizo scroll
-      const shouldShow = scrollY < threshold;
+      
+      // Obtener la sección de contenido
+      const contentSection = document.getElementById('content-section');
+      
+      let shouldShow = false;
+      
+      if (contentSection) {
+        // Obtener la posición superior de la sección de contenido relativa al viewport
+        const contentTop = contentSection.getBoundingClientRect().top;
+        
+        // El botón se muestra solo si la sección de contenido aún no está visible
+        // o está muy arriba (más de 200px desde el top del viewport)
+        // Esto significa que el usuario aún está en la sección hero
+        shouldShow = contentTop > 200;
+      } else {
+        // Fallback: mostrar solo si estamos cerca del inicio
+        shouldShow = scrollY < 100;
+      }
+      
       this.showScrollIndicator.set(shouldShow);
     };
 
@@ -247,13 +264,27 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     
     // Verificar posición inicial
     handleScroll();
+    
+    // También verificar cuando cambia el tamaño de la ventana (por si cambia el layout)
+    const handleResize = () => {
+      setTimeout(handleScroll, 100);
+    };
+    
+    window.addEventListener('resize', handleResize, { passive: true });
+    (this as any)._resizeHandler = handleResize;
   }
 
   private removeScrollListener(): void {
     if (typeof window === 'undefined') return;
-    const handler = (this as any)._scrollHandler;
-    if (handler) {
-      window.removeEventListener('scroll', handler);
+    const scrollHandler = (this as any)._scrollHandler;
+    const resizeHandler = (this as any)._resizeHandler;
+    
+    if (scrollHandler) {
+      window.removeEventListener('scroll', scrollHandler);
+    }
+    
+    if (resizeHandler) {
+      window.removeEventListener('resize', resizeHandler);
     }
   }
 }
