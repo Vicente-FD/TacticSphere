@@ -305,27 +305,43 @@
 }
 
 /* Esfera 3D wireframe decorativa del hero */
-.hero-sphere-3d {
+.sphere-wrapper {
   position: fixed;
-  right: -30%;
-  bottom: -70%;
-  width: 1100px;
-  height: 1100px;
+  bottom: -65%;
+  right: -25%;
+  
+  /* La esfera escala según el ancho de la pantalla */
+  width: 75vw;
+  height: 75vw;
+  
+  overflow: hidden;
   pointer-events: none;
-  z-index: 0;
+  z-index: 0; /* El contenido del hero debe tener z-index mayor */
+}
+
+/* El canvas del componente 3D debe llenar el wrapper */
+.sphere-wrapper canvas {
+  width: 100%;
+  height: 100%;
+  opacity: 0.75;
+}
+
+@media (max-width: 1400px) {
+  .sphere-wrapper {
+    width: 80vw;
+    height: 80vw;
+  }
 }
 
 @media (max-width: 1024px) {
-  .hero-sphere-3d {
-    width: 800px;
-    height: 800px;
-    right: -33%;
-    bottom: -72%;
+  .sphere-wrapper {
+    width: 90vw;
+    height: 90vw;
   }
 }
 
 @media (max-width: 768px) {
-  .hero-sphere-3d {
+  .sphere-wrapper {
     display: none;
   }
 }

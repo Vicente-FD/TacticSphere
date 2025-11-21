@@ -10,15 +10,21 @@ import * as THREE from 'three';
     <canvas #canvasRef class="hero-sphere-canvas"></canvas>
   `,
   styles: [`
-    .hero-sphere-canvas {
+    :host {
+      display: block;
       width: 100%;
       height: 100%;
+    }
+
+    .hero-sphere-canvas {
       display: block;
+      width: 100%;
+      height: 100%;
     }
   `],
 })
 export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('canvasRef', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('canvasRef', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
@@ -32,11 +38,14 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.initThree();
-    this.createSphere();
-    this.setupCamera();
-    this.startAnimation();
-    this.setupResizeListener();
+    // Esperar un frame para que el wrapper se haya renderizado completamente
+    requestAnimationFrame(() => {
+      this.initThree();
+      this.createSphere();
+      this.updateRendererSize(); // Asegurar que el tamaño se calcule correctamente
+      this.startAnimation();
+      this.setupResizeListener();
+    });
   }
 
   ngOnDestroy(): void {
@@ -45,29 +54,31 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
 
   private initThree(): void {
     const canvas = this.canvasRef.nativeElement;
-    const container = canvas.parentElement;
 
-    if (!container) {
+    if (!canvas) {
       return;
     }
-
-    // Obtener dimensiones del contenedor
-    const width = container.clientWidth;
-    const height = container.clientHeight;
 
     // Crear escena
     this.scene = new THREE.Scene();
 
-    // Crear cámara
+    // Crear cámara (el aspecto se actualizará en updateRendererSize)
     this.camera = new THREE.PerspectiveCamera(
       45, // FOV
-      width / height, // Aspect ratio
+      1, // Aspect ratio temporal (se actualizará)
       0.1, // Near
       1000 // Far
     );
 
     // Posicionar cámara
     this.camera.position.z = 3;
+
+    // Inicializar renderer
+    this.initRenderer();
+  }
+
+  private initRenderer(): void {
+    const canvas = this.canvasRef.nativeElement;
 
     // Crear renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -76,8 +87,25 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
       antialias: true, // Antialiasing
     });
 
-    this.renderer.setSize(width, height);
+    // Actualizar tamaño del renderer usando el tamaño real del canvas
+    this.updateRendererSize();
+  }
+
+  private updateRendererSize(): void {
+    const canvas = this.canvasRef.nativeElement;
+    if (!canvas || !this.camera || !this.renderer) {
+      return;
+    }
+
+    const { clientWidth, clientHeight } = canvas;
+
+    // Actualizar tamaño del renderer
+    this.renderer.setSize(clientWidth, clientHeight, false);
     this.renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Actualizar aspecto de la cámara
+    this.camera.aspect = clientWidth / clientHeight;
+    this.camera.updateProjectionMatrix();
   }
 
   private createSphere(): void {
@@ -97,11 +125,6 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
 
     // Añadir a la escena
     this.scene.add(this.sphere);
-  }
-
-  private setupCamera(): void {
-    // La cámara ya está configurada en initThree
-    // Puedes ajustar la posición aquí si es necesario
   }
 
   private startAnimation(): void {
@@ -125,20 +148,8 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
 
   private setupResizeListener(): void {
     this.resizeListener = () => {
-      const container = this.canvasRef.nativeElement.parentElement;
-      if (!container || !this.camera || !this.renderer) {
-        return;
-      }
-
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-
-      // Actualizar tamaño del renderer
-      this.renderer.setSize(width, height);
-
-      // Actualizar aspecto de la cámara
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
+      // Actualizar tamaño del renderer usando el tamaño real del canvas
+      this.updateRendererSize();
     };
 
     window.addEventListener('resize', this.resizeListener);
