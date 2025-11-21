@@ -18,6 +18,7 @@ type AuthStorage = {
   token?: string;
   rol?: RolEnum;
   empresa_id?: number | null;
+  nombre_usuario?: string;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -39,6 +40,7 @@ export class AuthService {
                 ...base,
                 rol: me.rol,
                 empresa_id: me.empresa_id ?? null,
+                nombre_usuario: me.nombre,
               });
             }),
             map(() => void 0)
@@ -67,6 +69,7 @@ export class AuthService {
           ...base,
           rol: me.rol,
           empresa_id: me.empresa_id ?? null,
+          nombre_usuario: me.nombre,
         });
       }),
       map(() => void 0)
@@ -87,6 +90,10 @@ export class AuthService {
     return typeof v === 'number' ? v : null;
   }
 
+  getUserName(): string | null {
+    return this.readAuth().nombre_usuario ?? null;
+  }
+
   hasRole(roles: RolEnum[] | RolEnum): boolean {
     const current = this.getRole();
     const list = Array.isArray(roles) ? roles : [roles];
@@ -98,7 +105,7 @@ export class AuthService {
     switch (role) {
       case 'ADMIN_SISTEMA':
       case 'ADMIN':
-        return '/admin/dashboards';
+        return '/results';
       case 'ANALISTA':
         return '/results';
       case 'USUARIO':

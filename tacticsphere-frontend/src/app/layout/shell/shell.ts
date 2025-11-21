@@ -1,5 +1,5 @@
 ﻿// src/app/layout/shell/shell.ts
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterOutlet, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../auth.service';
@@ -24,7 +24,7 @@ import { AuthService } from '../../auth.service';
             >
               Menú
             </button>
-            <span class="text-muted">Rol: <span class="text-ink">{{ rol }}</span></span>
+            <span class="text-muted">Usuario: <span class="text-ink">{{ userName() }}</span></span>
             <button type="button" class="ts-btn ts-btn--secondary" (click)="logout()">Salir</button>
           </div>
         </div>
@@ -57,12 +57,12 @@ import { AuthService } from '../../auth.service';
               >Resultados</a
             >
             <a
-              *ngIf="canManageAdmin"
+              *ngIf="canSeeSurvey"
               class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
-              routerLink="/admin/dashboards"
+              routerLink="/survey"
               routerLinkActive="bg-[#f6f6f6] text-ink"
               (click)="handleNavClick()"
-              >Panel admin</a
+              >Encuesta</a
             >
             <a
               *ngIf="canManageAdmin"
@@ -104,14 +104,6 @@ import { AuthService } from '../../auth.service';
               (click)="handleNavClick()"
               >Registro de auditoría</a
             >
-            <a
-              *ngIf="canSeeSurvey"
-              class="rounded-xl px-3 py-2 text-muted transition-colors hover:bg-[#f6f6f6] hover:text-ink"
-              routerLink="/survey"
-              routerLinkActive="bg-[#f6f6f6] text-ink"
-              (click)="handleNavClick()"
-              >Encuesta</a
-            >
           </nav>
         </aside>
 
@@ -121,10 +113,16 @@ import { AuthService } from '../../auth.service';
           </main>
           <footer class="border-t border-border bg-white px-6 py-4 text-xs text-muted sm:text-sm">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span>© {{ currentYear }} TacticSphere. Todos los derechos reservados.</span>
+              <span>© 2025 TacticSphere. Todos los derechos reservados.</span>
               <div class="flex flex-wrap items-center gap-4">
-                <a class="transition-colors hover:text-ink" href="mailto:contacto@tacticsphere.com">Contacto</a>
-                <a class="transition-colors hover:text-ink" [routerLink]="defaultRoute">Ir a inicio</a>
+                <a class="transition-colors hover:text-ink" href="mailto:soporte@tacticsphere.com">Soporte</a>
+                <button
+                  type="button"
+                  class="transition-colors hover:text-ink"
+                  (click)="scrollToTop()"
+                >
+                  Ir arriba
+                </button>
               </div>
             </div>
           </footer>
@@ -133,11 +131,11 @@ import { AuthService } from '../../auth.service';
     </div>
   `,
 })
-export class ShellComponent {
+export class ShellComponent implements OnInit {
   private router = inject(Router);
   private auth = inject(AuthService);
 
-  readonly rol = this.auth.getRole() ?? 'N/A';
+  readonly userName = signal<string>(this.auth.getUserName() ?? 'Usuario');
   readonly currentYear = new Date().getFullYear();
   readonly canManageAdmin = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA']);
   readonly canSeeSurvey = this.auth.hasRole(['ADMIN', 'ADMIN_SISTEMA', 'ANALISTA']);
@@ -145,6 +143,25 @@ export class ShellComponent {
   readonly defaultRoute = this.auth.getDefaultRoute() || '/results';
   private readonly desktopBreakpoint = 1024;
   sidebarOpen = typeof window === 'undefined' ? true : window.innerWidth >= this.desktopBreakpoint;
+
+  ngOnInit(): void {
+    // Asegurar que el nombre del usuario esté cargado
+    const currentName = this.auth.getUserName();
+    if (!currentName) {
+      // Si no hay nombre en el storage, obtenerlo desde /me
+      this.auth.ensureMe().subscribe({
+        next: () => {
+          const name = this.auth.getUserName();
+          if (name) {
+            this.userName.set(name);
+          }
+        },
+        error: () => {
+          // Si hay error, mantener el valor por defecto
+        },
+      });
+    }
+  }
 
   logout(): void {
     this.auth.logout();
@@ -162,6 +179,12 @@ export class ShellComponent {
   handleNavClick(): void {
     if (typeof window !== 'undefined' && window.innerWidth < this.desktopBreakpoint) {
       this.sidebarOpen = false;
+    }
+  }
+
+  scrollToTop(): void {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 

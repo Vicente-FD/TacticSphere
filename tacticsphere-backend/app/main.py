@@ -53,7 +53,7 @@ from .schemas import (
 
     # Empresa / Depto
 
-    EmpresaCreate, EmpresaRead,
+    EmpresaCreate, EmpresaRead, EmpresaUpdate,
 
     DepartamentoCreate, DepartamentoRead,
 
@@ -463,6 +463,63 @@ def create_company(
         request=request,
     )
     return empresa
+
+
+@app.patch("/companies/{empresa_id}", response_model=EmpresaRead)
+def update_company(
+    empresa_id: int,
+    data: EmpresaUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
+):
+    empresa = db.get(Empresa, empresa_id)
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    
+    # Guardar estado antes para auditoría
+    before = {
+        "id": empresa.id,
+        "nombre": empresa.nombre,
+        "rut": empresa.rut,
+        "giro": empresa.giro,
+        "departamentos": [d.nombre for d in empresa.departamentos] if empresa.departamentos else [],
+    }
+    
+    updated = crud.update_empresa(
+        db,
+        empresa_id=empresa_id,
+        nombre=data.nombre,
+        rut=data.rut,
+        giro=data.giro,
+        departamentos=data.departamentos,
+    )
+    
+    if not updated:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    
+    # Registrar en auditoría
+    after = {
+        "id": updated.id,
+        "nombre": updated.nombre,
+        "rut": updated.rut,
+        "giro": updated.giro,
+        "departamentos": [d.nombre for d in updated.departamentos] if updated.departamentos else [],
+    }
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.COMPANY_UPDATE,
+        current_user=current,
+        empresa_id=updated.id,
+        entity_type="Empresa",
+        entity_id=empresa_id,
+        notes=f"Actualizó empresa {updated.nombre}",
+        diff_before=before,
+        diff_after=after,
+        request=request,
+    )
+    return updated
 
 
 @app.delete("/companies/{empresa_id}", status_code=204)

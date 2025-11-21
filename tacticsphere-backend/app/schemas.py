@@ -25,6 +25,14 @@ class EmpresaCreate(BaseModel):
     # nombres de departamentos opcionales al crear empresa
     departamentos: Optional[List[str]] = None
 
+class EmpresaUpdate(BaseModel):
+    # todos opcionales para actualizaciones parciales
+    nombre: Optional[str] = None
+    rut: Optional[str] = None
+    giro: Optional[str] = None
+    # nombres de departamentos opcionales al actualizar empresa
+    departamentos: Optional[List[str]] = None
+
 class EmpresaRead(BaseModel):
     id: int
     nombre: str

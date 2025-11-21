@@ -58,10 +58,8 @@ export const routes: Routes = [
           },
           {
             path: 'dashboards',
-            loadComponent: () =>
-              import('./admin/dashboard-analytics/dashboard-analytics').then(
-                (m) => m.DashboardAnalyticsComponent,
-              ),
+            redirectTo: '/results',
+            pathMatch: 'full',
           },
           {
             path: 'companies',

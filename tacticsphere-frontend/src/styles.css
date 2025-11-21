@@ -176,6 +176,10 @@
   }
 
   .ts-btn--danger {
+    @apply border border-error/40 bg-white text-error hover:bg-error/10 hover:text-error;
+  }
+
+  .ts-btn--danger {
     @apply border border-error/30 bg-white text-error hover:bg-error/10 hover:text-error;
   }
 
@@ -208,7 +212,34 @@
   }
 
   .ts-table tbody td {
-    @apply border-b border-border py-3 align-middle;
+    @apply border-b border-border py-1.5 align-middle;
+  }
+
+  /* Menú de acciones: overlay flotante que no afecta el layout */
+  .user-actions-dropdown {
+    /* Position fixed para que flote sobre todo sin afectar el layout */
+    position: fixed;
+    /* Asegurar que el menú se vea por encima de todo (tarjetas, modales, etc.) */
+    z-index: 1000;
+    /* Estilos base del menú */
+    min-w: 180px;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background-color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 0.25rem 0;
+    /* Evitar que el menú se desborde de la pantalla */
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    /* Asegurar que el menú tenga un fondo sólido */
+    background-color: white;
+    /* Eliminar cualquier margen o padding que pueda afectar el posicionamiento */
+    margin: 0;
+  }
+
+  /* Variante del menú cuando se abre hacia arriba */
+  .user-actions-dropdown--top {
+    /* Mantener los mismos estilos pero con posición ajustada */
   }
 
   .ts-badge {
@@ -242,6 +273,40 @@
 
 .scroll-indicator > lucide-icon {
   animation: scrollIndicator 2s ease-in-out infinite;
+}
+
+/* Skeleton loader para usuarios */
+.users-skeleton-row {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.users-skeleton-row td {
+  padding: 0.75rem 0.5rem;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .ts-btn:hover {

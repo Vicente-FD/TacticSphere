@@ -194,6 +194,50 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
     db.refresh(emp)
     return emp
 
+def update_empresa(
+    db: Session,
+    empresa_id: int,
+    nombre: Optional[str] = None,
+    rut: Optional[str] = None,
+    giro: Optional[str] = None,
+    departamentos: Optional[List[str]] = None,
+) -> Optional[Empresa]:
+    emp = db.get(Empresa, empresa_id)
+    if not emp:
+        return None
+    
+    # Actualizar campos básicos
+    if nombre is not None:
+        emp.nombre = nombre
+    if rut is not None:
+        emp.rut = rut
+    if giro is not None:
+        emp.giro = giro
+    
+    # Si se proporcionan departamentos, reemplazar los existentes
+    if departamentos is not None:
+        # Eliminar departamentos existentes
+        for dep in emp.departamentos:
+            db.delete(dep)
+        
+        # Crear nuevos departamentos
+        seen: set[str] = set()
+        for raw in departamentos:
+            if not raw:
+                continue
+            n = raw.strip()
+            if not n:
+                continue
+            key = n.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            db.add(Departamento(nombre=n, empresa_id=emp.id))
+    
+    db.commit()
+    db.refresh(emp)
+    return emp
+
 def delete_empresa(db: Session, empresa_id: int) -> bool:
     emp = db.get(Empresa, empresa_id)
     if not emp:

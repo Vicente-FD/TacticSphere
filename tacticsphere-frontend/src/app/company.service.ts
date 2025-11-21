@@ -37,6 +37,27 @@ export class CompanyService {
     );
   }
 
+  /**
+   * Actualiza una empresa.
+   * PATCH /companies/{id}
+   */
+  update(
+    id: number,
+    body: {
+      nombre?: string;
+      rut?: string;
+      giro?: string;
+      departamentos?: string[];
+    }
+  ): Observable<Empresa> {
+    return this.http.patch<Empresa>(`${this.base}/companies/${id}`, body).pipe(
+      map((r) => ({
+        ...r,
+        activa: typeof r.activa === 'boolean' ? r.activa : true,
+      }))
+    );
+  }
+
   /** Elimina una empresa */
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/companies/${id}`);

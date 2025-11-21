@@ -1,16 +1,16 @@
-﻿import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, WritableSignal, inject, signal, ChangeDetectionStrategy, ChangeDetectorRef, TrackByFunction } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
-import { LucideAngularModule } from 'lucide-angular';
 import { finalize } from 'rxjs/operators';
 
 import { CompanyService } from '../../company.service';
 import { UserService } from '../../user.service';
 import { AuthService } from '../../auth.service';
 import { ModalComponent } from '../../shared/ui/modal/modal.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
-import { Empresa, RolEnum, Usuario, UsuarioCreate, PasswordChangeRequest } from '../../types';
+import { Empresa, RolEnum, Usuario, UsuarioCreate, UsuarioUpdate, PasswordChangeRequest } from '../../types';
 
 type PasswordDialogMode = 'user' | 'request';
 
@@ -22,6 +22,14 @@ interface PasswordDialogState {
   value: string;
 }
 
+interface EditDialogState {
+  open: boolean;
+  user: Usuario | null;
+  type: 'company' | 'role' | 'email' | null;
+  value: number | string | null; // empresa_id (number) | rol (string) | email (string)
+  busy: boolean;
+}
+
 @Component({
   standalone: true,
   selector: 'app-users',
@@ -29,9 +37,10 @@ interface PasswordDialogState {
     CommonModule,
     FormsModule,
     NgxSkeletonLoaderModule,
-    LucideAngularModule,
     ModalComponent,
+    IconComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ts-page">
       <div class="ts-container space-y-6">
@@ -41,7 +50,7 @@ interface PasswordDialogState {
             <p class="ts-subtitle">Crea usuarios, asigna roles y controla el acceso a la plataforma.</p>
           </div>
           <div class="ts-chip h-fit">
-            <lucide-icon name="Users" class="h-4 w-4 text-accent" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="users" size="16" class="h-4 w-4 text-accent" strokeWidth="1.75"></app-icon>
             {{ users().length }} visibles
           </div>
         </div>
@@ -52,7 +61,7 @@ interface PasswordDialogState {
             class="ts-btn ts-btn--positive gap-2"
             (click)="toggleCreateCard()"
           >
-            <lucide-icon name="UserPlus" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="user-plus" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
             <span>{{ showCreateCard ? 'Cerrar creación' : 'Crear usuario' }}</span>
           </button>
           <button
@@ -60,7 +69,7 @@ interface PasswordDialogState {
             class="ts-btn ts-btn--ghost gap-2"
             (click)="toggleFiltersCard()"
           >
-            <lucide-icon name="SlidersHorizontal" class="h-4 w-4" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="sliders-horizontal" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
             <span>Filtros</span>
           </button>
         </div>
@@ -68,7 +77,7 @@ interface PasswordDialogState {
         <div class="space-y-6">
           <div *ngIf="showCreateCard" class="ts-card space-y-5">
             <div class="flex items-center gap-3">
-              <lucide-icon name="UserPlus" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <app-icon name="user-plus" size="20" class="h-5 w-5 text-accent" strokeWidth="1.75"></app-icon>
               <div>
                 <h2 class="text-lg font-semibold text-ink">Crear usuario</h2>
                 <p class="text-sm text-neutral-400">Proporciona las credenciales iniciales y asigna el rol adecuado.</p>
@@ -86,7 +95,7 @@ interface PasswordDialogState {
                 <div
                   class="flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-3 py-2 transition-all duration-120 ease-smooth focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20"
                 >
-                  <lucide-icon name="Mail" class="h-4 w-4 text-neutral-400" strokeWidth="1.75"></lucide-icon>
+                  <app-icon name="mail" size="16" class="h-4 w-4 text-neutral-400" strokeWidth="1.75"></app-icon>
                   <input
                     class="flex-1 border-none bg-transparent p-0 text-base text-ink placeholder:text-neutral-300 focus:outline-none"
                     [(ngModel)]="form.email"
@@ -128,25 +137,27 @@ interface PasswordDialogState {
               (click)="createUser()"
               [disabled]="creatingUser || !isValidForm()"
             >
-              <lucide-icon
+              <app-icon
                 *ngIf="!creatingUser"
-                name="ShieldCheck"
+                name="shield"
+                size="16"
                 class="h-4 w-4"
                 strokeWidth="1.75"
-              ></lucide-icon>
-              <lucide-icon
+              ></app-icon>
+              <app-icon
                 *ngIf="creatingUser"
-                name="Loader2"
+                name="loader2"
+                size="16"
                 class="h-4 w-4 animate-spin"
                 strokeWidth="1.75"
-              ></lucide-icon>
+              ></app-icon>
               <span>{{ creatingUser ? 'Creando...' : 'Crear usuario' }}</span>
             </button>
           </div>
 
           <div *ngIf="showFiltersCard" class="ts-card space-y-4">
             <div class="flex items-center gap-3">
-              <lucide-icon name="Building2" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <app-icon name="building2" size="20" class="h-5 w-5 text-accent" strokeWidth="1.75"></app-icon>
               <div>
                 <h2 class="text-lg font-semibold text-ink">Filtrar por empresa</h2>
                 <p class="text-sm text-neutral-400">Muestra solo los usuarios de una organización específica.</p>
@@ -181,14 +192,7 @@ interface PasswordDialogState {
               </div>
             </div>
 
-            <ng-container *ngIf="loadingUsers">
-              <ngx-skeleton-loader
-                count="6"
-                [theme]="{ height: '48px', marginBottom: '10px', borderRadius: '10px' }"
-              ></ngx-skeleton-loader>
-            </ng-container>
-
-            <ng-container *ngIf="!loadingUsers && users().length; else emptyUsers">
+            <ng-container *ngIf="loadingUsers(); else usersTable">
               <div class="overflow-x-auto">
                 <table class="ts-table">
                   <thead>
@@ -202,101 +206,145 @@ interface PasswordDialogState {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let u of users()">
-                      <td>
-                        <div class="font-semibold text-ink">{{ u.nombre }}</div>
-                        <div class="text-xs uppercase tracking-[0.08em] text-neutral-400">ID: {{ u.id }}</div>
-                      </td>
-                      <td class="text-sm text-neutral-500">{{ u.email }}</td>
-                      <td>
-                        <select
-                          class="ts-select"
-                          [ngModel]="u.rol"
-                          (ngModelChange)="onRoleChange(u, $event)"
-                          [disabled]="updatingRoleId === u.id || (!isAdminSistema && u.rol === 'ADMIN_SISTEMA')"
-                        >
-                          <option
-                            *ngFor="let r of roles"
-                            [ngValue]="r"
-                            [disabled]="!isAdminSistema && r === 'ADMIN_SISTEMA' && u.rol !== 'ADMIN_SISTEMA'"
-                          >
-                            {{ r }}
-                          </option>
-                        </select>
-                      </td>
-                      <td>{{ empresaName(u.empresa_id) }}</td>
-                      <td>
-                        <button
-                          type="button"
-                          class="ts-chip inline-flex items-center justify-center gap-2 w-[110px] px-3 py-1.5 text-sm"
-                          [class.bg-success/10]="u.activo"
-                          [class.bg-error/10]="!u.activo"
-                          (click)="toggleActive(u)"
-                          [disabled]="togglingActiveId === u.id || u.rol === 'ADMIN_SISTEMA'"
-                        >
-                          <lucide-icon
-                            *ngIf="togglingActiveId !== u.id"
-                            [name]="u.activo ? 'Check' : 'Slash'"
-                            class="h-4 w-4 flex-shrink-0"
-                            strokeWidth="1.75"
-                          ></lucide-icon>
-                          <lucide-icon
-                            *ngIf="togglingActiveId === u.id"
-                            name="Loader2"
-                            class="h-4 w-4 flex-shrink-0 animate-spin"
-                            strokeWidth="1.75"
-                          ></lucide-icon>
-                          <span class="text-sm font-medium">{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
-                        </button>
-                      </td>
-                      <td>
-                        <div class="flex flex-wrap gap-2 justify-end">
-                          <button
-                            class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
-                            (click)="resetPassword(u)"
-                            type="button"
-                            [disabled]="resettingId === u.id || passwordDialogBusy"
-                          >
-                            <lucide-icon
-                              *ngIf="resettingId !== u.id"
-                              name="KeyRound"
-                              class="h-4 w-4"
-                              strokeWidth="1.75"
-                            ></lucide-icon>
-                            <lucide-icon
-                              *ngIf="resettingId === u.id"
-                              name="Loader2"
-                              class="h-4 w-4 animate-spin"
-                              strokeWidth="1.75"
-                            ></lucide-icon>
-                            <span>Cambiar contraseña</span>
-                          </button>
-                          <button
-                            class="ts-btn ts-btn--danger"
-                            (click)="deleteUser(u)"
-                            [disabled]="deletingId === u.id || u.rol === 'ADMIN_SISTEMA'"
-                          >
-                            <lucide-icon
-                              *ngIf="deletingId !== u.id"
-                              name="Trash2"
-                              class="h-4 w-4"
-                              strokeWidth="1.75"
-                            ></lucide-icon>
-                            <lucide-icon
-                              *ngIf="deletingId === u.id"
-                              name="Loader2"
-                              class="h-4 w-4 animate-spin"
-                              strokeWidth="1.75"
-                            ></lucide-icon>
-                            <span>Eliminar</span>
-                          </button>
-                        </div>
-                      </td>
+                    <tr *ngFor="let i of [1,2,3,4,5]" class="users-skeleton-row">
+                      <td><div class="skeleton h-4 w-32"></div></td>
+                      <td><div class="skeleton h-4 w-40"></div></td>
+                      <td><div class="skeleton h-8 w-24"></div></td>
+                      <td><div class="skeleton h-4 w-28"></div></td>
+                      <td><div class="skeleton h-6 w-24"></div></td>
+                      <td><div class="skeleton h-8 w-8 ml-auto"></div></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </ng-container>
+
+            <ng-template #usersTable>
+              <ng-container *ngIf="users().length; else emptyUsers">
+                <!-- Contenedor de tabla: overflow solo horizontal, sin afectar el menú flotante -->
+                <div class="overflow-x-auto overflow-y-visible">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Empresa</th>
+                        <th>Estado</th>
+                        <th class="text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let u of users(); trackBy: trackByUserId">
+                        <td>
+                          <div class="font-semibold text-ink">{{ u.nombre }}</div>
+                          <div class="text-xs uppercase tracking-[0.08em] text-neutral-400">ID: {{ u.id }}</div>
+                        </td>
+                        <td class="text-sm text-neutral-500">{{ u.email }}</td>
+                        <td>
+                          <select
+                            class="ts-select"
+                            [ngModel]="u.rol"
+                            (ngModelChange)="onRoleChange(u, $event)"
+                            [disabled]="updatingRoleId === u.id || (!isAdminSistema && u.rol === 'ADMIN_SISTEMA')"
+                          >
+                            <option
+                              *ngFor="let r of roles"
+                              [ngValue]="r"
+                              [disabled]="!isAdminSistema && r === 'ADMIN_SISTEMA' && u.rol !== 'ADMIN_SISTEMA'"
+                            >
+                              {{ r }}
+                            </option>
+                          </select>
+                        </td>
+                        <td>{{ empresaName(u.empresa_id) }}</td>
+                        <td>
+                          <button
+                            type="button"
+                            class="ts-chip inline-flex items-center justify-center gap-1.5 w-[110px] px-2.5 py-1 text-xs"
+                            [class.bg-success/10]="u.activo"
+                            [class.bg-error/10]="!u.activo"
+                            (click)="toggleActive(u)"
+                            [disabled]="togglingActiveId === u.id || u.rol === 'ADMIN_SISTEMA'"
+                          >
+                            <app-icon
+                              *ngIf="togglingActiveId !== u.id"
+                              [name]="u.activo ? 'check' : 'slash'"
+                              size="16"
+                              class="h-4 w-4 flex-shrink-0"
+                              strokeWidth="1.75"
+                            ></app-icon>
+                            <app-icon
+                              *ngIf="togglingActiveId === u.id"
+                              name="loader2"
+                              size="16"
+                              class="h-4 w-4 flex-shrink-0 animate-spin"
+                              strokeWidth="1.75"
+                            ></app-icon>
+                            <span class="text-xs font-medium">{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
+                          </button>
+                        </td>
+                        <td>
+                          <!-- Menú de acciones: overlay flotante que no afecta el layout -->
+                          <div class="flex justify-end">
+                            <button
+                              type="button"
+                              #menuButton
+                              class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink p-2 user-actions-button"
+                              (click)="toggleUserMenu(u.id, menuButton); $event.stopPropagation()"
+                              [disabled]="resettingId === u.id || deletingId === u.id || passwordDialogBusy"
+                              aria-label="Acciones del usuario"
+                            >
+                              <app-icon
+                                *ngIf="resettingId !== u.id && deletingId !== u.id"
+                                name="settings"
+                                size="16"
+                                class="h-4 w-4"
+                                strokeWidth="1.75"
+                              ></app-icon>
+                              <app-icon
+                                *ngIf="resettingId === u.id || deletingId === u.id"
+                                name="loader2"
+                                size="16"
+                                class="h-4 w-4 animate-spin"
+                                strokeWidth="1.75"
+                              ></app-icon>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-container>
+            </ng-template>
+
+            <ng-template #loadingTable>
+              <div class="overflow-x-auto">
+                <table class="ts-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Email</th>
+                      <th>Rol</th>
+                      <th>Empresa</th>
+                      <th>Estado</th>
+                      <th class="text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let i of [1,2,3,4,5]" class="users-skeleton-row">
+                      <td><div class="skeleton h-4 w-32"></div></td>
+                      <td><div class="skeleton h-4 w-40"></div></td>
+                      <td><div class="skeleton h-4 w-24"></div></td>
+                      <td><div class="skeleton h-4 w-28"></div></td>
+                      <td><div class="skeleton h-6 w-20"></div></td>
+                      <td><div class="skeleton h-8 w-8 ml-auto"></div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </ng-template>
 
             <ng-template #emptyUsers>
               <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 p-6 text-center">
@@ -310,7 +358,7 @@ interface PasswordDialogState {
           <div *ngIf="isAdminSistema" class="ts-card space-y-4">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-3">
-              <lucide-icon name="BellRing" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <app-icon name="bell-ring" size="20" class="h-5 w-5 text-accent" strokeWidth="1.75"></app-icon>
               <div>
                 <h2 class="text-lg font-semibold text-ink">Solicitudes de cambio de contraseña</h2>
                 <p class="text-sm text-neutral-400">
@@ -350,18 +398,20 @@ interface PasswordDialogState {
                           type="button"
                           [disabled]="resolvingRequestId === req.id || passwordDialogBusy"
                         >
-                          <lucide-icon
+                          <app-icon
                             *ngIf="resolvingRequestId !== req.id"
-                            name="KeyRound"
+                            name="key-round"
+                            size="16"
                             class="h-4 w-4"
                             strokeWidth="1.75"
-                          ></lucide-icon>
-                          <lucide-icon
+                          ></app-icon>
+                          <app-icon
                             *ngIf="resolvingRequestId === req.id"
-                            name="Loader2"
+                            name="loader2"
+                            size="16"
                             class="h-4 w-4 animate-spin"
                             strokeWidth="1.75"
-                          ></lucide-icon>
+                          ></app-icon>
                           <span>Atender</span>
                         </button>
                       </td>
@@ -385,6 +435,7 @@ interface PasswordDialogState {
           </ng-template>
         </div>
       </div>
+
       <ts-modal
         [title]="passwordDialog.mode === 'request' ? 'Atender cambio de contraseña' : 'Cambiar contraseña'"
         [open]="passwordDialog.open"
@@ -436,13 +487,177 @@ interface PasswordDialogState {
           </div>
         </div>
       </ts-modal>
+
+      <ts-modal [title]="getEditDialogTitle()" [open]="editDialog.open" (close)="closeEditDialog()">
+        <div class="space-y-4">
+          <p *ngIf="editDialogMessage" class="text-sm text-neutral-500">{{ editDialogMessage }}</p>
+
+          <!-- Diálogo para cambiar empresa -->
+          <div *ngIf="editDialog.type === 'company'">
+            <label class="block space-y-2">
+              <span class="ts-label">Empresa</span>
+              <select
+                class="ts-select"
+                [ngModel]="editDialog.value"
+                (ngModelChange)="editDialog.value = $event"
+                [disabled]="editDialog.busy"
+              >
+                <option [ngValue]="null">Sin asignar</option>
+                <option *ngFor="let empresa of empresas()" [ngValue]="empresa.id">
+                  {{ empresa.nombre }}
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <!-- Diálogo para cambiar rol -->
+          <div *ngIf="editDialog.type === 'role'">
+            <label class="block space-y-2">
+              <span class="ts-label">Rol</span>
+              <select
+                class="ts-select"
+                [ngModel]="editDialog.value"
+                (ngModelChange)="editDialog.value = $event"
+                [disabled]="editDialog.busy || (updatingRoleId === editDialog.user?.id)"
+              >
+                <option
+                  *ngFor="let r of roles"
+                  [ngValue]="r"
+                  [disabled]="
+                    !isAdminSistema && r === 'ADMIN_SISTEMA' && editDialog.user?.rol !== 'ADMIN_SISTEMA'
+                  "
+                >
+                  {{ r }}
+                </option>
+              </select>
+            </label>
+            <p class="text-xs text-muted">
+              * Solo usuarios ADMIN_SISTEMA pueden asignar el rol ADMIN_SISTEMA
+            </p>
+          </div>
+
+          <!-- Diálogo para cambiar correo -->
+          <div *ngIf="editDialog.type === 'email'">
+            <label class="block space-y-2">
+              <span class="ts-label">Correo electrónico</span>
+              <input
+                type="email"
+                class="ts-input"
+                [(ngModel)]="editDialog.value"
+                [disabled]="editDialog.busy"
+                placeholder="usuario@ejemplo.com"
+              />
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeEditDialog()"
+              [disabled]="editDialog.busy"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--positive"
+              (click)="confirmEditDialog()"
+              [disabled]="editDialog.busy"
+            >
+              {{ editDialog.busy ? 'Guardando...' : 'Confirmar' }}
+            </button>
+          </div>
+        </div>
+      </ts-modal>
+
+      <!-- Modal de confirmación para eliminar usuario -->
+      <ts-modal
+        title="Eliminar usuario"
+        [open]="deleteConfirmDialog.open"
+        (close)="closeDeleteConfirmDialog()"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            ¿Seguro que deseas eliminar al usuario <strong>{{ deleteConfirmDialog.user?.email }}</strong>?
+            Esta acción no se puede deshacer.
+          </p>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeDeleteConfirmDialog()"
+              [disabled]="deletingId === deleteConfirmDialog.user?.id"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--danger"
+              (click)="confirmDeleteUser()"
+              [disabled]="deletingId === deleteConfirmDialog.user?.id || !deleteConfirmDialog.user"
+            >
+              <app-icon
+                *ngIf="deletingId !== deleteConfirmDialog.user?.id"
+                name="trash2"
+                size="16"
+                class="h-4 w-4"
+                strokeWidth="1.75"
+              ></app-icon>
+              <app-icon
+                *ngIf="deletingId === deleteConfirmDialog.user?.id"
+                name="loader2"
+                size="16"
+                class="h-4 w-4 animate-spin"
+                strokeWidth="1.75"
+              ></app-icon>
+              <span>{{ deletingId === deleteConfirmDialog.user?.id ? 'Eliminando...' : 'Eliminar usuario' }}</span>
+            </button>
+          </div>
+        </div>
+      </ts-modal>
+
+      <!-- Dropdown overlay flotante: renderizado fuera del flujo de la tabla para evitar afectar el layout -->
+      <div
+        *ngIf="openMenuUserId !== null && menuPosition"
+        class="user-actions-dropdown"
+        [style.top.px]="menuPosition.top"
+        [style.right.px]="menuPosition.right"
+        [class.user-actions-dropdown--top]="menuPosition.openUp"
+        (click)="$event.stopPropagation()"
+      >
+        <ng-container *ngFor="let action of getMenuActions(openMenuUserId); let isLast = last">
+          <button
+            *ngIf="action.type !== 'delete'"
+            type="button"
+            [class]="action.class"
+            (click)="handleMenuAction(getUserById(openMenuUserId)!, action.type)"
+            [disabled]="action.disabled"
+          >
+            <app-icon [name]="$any(action.icon)" size="16" class="h-4 w-4 text-muted" strokeWidth="1.75"></app-icon>
+            <span>{{ action.label }}</span>
+          </button>
+          <div *ngIf="action.type === 'delete'" class="my-1 border-t border-border"></div>
+          <button
+            *ngIf="action.type === 'delete'"
+            type="button"
+            [class]="action.class"
+            (click)="handleMenuAction(getUserById(openMenuUserId)!, action.type)"
+            [disabled]="action.disabled"
+          >
+            <app-icon [name]="$any(action.icon)" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
+            <span>{{ action.label }}</span>
+          </button>
+        </ng-container>
+      </div>
     </div>
   `,
 })
-export class UsersComponent implements OnInit {
+export class UsersComponent implements OnInit, OnDestroy {
   private companies = inject(CompanyService);
   private usersApi = inject(UserService);
   private auth = inject(AuthService);
+  private cdr = inject(ChangeDetectorRef);
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   users: WritableSignal<Usuario[]> = signal<Usuario[]>([]);
@@ -452,7 +667,7 @@ export class UsersComponent implements OnInit {
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
 
   loadingCompanies = true;
-  loadingUsers = true;
+  loadingUsers = signal(true);
   loadingPasswordRequests = false;
   creatingUser = false;
   updatingRoleId: number | null = null;
@@ -463,6 +678,10 @@ export class UsersComponent implements OnInit {
   isAdminSistema = this.auth.hasRole('ADMIN_SISTEMA');
   showCreateCard = false;
   showFiltersCard = false;
+  openMenuUserId: number | null = null;
+  menuPosition: { top: number; right: number; openUp?: boolean } | null = null;
+  private documentClickHandler?: (event: MouseEvent) => void;
+  private scrollHandler?: () => void;
   readonly passwordMinLength = 10;
   passwordDialog: PasswordDialogState = {
     open: false,
@@ -473,6 +692,24 @@ export class UsersComponent implements OnInit {
   };
   passwordDialogMessage = '';
   passwordDialogBusy = false;
+
+  editDialog: EditDialogState = {
+    open: false,
+    user: null,
+    type: null,
+    value: null,
+    busy: false,
+  };
+  editDialogMessage = '';
+  updatingUserId: number | null = null;
+
+  // =========================================================
+  // MODAL DE CONFIRMACIÓN PARA ELIMINAR USUARIO
+  // =========================================================
+  deleteConfirmDialog = {
+    open: false,
+    user: null as Usuario | null,
+  };
 
   form: UsuarioCreate = {
     nombre: '',
@@ -486,6 +723,40 @@ export class UsersComponent implements OnInit {
     this.loadCompanies();
     this.loadUsers();
     this.initializeAdminData();
+    // Cerrar menú al hacer clic fuera o al hacer scroll
+    if (typeof document !== 'undefined') {
+      this.documentClickHandler = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        // Cerrar si el clic no está dentro del botón ni del dropdown
+        if (!target.closest('.user-actions-button') && !target.closest('.user-actions-dropdown')) {
+          this.closeUserMenu();
+        }
+      };
+      document.addEventListener('click', this.documentClickHandler);
+      
+      // Cerrar menú al hacer scroll
+      this.scrollHandler = () => {
+        this.closeUserMenu();
+      };
+      window.addEventListener('scroll', this.scrollHandler, true); // Use capture para capturar scrolls anidados
+    }
+  }
+
+  ngOnDestroy(): void {
+    // Remover listeners al destruir el componente
+    if (typeof document !== 'undefined') {
+      if (this.documentClickHandler) {
+        document.removeEventListener('click', this.documentClickHandler);
+      }
+      if (this.scrollHandler) {
+        window.removeEventListener('scroll', this.scrollHandler, true);
+      }
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    this.closeUserMenu();
   }
 
   toggleCreateCard(): void {
@@ -524,13 +795,25 @@ export class UsersComponent implements OnInit {
   }
 
   loadUsers(): void {
-    this.loadingUsers = true;
+    this.loadingUsers.set(true);
     this.usersApi
       .list(this.selectedEmpresaId ?? undefined)
-      .pipe(finalize(() => (this.loadingUsers = false)))
+      .pipe(
+        finalize(() => {
+          this.loadingUsers.set(false);
+          this.cdr.markForCheck();
+        })
+      )
       .subscribe({
-        next: (rows) => this.users.set(rows ?? []),
-        error: (error) => console.error('Error cargando usuarios', error),
+        next: (rows) => {
+          this.users.set(rows ?? []);
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error('Error cargando usuarios', error);
+          this.loadingUsers.set(false);
+          this.cdr.markForCheck();
+        },
       });
   }
 
@@ -561,18 +844,24 @@ export class UsersComponent implements OnInit {
   createUser(): void {
     if (!this.isValidForm() || this.creatingUser) return;
     this.creatingUser = true;
+    this.cdr.markForCheck();
 
     this.usersApi.create(this.form).subscribe({
       next: () => {
         this.form = { nombre: '', email: '', password: '', rol: 'USUARIO', empresa_id: null };
         this.showCreateCard = false;
         this.loadUsers();
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error creando usuario', error);
         this.creatingUser = false;
+        this.cdr.markForCheck();
       },
-      complete: () => (this.creatingUser = false),
+      complete: () => {
+        this.creatingUser = false;
+        this.cdr.markForCheck();
+      },
     });
   }
 
@@ -618,6 +907,7 @@ export class UsersComponent implements OnInit {
     this.usersApi.update(u.id, { rol }).subscribe({
       next: (updated) => {
         this.users.set(this.users().map((x) => (x.id === u.id ? updated : x)));
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error actualizando rol', error);
@@ -625,9 +915,11 @@ export class UsersComponent implements OnInit {
           u.rol = previousRole;
         }
         this.updatingRoleId = null;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.updatingRoleId = null;
+        this.cdr.markForCheck();
       },
     });
   }
@@ -639,13 +931,16 @@ export class UsersComponent implements OnInit {
     this.usersApi.toggleActive(u).subscribe({
       next: (updated) => {
         this.users.set(this.users().map((x) => (x.id === u.id ? updated : x)));
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error cambiando estado', error);
         this.togglingActiveId = null;
+        this.cdr.markForCheck();
       },
       complete: () => {
         this.togglingActiveId = null;
+        this.cdr.markForCheck();
       },
     });
   }
@@ -753,26 +1048,362 @@ export class UsersComponent implements OnInit {
     this.passwordDialogBusy = false;
   }
 
+  // =========================================================
+  // ELIMINAR USUARIO: Abre modal de confirmación
+  // =========================================================
   deleteUser(u: Usuario): void {
     if (u.rol === 'ADMIN_SISTEMA') return;
-    if (!confirm(`Â¿Eliminar usuario ${u.email}?`)) return;
-    this.deletingId = u.id;
-    this.usersApi.delete(u.id).subscribe({
-      next: () => this.loadUsers(),
+    if (this.deletingId !== null) return; // Ya hay una eliminación en proceso
+    
+    this.deleteConfirmDialog = {
+      open: true,
+      user: u,
+    };
+  }
+
+  // =========================================================
+  // CONFIRMAR ELIMINACIÓN: Ejecuta la eliminación real
+  // =========================================================
+  confirmDeleteUser(): void {
+    const user = this.deleteConfirmDialog.user;
+    if (!user || user.rol === 'ADMIN_SISTEMA' || this.deletingId !== null) return;
+
+    this.deletingId = user.id;
+    this.usersApi.delete(user.id).subscribe({
+      next: () => {
+        // Cerrar el modal inmediatamente después de confirmar
+        this.deleteConfirmDialog = {
+          open: false,
+          user: null,
+        };
+        // Recargar usuarios y actualizar vista
+        this.loadUsers();
+        this.cdr.markForCheck();
+      },
       error: (error) => {
         console.error('Error eliminando usuario', error);
         this.deletingId = null;
+        // No cerrar el modal si hay error, para que el usuario pueda intentar de nuevo
+        this.cdr.markForCheck();
       },
       complete: () => {
+        // Asegurar que el estado de eliminación se resetee
         this.deletingId = null;
+        this.cdr.markForCheck();
       },
     });
   }
+
+  // =========================================================
+  // CERRAR MODAL DE CONFIRMACIÓN
+  // =========================================================
+  closeDeleteConfirmDialog(): void {
+    // Permitir cerrar solo si no hay una eliminación en proceso
+    if (this.deletingId !== null) return;
+    this.deleteConfirmDialog = {
+      open: false,
+      user: null,
+    };
+    this.cdr.markForCheck();
+  }
+
+  trackByUserId: TrackByFunction<Usuario> = (index: number, user: Usuario) => user.id;
 
   empresaName(id: number | null | undefined): string {
     if (id == null) return 'Sin asignar';
     const e = this.empresas().find((x) => x.id === id);
     return e?.nombre ?? `#${id}`;
+  }
+
+  // =========================================================
+  // MENÚ DE ACCIONES: Toggle para abrir/cerrar el menú con posicionamiento inteligente
+  // =========================================================
+  toggleUserMenu(userId: number, buttonElement?: HTMLButtonElement): void {
+    // Solo un menú abierto a la vez
+    if (this.openMenuUserId === userId) {
+      this.openMenuUserId = null;
+      this.menuPosition = null;
+    } else {
+      // Calcular posición del menú basado en el botón con detección de espacio
+      if (buttonElement) {
+        const rect = buttonElement.getBoundingClientRect();
+        const MENU_ESTIMATED_HEIGHT = 250; // Altura aproximada del menú (5 opciones + espaciado)
+        const MENU_MARGIN = 8; // Margen entre botón y menú
+        const VIEWPORT_PADDING = 16; // Padding desde el borde del viewport
+        
+        const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PADDING;
+        const spaceAbove = rect.top - VIEWPORT_PADDING;
+        
+        // Si no hay espacio hacia abajo pero sí hacia arriba, abrir hacia arriba
+        const openUp = spaceBelow < MENU_ESTIMATED_HEIGHT && spaceAbove > spaceBelow;
+        
+        // Calcular posición top
+        let top: number;
+        if (openUp) {
+          // Abrir hacia arriba: posicionar encima del botón
+          top = rect.top - MENU_ESTIMATED_HEIGHT - MENU_MARGIN;
+          // Asegurar que no se salga por arriba
+          if (top < VIEWPORT_PADDING) {
+            top = VIEWPORT_PADDING;
+          }
+        } else {
+          // Abrir hacia abajo: posicionar debajo del botón
+          top = rect.bottom + MENU_MARGIN;
+          // Asegurar que no se salga por abajo
+          const maxTop = window.innerHeight - MENU_ESTIMATED_HEIGHT - VIEWPORT_PADDING;
+          if (top > maxTop) {
+            top = maxTop;
+          }
+        }
+        
+        // Posicionar el menú alineado a la derecha del botón
+        this.menuPosition = {
+          top,
+          right: window.innerWidth - rect.right, // Distancia desde el borde derecho
+          openUp,
+        };
+      }
+      this.openMenuUserId = userId;
+    }
+    this.cdr.markForCheck();
+  }
+
+  // =========================================================
+  // CERRAR MENÚ DE ACCIONES
+  // =========================================================
+  closeUserMenu(): void {
+    if (this.openMenuUserId !== null) {
+      this.openMenuUserId = null;
+      this.menuPosition = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  // =========================================================
+  // OBTENER USUARIO POR ID: Helper para el menú flotante
+  // =========================================================
+  getUserById(userId: number): Usuario | undefined {
+    return this.users().find(u => u.id === userId);
+  }
+
+  // =========================================================
+  // OBTENER ACCIONES DEL MENÚ: Configuración de las opciones del menú
+  // =========================================================
+  getMenuActions(userId: number): Array<{
+    type: 'password' | 'company' | 'role' | 'email' | 'delete';
+    label: string;
+    icon: 'key-round' | 'building2' | 'shield' | 'mail' | 'trash2';
+    class: string;
+    disabled: boolean;
+    danger?: boolean;
+  }> {
+    const user = this.getUserById(userId);
+    if (!user) return [];
+
+    return [
+      {
+        type: 'password',
+        label: 'Cambiar contraseña',
+        icon: 'key-round',
+        class: 'flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink transition-colors hover:bg-[#f6f6f6]',
+        disabled: this.resettingId === user.id || this.passwordDialogBusy,
+      },
+      {
+        type: 'company',
+        label: 'Cambiar empresa',
+        icon: 'building2',
+        class: 'flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink transition-colors hover:bg-[#f6f6f6]',
+        disabled: false,
+      },
+      {
+        type: 'role',
+        label: 'Cambiar rol',
+        icon: 'shield',
+        class: 'flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink transition-colors hover:bg-[#f6f6f6]',
+        disabled: this.updatingRoleId === user.id,
+      },
+      {
+        type: 'email',
+        label: 'Cambiar correo',
+        icon: 'mail',
+        class: 'flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink transition-colors hover:bg-[#f6f6f6]',
+        disabled: false,
+      },
+      {
+        type: 'delete',
+        label: 'Eliminar usuario',
+        icon: 'trash2',
+        class: 'flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-error transition-colors hover:bg-error/10',
+        disabled: this.deletingId === user.id || user.rol === 'ADMIN_SISTEMA',
+        danger: true,
+      },
+    ];
+  }
+
+  // =========================================================
+  // MANEJAR ACCIONES DEL MENÚ: Dispatcher para las acciones
+  // =========================================================
+  handleMenuAction(user: Usuario, action: 'password' | 'company' | 'role' | 'email' | 'delete'): void {
+    // Cerrar el menú inmediatamente después de seleccionar una acción
+    this.closeUserMenu();
+
+    switch (action) {
+      case 'password':
+        this.resetPassword(user);
+        break;
+      case 'company':
+        this.onChangeCompany(user);
+        break;
+      case 'role':
+        this.onChangeRole(user);
+        break;
+      case 'email':
+        this.onChangeEmail(user);
+        break;
+      case 'delete':
+        this.deleteUser(user);
+        break;
+    }
+  }
+
+  onChangeCompany(user: Usuario): void {
+    if (this.editDialog.busy) return;
+    this.editDialog = {
+      open: true,
+      user,
+      type: 'company',
+      value: user.empresa_id ?? null,
+      busy: false,
+    };
+    this.editDialogMessage = `Selecciona una nueva empresa para ${user.email}.`;
+  }
+
+  onChangeRole(user: Usuario): void {
+    if (this.editDialog.busy || this.updatingRoleId === user.id) return;
+    this.editDialog = {
+      open: true,
+      user,
+      type: 'role',
+      value: user.rol,
+      busy: false,
+    };
+    this.editDialogMessage = `Selecciona un nuevo rol para ${user.email}.`;
+  }
+
+  onChangeEmail(user: Usuario): void {
+    if (this.editDialog.busy) return;
+    this.editDialog = {
+      open: true,
+      user,
+      type: 'email',
+      value: user.email,
+      busy: false,
+    };
+    this.editDialogMessage = `Ingresa el nuevo correo electrónico para ${user.nombre}.`;
+  }
+
+  closeEditDialog(force = false): void {
+    if (this.editDialog.busy && !force) return;
+    this.editDialog = {
+      open: false,
+      user: null,
+      type: null,
+      value: null,
+      busy: false,
+    };
+    this.editDialogMessage = '';
+    this.updatingUserId = null;
+  }
+
+  confirmEditDialog(): void {
+    if (this.editDialog.busy || !this.editDialog.user || !this.editDialog.type) return;
+
+    const user = this.editDialog.user;
+    let updateData: UsuarioUpdate = {};
+
+    // Validar según el tipo
+    if (this.editDialog.type === 'company') {
+      const newEmpresaId = this.editDialog.value as number | null;
+      if (newEmpresaId === user.empresa_id) {
+        this.closeEditDialog();
+        return;
+      }
+      updateData.empresa_id = newEmpresaId;
+    } else if (this.editDialog.type === 'role') {
+      const newRole = this.editDialog.value as RolEnum;
+      if (newRole === user.rol) {
+        this.closeEditDialog();
+        return;
+      }
+      // Validar permisos
+      if (!this.isAdminSistema) {
+        if (newRole === 'ADMIN_SISTEMA' && user.rol !== 'ADMIN_SISTEMA') {
+          alert('No tienes permisos para asignar el rol ADMIN_SISTEMA');
+          return;
+        }
+        if (user.rol === 'ADMIN_SISTEMA' && newRole !== 'ADMIN_SISTEMA') {
+          alert('No tienes permisos para modificar usuarios ADMIN_SISTEMA');
+          return;
+        }
+      }
+      updateData.rol = newRole;
+    } else if (this.editDialog.type === 'email') {
+      const newEmail = (this.editDialog.value as string)?.trim();
+      if (!newEmail || newEmail === user.email) {
+        this.closeEditDialog();
+        return;
+      }
+      // Validar formato de email básico
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        alert('Por favor ingresa un correo electrónico válido');
+        return;
+      }
+      updateData.email = newEmail;
+    }
+
+    // Actualizar
+    this.editDialog.busy = true;
+    this.updatingUserId = user.id;
+    this.usersApi
+      .update(user.id, updateData)
+      .pipe(
+        finalize(() => {
+          this.editDialog.busy = false;
+          if (this.updatingUserId === user.id) {
+            this.updatingUserId = null;
+          }
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
+        next: (updated) => {
+          // Actualizar el usuario en la lista
+          this.users.set(this.users().map((u) => (u.id === user.id ? updated : u)));
+          this.closeEditDialog(true);
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error(`Error actualizando ${this.editDialog.type}`, error);
+          const errorMessage =
+            error.error?.detail || error.message || 'Error al actualizar. Por favor intenta nuevamente.';
+          alert(errorMessage);
+          this.cdr.markForCheck();
+        },
+      });
+  }
+
+  getEditDialogTitle(): string {
+    if (!this.editDialog.type) return 'Editar';
+    switch (this.editDialog.type) {
+      case 'company':
+        return 'Cambiar empresa';
+      case 'role':
+        return 'Cambiar rol';
+      case 'email':
+        return 'Cambiar correo electrónico';
+      default:
+        return 'Editar';
+    }
   }
 }
 

@@ -2,7 +2,7 @@ import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
-import { LucideAngularModule } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 import { CompanyService } from '../../company.service';
 import { LeadService } from '../../core/services/lead.service';
@@ -15,7 +15,7 @@ import { Empresa, Lead } from '../../types';
     CommonModule,
     FormsModule,
     NgxSkeletonLoaderModule,
-    LucideAngularModule,
+    IconComponent,
   ],
   template: `
     <div class="ts-page">
@@ -26,7 +26,7 @@ import { Empresa, Lead } from '../../types';
             <p class="ts-subtitle">Administra la información base y los departamentos asociados.</p>
           </div>
           <div class="ts-chip h-fit">
-            <lucide-icon name="Building2" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="building2" size="16" class="h-4 w-4 text-ink" strokeWidth="1.75"></app-icon>
             {{ empresas().length }} registradas
           </div>
         </div>
@@ -34,8 +34,16 @@ import { Empresa, Lead } from '../../types';
         <div class="grid gap-6 lg:grid-cols-[minmax(0,0.65fr)_minmax(0,1fr)]">
           <div class="ts-card space-y-6">
             <div>
-              <h2 class="text-xl font-semibold text-ink">Crear empresa</h2>
-              <p class="text-sm text-muted">Completa los datos para dar de alta una nueva empresa.</p>
+              <h2 class="text-xl font-semibold text-ink">
+                {{ editingEmpresa ? 'Editar empresa' : 'Crear empresa' }}
+              </h2>
+              <p class="text-sm text-muted">
+                {{
+                  editingEmpresa
+                    ? 'Modifica los datos de la empresa seleccionada.'
+                    : 'Completa los datos para dar de alta una nueva empresa.'
+                }}
+              </p>
             </div>
 
             <div class="space-y-4">
@@ -67,25 +75,54 @@ import { Empresa, Lead } from '../../types';
               </label>
             </div>
 
-            <button
-              class="ts-btn ts-btn--positive w-full md:w-auto"
-              (click)="crear()"
-              [disabled]="creating || !form.nombre.trim()"
-            >
-              <lucide-icon
-                *ngIf="!creating"
-                name="Plus"
-                class="h-4 w-4"
-                strokeWidth="1.75"
-              ></lucide-icon>
-              <lucide-icon
-                *ngIf="creating"
-                name="Loader2"
-                class="h-4 w-4 animate-spin"
-                strokeWidth="1.75"
-              ></lucide-icon>
-              <span>{{ creating ? 'Creando...' : 'Crear empresa' }}</span>
-            </button>
+            <div class="flex flex-wrap gap-3">
+              <button
+                class="ts-btn ts-btn--positive w-full md:w-auto"
+                (click)="editingEmpresa ? guardarCambios() : crear()"
+                [disabled]="creating || updating || !form.nombre.trim()"
+              >
+                <app-icon
+                  *ngIf="!creating && !updating"
+                  [name]="editingEmpresa ? 'check' : 'plus'"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="creating || updating"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>
+                  {{
+                    creating
+                      ? 'Creando...'
+                      : updating
+                        ? 'Guardando...'
+                        : editingEmpresa
+                          ? 'Guardar cambios'
+                          : 'Crear empresa'
+                  }}
+                </span>
+              </button>
+              <button
+                *ngIf="editingEmpresa"
+                type="button"
+                class="ts-btn ts-btn--secondary w-full md:w-auto"
+                (click)="cancelarEdicion()"
+                [disabled]="creating || updating"
+              >
+                <app-icon name="x" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
+                <span>Cancelar edición</span>
+              </button>
+            </div>
+
+            <!-- Mensajes de éxito/error -->
+            <div *ngIf="message" class="rounded-lg px-4 py-3 text-sm" [class.bg-success/10]="messageType === 'success'" [class.text-success]="messageType === 'success'" [class.bg-error/10]="messageType === 'error'" [class.text-error]="messageType === 'error'">
+              {{ message }}
+            </div>
           </div>
 
           <div class="ts-card space-y-4">
@@ -110,11 +147,7 @@ import { Empresa, Lead } from '../../types';
                   <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div class="space-y-1">
                       <div class="flex items-center gap-2">
-                        <lucide-icon
-                          name="Building2"
-                          class="h-5 w-5 text-ink"
-                          strokeWidth="1.75"
-                        ></lucide-icon>
+                        <app-icon name="building2" size="20" class="h-5 w-5 text-ink" strokeWidth="1.75"></app-icon>
                         <p class="text-lg font-semibold text-ink">{{ e.nombre }}</p>
                       </div>
                       <div class="flex flex-wrap gap-2 text-sm text-muted">
@@ -130,25 +163,39 @@ import { Empresa, Lead } from '../../types';
                       </div>
                     </div>
 
-                    <button
-                      class="ts-btn ts-btn--danger"
-                      (click)="eliminar(e)"
-                      [disabled]="deletingId === e.id"
-                    >
-                      <lucide-icon
-                        *ngIf="deletingId !== e.id"
-                        name="Trash2"
-                        class="h-4 w-4"
-                        strokeWidth="1.75"
-                      ></lucide-icon>
-                      <lucide-icon
-                        *ngIf="deletingId === e.id"
-                        name="Loader2"
-                        class="h-4 w-4 animate-spin"
-                        strokeWidth="1.75"
-                      ></lucide-icon>
-                      <span>{{ deletingId === e.id ? 'Eliminando...' : 'Eliminar' }}</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
+                        (click)="editarEmpresa(e)"
+                        [disabled]="deletingId === e.id || creating || updating"
+                        aria-label="Editar empresa"
+                      >
+                        <app-icon name="pencil" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
+                      </button>
+                      <button
+                        type="button"
+                        class="ts-btn ts-btn--danger"
+                        (click)="eliminar(e)"
+                        [disabled]="deletingId === e.id || creating || updating"
+                      >
+                        <app-icon
+                          *ngIf="deletingId !== e.id"
+                          name="trash2"
+                          size="16"
+                          class="h-4 w-4"
+                          strokeWidth="1.75"
+                        ></app-icon>
+                        <app-icon
+                          *ngIf="deletingId === e.id"
+                          name="loader2"
+                          size="16"
+                          class="h-4 w-4 animate-spin"
+                          strokeWidth="1.75"
+                        ></app-icon>
+                        <span>{{ deletingId === e.id ? 'Eliminando...' : 'Eliminar' }}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -182,7 +229,7 @@ import { Empresa, Lead } from '../../types';
                 Limpiar solicitudes
               </button>
               <div class="ts-chip">
-                <lucide-icon name="Mail" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+                <app-icon name="mail" size="16" class="h-4 w-4 text-ink" strokeWidth="1.75"></app-icon>
                 {{ leads().length }} solicitudes
               </div>
             </div>
@@ -220,12 +267,13 @@ import { Empresa, Lead } from '../../types';
                         (click)="acceptLead(lead)"
                         [disabled]="leadActionId() !== null"
                       >
-                        <lucide-icon
+                        <app-icon
                           *ngIf="leadActionId() === lead.id"
-                          name="Loader2"
+                          name="loader2"
+                          size="14"
                           class="h-3.5 w-3.5 animate-spin"
                           strokeWidth="1.75"
-                        ></lucide-icon>
+                        ></app-icon>
                         <span>{{ leadActionId() === lead.id ? 'Procesando...' : 'Aceptar' }}</span>
                       </button>
                       <button
@@ -258,7 +306,15 @@ export class CompaniesComponent implements OnInit {
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;
   creating = false;
+  updating = false;
   deletingId: number | null = null;
+  
+  // =========================================================
+  // MODO EDICIÓN
+  // =========================================================
+  editingEmpresa: Empresa | null = null;
+  message = '';
+  messageType: 'success' | 'error' | null = null;
 
   leads: WritableSignal<Lead[]> = signal<Lead[]>([]);
   loadingLeads = true;
@@ -306,6 +362,9 @@ export class CompaniesComponent implements OnInit {
     });
   }
 
+  // =========================================================
+  // CREAR EMPRESA (sin cambios, se mantiene igual)
+  // =========================================================
   crear(): void {
     const deps = this.form.departamentos
       .split(',')
@@ -319,21 +378,148 @@ export class CompaniesComponent implements OnInit {
       departamentos: deps.length ? deps : undefined,
     };
 
-    if (!payload.nombre || this.creating) return;
+    if (!payload.nombre || this.creating || this.updating) return;
 
     this.creating = true;
+    this.clearMessage();
 
     this.api.create(payload).subscribe({
       next: () => {
         this.form = { nombre: '', rut: '', giro: '', departamentos: '' };
         this.loadEmpresas();
+        this.showMessage('Empresa creada correctamente', 'success');
       },
       error: (error) => {
         console.error('Error creando empresa', error);
+        const errorMsg = error.error?.detail || error.message || 'Error al crear la empresa';
+        this.showMessage(errorMsg, 'error');
         this.creating = false;
       },
       complete: () => (this.creating = false),
     });
+  }
+
+  // =========================================================
+  // MODO EDICIÓN: Cargar empresa en el formulario
+  // =========================================================
+  editarEmpresa(empresa: Empresa): void {
+    if (this.creating || this.updating) return;
+    
+    this.editingEmpresa = empresa;
+    this.clearMessage();
+    
+    // Cargar datos en el formulario
+    this.form.nombre = empresa.nombre;
+    this.form.rut = empresa.rut || '';
+    this.form.giro = empresa.giro || '';
+    
+    // Convertir array de departamentos a string separado por comas
+    if (empresa.departamentos && empresa.departamentos.length > 0) {
+      this.form.departamentos = empresa.departamentos.map(d => d.nombre).join(', ');
+    } else {
+      this.form.departamentos = '';
+    }
+  }
+
+  // =========================================================
+  // MODO EDICIÓN: Cancelar edición y volver a modo creación
+  // =========================================================
+  cancelarEdicion(): void {
+    if (this.creating || this.updating) return;
+    
+    this.editingEmpresa = null;
+    this.form = { nombre: '', rut: '', giro: '', departamentos: '' };
+    this.clearMessage();
+  }
+
+  // =========================================================
+  // MODO EDICIÓN: Guardar cambios de la empresa
+  // =========================================================
+  guardarCambios(): void {
+    if (!this.editingEmpresa || this.creating || this.updating) return;
+
+    const deps = this.form.departamentos
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const payload: {
+      nombre?: string;
+      rut?: string;
+      giro?: string;
+      departamentos?: string[];
+    } = {};
+
+    // Solo incluir campos que han cambiado
+    if (this.form.nombre.trim() !== this.editingEmpresa.nombre) {
+      payload.nombre = this.form.nombre.trim();
+    }
+    if ((this.form.rut || '') !== (this.editingEmpresa.rut || '')) {
+      payload.rut = this.form.rut || undefined;
+    }
+    if ((this.form.giro || '') !== (this.editingEmpresa.giro || '')) {
+      payload.giro = this.form.giro || undefined;
+    }
+    
+    // Comparar departamentos actuales con los del formulario
+    const currentDepartamentos = (this.editingEmpresa.departamentos || []).map(d => d.nombre).sort();
+    const newDepartamentos = deps.sort();
+    if (JSON.stringify(currentDepartamentos) !== JSON.stringify(newDepartamentos)) {
+      payload.departamentos = deps.length ? deps : [];
+    }
+
+    // Si no hay cambios, no hacer nada
+    if (Object.keys(payload).length === 0) {
+      this.showMessage('No hay cambios para guardar', 'error');
+      return;
+    }
+
+    if (!this.form.nombre.trim()) {
+      this.showMessage('El nombre es obligatorio', 'error');
+      return;
+    }
+
+    this.updating = true;
+    this.clearMessage();
+
+    this.api.update(this.editingEmpresa.id, payload).subscribe({
+      next: (updated) => {
+        // Actualizar la empresa en la lista
+        this.empresas.set(
+          this.empresas().map((e) => (e.id === updated.id ? updated : e))
+        );
+        
+        // Salir del modo edición
+        this.cancelarEdicion();
+        this.showMessage('Empresa actualizada correctamente', 'success');
+      },
+      error: (error) => {
+        console.error('Error actualizando empresa', error);
+        const errorMsg = error.error?.detail || error.message || 'Error al actualizar la empresa';
+        this.showMessage(errorMsg, 'error');
+        this.updating = false;
+      },
+      complete: () => {
+        this.updating = false;
+      },
+    });
+  }
+
+  // =========================================================
+  // HELPERS: Mensajes de éxito/error
+  // =========================================================
+  private showMessage(text: string, type: 'success' | 'error'): void {
+    this.message = text;
+    this.messageType = type;
+    // Auto-ocultar mensaje después de 5 segundos
+    setTimeout(() => {
+      this.clearMessage();
+    }, 5000);
+  }
+
+  private clearMessage(): void {
+    this.message = '';
+    this.messageType = null;
   }
 
   acceptLead(lead: Lead): void {

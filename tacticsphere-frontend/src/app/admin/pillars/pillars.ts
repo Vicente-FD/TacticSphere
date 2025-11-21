@@ -119,7 +119,6 @@ import { Pilar } from '../../types';
               <table class="ts-table">
                 <thead>
                   <tr>
-                    <th class="min-w-[4rem]">ID</th>
                     <th>Nombre</th>
                     <th>Descripción</th>
                     <th>Peso</th>
@@ -128,18 +127,17 @@ import { Pilar } from '../../types';
                 </thead>
                 <tbody>
                   <tr *ngIf="loading">
-                    <td colspan="5" class="p-6 text-center text-sm text-neutral-500">
+                    <td colspan="4" class="p-6 text-center text-sm text-neutral-500">
                       Cargando pilares...
                     </td>
                   </tr>
                   <tr *ngIf="!loading && !pilares().length">
-                    <td colspan="5" class="p-6 text-center text-sm text-neutral-500">
+                    <td colspan="4" class="p-6 text-center text-sm text-neutral-500">
                       Aún no se han configurado pilares.
                     </td>
                   </tr>
                   <tr *ngFor="let pilar of pilares()">
-                    <td class="font-medium text-ink">#{{ pilar.id }}</td>
-                    <td>{{ pilar.nombre }}</td>
+                    <td title="ID: {{ pilar.id }}" class="cursor-help">{{ pilar.nombre }}</td>
                     <td>{{ pilar.descripcion || '--' }}</td>
                     <td class="w-20">{{ pilar.peso }}</td>
                     <td>
