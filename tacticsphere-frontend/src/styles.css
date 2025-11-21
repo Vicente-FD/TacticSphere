@@ -109,6 +109,27 @@
   }
 }
 
+@keyframes sphereFloat {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(6deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes sphereRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @layer components {
   .ts-page {
     @apply min-h-[calc(100vh-4rem)] bg-bg py-8 px-4 md:px-8;
@@ -235,6 +256,25 @@
   @apply border-border bg-[#f7f7f7] text-ink;
 }
 
+/* Botones de la card CTA "¿Listo para mapear tu ruta digital?" */
+.cta-card-button {
+  background-color: #ffffff !important;
+  border-color: #0f0f0f !important;
+  color: #0f0f0f !important;
+}
+
+.cta-card-button:hover {
+  background-color: #ffffff !important;
+  border-color: #0f0f0f !important;
+  color: #0f0f0f !important;
+}
+
+.cta-card-button:focus {
+  background-color: #ffffff !important;
+  border-color: #0f0f0f !important;
+  color: #0f0f0f !important;
+}
+
 .ts-input:focus {
   box-shadow: var(--shadow), var(--shadow);
   outline: none;
@@ -262,6 +302,45 @@
 
 .cdk-overlay-backdrop.cdk-overlay-backdrop-showing {
   background: rgba(15, 23, 42, 0.15);
+}
+
+/* Esfera wireframe decorativa del hero */
+.sphere-bg {
+  position: fixed;
+  right: -25%;
+  bottom: -50%;
+  top: auto;
+  width: 900px;
+  height: 900px;
+  opacity: 0.15;
+  z-index: 0;
+  pointer-events: none;
+  animation: sphereRotate 60s linear infinite;
+}
+
+@media (max-width: 1024px) {
+  .sphere-bg {
+    width: 650px;
+    height: 650px;
+    right: -30%;
+    bottom: -45%;
+  }
+}
+
+@media (max-width: 768px) {
+  .sphere-bg {
+    width: 500px;
+    height: 500px;
+    right: -35%;
+    bottom: -40%;
+    opacity: 0.1;
+  }
+}
+
+@media (max-width: 640px) {
+  .sphere-bg {
+    display: none;
+  }
 }
 
 .ts-select-panel,
