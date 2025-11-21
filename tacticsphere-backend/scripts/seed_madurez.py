@@ -485,6 +485,144 @@ def crear_empresas_ejemplo(session: Session) -> List[Empresa]:
     return empresas
 
 
+def crear_santiago_cloud(
+    session: Session,
+    empleado_global_idx: int,
+    rut_base: int,
+) -> tuple[Empresa, List[Departamento], List[Empleado], Dict[int, str]]:
+    """
+    Crea la empresa Santiago Cloud con distribución específica de empleados.
+    
+    - 30 empleados distribuidos: 3 inicial, 5 básico, 12 intermedio, 8 avanzado, 2 innovador
+    - 4 departamentos: Finanzas (medio), RRHH (bajo), Operaciones (medio), TI (alto)
+    """
+    print("\nCreando empresa especial: Santiago Cloud...")
+    
+    # Crear empresa
+    empresa = Empresa(
+        nombre="Santiago Cloud",
+        rut="80.567.890-1",
+        giro="Servicios Cloud y Transformación Digital",
+        activa=True,
+    )
+    session.add(empresa)
+    session.flush()
+    print(f"  [+] {empresa.nombre}")
+    
+    # Crear departamentos con desempeños específicos
+    departamentos_data = [
+        {"nombre": "Finanzas", "desempeño": "MEDIO"},
+        {"nombre": "Recursos Humanos", "desempeño": "BAJO"},
+        {"nombre": "Operaciones", "desempeño": "MEDIO"},
+        {"nombre": "TI", "desempeño": "ALTO"},
+    ]
+    
+    departamentos = []
+    desempeños_departamento = {}
+    
+    for depto_data in departamentos_data:
+        depto = Departamento(nombre=depto_data["nombre"], empresa_id=empresa.id)
+        session.add(depto)
+        session.flush()
+        departamentos.append(depto)
+        desempeños_departamento[depto.id] = depto_data["desempeño"]
+        print(f"    [+] Departamento: {depto.nombre} (desempeño: {depto_data['desempeño']})")
+    
+    # Nombres y apellidos adicionales para Santiago Cloud
+    nombres_santiago = [
+        "Alejandro", "Catalina", "Matías", "Javiera", "Felipe", "Antonia", "Tomás", "Francisca",
+        "Ignacio", "Isidora", "Benjamín", "Trinidad", "Vicente", "Amanda", "Maximiliano", "Catalina",
+        "Joaquín", "Martina", "Emilio", "Antonia", "Lucas", "Sofía", "Martín", "Emilia",
+        "Agustín", "Josefa", "Cristóbal", "Magdalena", "Renato", "Constanza",
+    ]
+    
+    apellidos_santiago = [
+        "Araya", "Bustamante", "Cáceres", "Delgado", "Espinoza", "Fuentes", "García", "Herrera",
+        "Ibáñez", "Jara", "Klein", "Lagos", "Molina", "Navarro", "Orellana", "Pizarro",
+        "Quiroz", "Rojas", "Salazar", "Tapia", "Urrutia", "Valdés", "Werner", "Yáñez",
+        "Zúñiga", "Álvarez", "Benítez", "Carrasco", "Díaz", "Escobar",
+    ]
+    
+    # Cargos por departamento
+    cargos_por_dept = {
+        "Finanzas": ["Contador Senior", "Analista Financiero", "Tesorero", "Controller", "CFO", "Especialista en Presupuestos", "Analista de Costos"],
+        "Recursos Humanos": ["Especialista en RRHH", "Reclutador", "Analista de Compensaciones", "Coordinador de Desarrollo", "Gerente de Talento", "Especialista en Capacitación"],
+        "Operaciones": ["Supervisor de Operaciones", "Coordinador Operativo", "Analista de Procesos", "Gerente de Operaciones", "Especialista en Calidad", "Coordinador de Logística"],
+        "TI": ["Desarrollador Senior", "Arquitecto Cloud", "DevOps Engineer", "Tech Lead", "Cloud Engineer", "System Administrator", "Security Specialist"],
+    }
+    
+    # Distribución de empleados por nivel
+    # 3 inicial (MUY_BAJO), 5 básico (BAJO), 12 intermedio (MEDIO), 8 avanzado (ALTO), 2 innovador (MUY_ALTO)
+    distribucion_niveles = [
+        ("MUY_BAJO", 3),   # Inicial
+        ("BAJO", 5),       # Básico
+        ("MEDIO", 12),     # Intermedio
+        ("ALTO", 8),       # Avanzado
+        ("MUY_ALTO", 2),   # Innovador
+    ]
+    
+    empleados = []
+    perfiles_asignados = {}
+    
+    # Asignar empleados a departamentos (distribuir equitativamente)
+    empleados_por_depto = {depto.id: [] for depto in departamentos}
+    empleado_idx = 0
+    
+    for nivel_perfil, cantidad in distribucion_niveles:
+        for _ in range(cantidad):
+            # Seleccionar nombre y apellidos
+            nombre = nombres_santiago[empleado_idx % len(nombres_santiago)]
+            apellido1 = apellidos_santiago[empleado_idx % len(apellidos_santiago)]
+            apellido2 = apellidos_santiago[(empleado_idx * 3 + 1) % len(apellidos_santiago)]
+            apellidos_completos = f"{apellido1} {apellido2}"
+            
+            # Asignar departamento (distribuir equitativamente)
+            depto_idx = empleado_idx % len(departamentos)
+            depto_asignado = departamentos[depto_idx]
+            depto_nombre = departamentos_data[depto_idx]["nombre"]
+            
+            # Obtener cargo según departamento
+            cargos_disponibles = cargos_por_dept.get(depto_nombre, ["Analista", "Especialista"])
+            cargo = cargos_disponibles[empleado_idx % len(cargos_disponibles)]
+            
+            # Generar email
+            email_base = f"{nombre.lower()}.{apellido1.lower()}"
+            email = f"{email_base}@santiagocloud.cl"
+            
+            # Generar RUT
+            rut = generar_rut_chileno(rut_base + empleado_global_idx)
+            
+            # Crear empleado
+            empleado = Empleado(
+                nombre=nombre,
+                apellidos=apellidos_completos,
+                rut=rut,
+                email=email,
+                empresa_id=empresa.id,
+                departamento_id=depto_asignado.id,
+                cargo=cargo,
+            )
+            session.add(empleado)
+            session.flush()
+            empleados.append(empleado)
+            empleados_por_depto[depto_asignado.id].append(empleado)
+            
+            # Asignar perfil de rendimiento
+            perfiles_asignados[empleado.id] = nivel_perfil
+            
+            empleado_idx += 1
+            empleado_global_idx += 1
+    
+    print(f"  [+] 30 empleados creados con distribución:")
+    print(f"      - 3 Inicial (MUY_BAJO)")
+    print(f"      - 5 Básico (BAJO)")
+    print(f"      - 12 Intermedio (MEDIO)")
+    print(f"      - 8 Avanzado (ALTO)")
+    print(f"      - 2 Innovador (MUY_ALTO)")
+    
+    return empresa, departamentos, empleados, perfiles_asignados
+
+
 def generar_rut_chileno(numero: int) -> str:
     """Genera un RUT chileno ficticio con formato válido."""
     # RUT base: número entre 10.000.000 y 99.999.999
@@ -679,39 +817,48 @@ def generar_respuesta_segun_perfil(
         distribucion_base[5],
     ]
     
-    # Aplicar pequeños ajustes por contexto (máximo 15% de variación)
-    # Sesgo de empresa (afecta ligeramente la distribución)
-    ajuste_emp = sesgo_empresa * 0.10
-    if ajuste_emp > 0:
-        # Sesgo positivo: desplaza hacia niveles altos
-        weights = [w * (1 - ajuste_emp * 0.3) if i < 2 else w * (1 + ajuste_emp * 0.5) 
-                  for i, w in enumerate(weights)]
-    else:
-        # Sesgo negativo: desplaza hacia niveles bajos
-        weights = [w * (1 - ajuste_emp * 0.5) if i < 2 else w * (1 + ajuste_emp * 0.3) 
-                  for i, w in enumerate(weights)]
+    # Aplicar ajustes MUY PEQUEÑOS por contexto (máximo 1% de variación)
+    # Los perfiles individuales deben ser completamente dominantes (99% del peso)
     
-    # Sesgo de departamento (afecta ligeramente)
-    ajuste_dept = sesgo_departamento * 0.08
-    if ajuste_dept > 0:
-        weights = [w * (1 - ajuste_dept * 0.25) if i < 2 else w * (1 + ajuste_dept * 0.4) 
-                  for i, w in enumerate(weights)]
-    else:
-        weights = [w * (1 - ajuste_dept * 0.4) if i < 2 else w * (1 + ajuste_dept * 0.25) 
-                  for i, w in enumerate(weights)]
+    # Para Santiago Cloud, los perfiles asignados deben ser aún más determinantes
+    # Solo aplicamos ajustes si realmente son necesarios y de forma muy conservadora
     
-    # Sesgo de pilar (afecta ligeramente)
-    ajuste_pilar = sesgo_pilar * 0.06
-    if ajuste_pilar > 0:
-        weights = [w * (1 - ajuste_pilar * 0.2) if i < 2 else w * (1 + ajuste_pilar * 0.3) 
-                  for i, w in enumerate(weights)]
-    else:
-        weights = [w * (1 - ajuste_pilar * 0.3) if i < 2 else w * (1 + ajuste_pilar * 0.2) 
-                  for i, w in enumerate(weights)]
+    # Sesgo de empresa (afecta muy mínimamente, solo si es significativo)
+    ajuste_emp = sesgo_empresa * 0.02  # Ajuste mínimo
+    if abs(ajuste_emp) > 0.001:
+        if ajuste_emp > 0:
+            # Sesgo positivo: desplaza ligeramente hacia niveles altos
+            weights = [w * (1 - ajuste_emp * 0.05) if i < 2 else w * (1 + ajuste_emp * 0.08) 
+                      for i, w in enumerate(weights)]
+        else:
+            # Sesgo negativo: desplaza ligeramente hacia niveles bajos
+            weights = [w * (1 - ajuste_emp * 0.08) if i < 2 else w * (1 + ajuste_emp * 0.05) 
+                      for i, w in enumerate(weights)]
     
-    # Agregar ruido aleatorio del 10% para evitar respuestas perfectas
-    ruido = random.uniform(-0.10, 0.10)
-    weights = [max(0.01, w * (1 + ruido * random.choice([-1, 1]))) 
+    # Sesgo de departamento (afecta muy mínimamente)
+    ajuste_dept = sesgo_departamento * 0.02  # Ajuste mínimo
+    if abs(ajuste_dept) > 0.001:
+        if ajuste_dept > 0:
+            weights = [w * (1 - ajuste_dept * 0.05) if i < 2 else w * (1 + ajuste_dept * 0.08) 
+                      for i, w in enumerate(weights)]
+        else:
+            weights = [w * (1 - ajuste_dept * 0.08) if i < 2 else w * (1 + ajuste_dept * 0.05) 
+                      for i, w in enumerate(weights)]
+    
+    # Sesgo de pilar (afecta muy mínimamente)
+    ajuste_pilar = sesgo_pilar * 0.02  # Ajuste mínimo
+    if abs(ajuste_pilar) > 0.001:
+        if ajuste_pilar > 0:
+            weights = [w * (1 - ajuste_pilar * 0.05) if i < 2 else w * (1 + ajuste_pilar * 0.08) 
+                      for i, w in enumerate(weights)]
+        else:
+            weights = [w * (1 - ajuste_pilar * 0.08) if i < 2 else w * (1 + ajuste_pilar * 0.05) 
+                      for i, w in enumerate(weights)]
+    
+    # Agregar ruido aleatorio del 5% para evitar respuestas perfectas
+    # Pero mantener los perfiles dominantes (95% del peso del perfil)
+    ruido = random.uniform(-0.05, 0.05)
+    weights = [max(0.001, w * (1 + ruido)) 
               for w in weights]
     
     # Normalizar pesos
@@ -774,6 +921,7 @@ def crear_asignaciones_y_respuestas(
     empleados: List[Empleado],
     pilares: List[Pilar],
     departamentos: List[Departamento],
+    perfiles_santiago_cloud: Optional[Dict[int, str]] = None,
 ) -> tuple[List[Asignacion], List[Respuesta]]:
     """
     Crea asignaciones y respuestas basadas en perfiles de rendimiento individuales.
@@ -798,7 +946,23 @@ def crear_asignaciones_y_respuestas(
         empleados_por_empresa[empleado.empresa_id].append(empleado)
     
     # Asignar perfiles de rendimiento a empleados (distribución libre)
-    perfiles_empleados = asignar_perfiles_empleados(empleados)
+    # Identificar empleados de Santiago Cloud
+    empresa_santiago = next((emp for emp in empresas if emp.nombre == "Santiago Cloud"), None)
+    empleados_santiago_ids = {e.id for e in empleados if empresa_santiago and e.empresa_id == empresa_santiago.id}
+    
+    # Asignar perfiles solo a empleados estándar (no Santiago Cloud)
+    empleados_estandar = [e for e in empleados if e.id not in empleados_santiago_ids]
+    perfiles_empleados = asignar_perfiles_empleados(empleados_estandar)
+    
+    # Agregar perfiles de Santiago Cloud si fueron proporcionados
+    if perfiles_santiago_cloud:
+        print(f"\n  [INFO] Agregando {len(perfiles_santiago_cloud)} perfiles de Santiago Cloud")
+        # Contar perfiles por tipo
+        conteo_perfiles = {}
+        for emp_id, perfil in perfiles_santiago_cloud.items():
+            perfiles_empleados[emp_id] = perfil
+            conteo_perfiles[perfil] = conteo_perfiles.get(perfil, 0) + 1
+        print(f"    [INFO] Distribución de perfiles: {conteo_perfiles}")
     
     # Crear sesgos únicos para cada empresa (ajustes menores, no dominantes)
     sesgos_empresa = {}
@@ -807,10 +971,26 @@ def crear_asignaciones_y_respuestas(
         sesgos_empresa[empresa.id] = random.uniform(-0.2, 0.2)
     
     # Crear sesgos únicos para cada departamento (ajustes menores)
+    # Para Santiago Cloud, usar desempeños específicos
     sesgos_departamento = {}
     for depto in departamentos:
-        # Cada departamento tiene un pequeño sesgo
-        sesgos_departamento[depto.id] = random.uniform(-0.15, 0.15)
+        # Verificar si es departamento de Santiago Cloud
+        empresa_depto = next((emp for emp in empresas if emp.id == depto.empresa_id), None)
+        if empresa_depto and empresa_depto.nombre == "Santiago Cloud":
+            # Aplicar sesgos según desempeño del departamento
+            if depto.nombre == "Finanzas":
+                sesgos_departamento[depto.id] = 0.0  # Medio
+            elif depto.nombre == "Recursos Humanos":
+                sesgos_departamento[depto.id] = -0.15  # Bajo
+            elif depto.nombre == "Operaciones":
+                sesgos_departamento[depto.id] = 0.0  # Medio
+            elif depto.nombre == "TI":
+                sesgos_departamento[depto.id] = 0.15  # Alto
+            else:
+                sesgos_departamento[depto.id] = random.uniform(-0.15, 0.15)
+        else:
+            # Cada departamento tiene un pequeño sesgo
+            sesgos_departamento[depto.id] = random.uniform(-0.15, 0.15)
     
     # Crear sesgos únicos para cada pilar (ajustes menores)
     sesgos_pilar = {}
@@ -919,15 +1099,27 @@ def main():
         # Paso 2: Crear pilares y preguntas
         pilares, preguntas = crear_pilares_y_preguntas(session)
         
-        # Paso 3: Crear empresas
+        # Paso 3: Crear empresas (4 empresas estándar)
         empresas = crear_empresas_ejemplo(session)
         
-        # Paso 4: Crear departamentos y empleados
+        # Paso 4: Crear departamentos y empleados para empresas estándar
         departamentos, empleados = crear_departamentos_y_empleados(session, empresas)
+        
+        # Paso 4b: Crear empresa especial Santiago Cloud
+        empleado_global_idx = len(empleados)
+        rut_base = 15000000 + empleado_global_idx
+        empresa_santiago, deptos_santiago, empleados_santiago, perfiles_santiago = crear_santiago_cloud(
+            session, empleado_global_idx, rut_base
+        )
+        
+        # Agregar Santiago Cloud a las listas
+        empresas.append(empresa_santiago)
+        departamentos.extend(deptos_santiago)
+        empleados.extend(empleados_santiago)
         
         # Paso 5: Crear asignaciones y respuestas (crea cuestionarios y asignaciones)
         asignaciones, respuestas = crear_asignaciones_y_respuestas(
-            session, empresas, preguntas, empleados, pilares, departamentos
+            session, empresas, preguntas, empleados, pilares, departamentos, perfiles_santiago
         )
         
         # Paso 7: Crear umbrales
