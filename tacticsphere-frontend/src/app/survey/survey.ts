@@ -472,8 +472,11 @@ import { AuthService } from '../auth.service';
                       <p class="text-sm font-semibold text-ink">Escala de madurez (1 = Inicial - 5 = Innovador)</p>
                       <p class="text-xs text-neutral-500">Aplica para todas las preguntas tipo Likert.</p>
                     </div>
-                    <button class="ts-btn ts-btn--ghost" type="button" (click)="toggleLikertInfo()">
-                      {{ showLikertInfo ? 'Minimizar' : 'Mostrar' }}
+                    <!-- =========================================================
+                         BOTÓN +/- DEL BLOQUE DE CONFIGURACIÓN DEL PILAR
+                         ========================================================= -->
+                    <button class="ts-btn ts-btn--ghost toggle-icon-btn" type="button" (click)="toggleLikertInfo()" [attr.aria-label]="showLikertInfo ? 'Minimizar' : 'Mostrar'">
+                      <span class="toggle-icon">{{ showLikertInfo ? '−' : '+' }}</span>
                     </button>
                   </div>
                   <div class="grid gap-3 md:grid-cols-2" *ngIf="showLikertInfo">
@@ -505,9 +508,30 @@ import { AuthService } from '../auth.service';
                     [class.question-error]="highlightedQuestionId === q.id"
                   >
                     <div class="font-medium text-ink">{{ q.enunciado }}</div>
-                    <p class="text-xs text-accent" *ngIf="canViewExpectedAnswer && q.respuesta_esperada">
-                      Respuesta esperada: {{ q.respuesta_esperada }}
-                    </p>
+                    
+                    <!-- =========================================================
+                         ACORDEÓN "RESPUESTA ESPERADA" EN CADA PREGUNTA
+                         ========================================================= -->
+                    <div *ngIf="canViewExpectedAnswer && q.respuesta_esperada" class="respuesta-esperada-container">
+                      <button
+                        type="button"
+                        class="respuesta-esperada-header"
+                        (click)="toggleExpectedAnswer(q.id)"
+                      >
+                        <span class="text-xs font-medium text-neutral-600">
+                          Respuesta esperada
+                        </span>
+                        <span class="toggle-icon toggle-icon-small">
+                          {{ expandedExpectedAnswers[q.id] ? '−' : '+' }}
+                        </span>
+                      </button>
+                      <div
+                        class="respuesta-esperada-body"
+                        [class.respuesta-esperada-expanded]="expandedExpectedAnswers[q.id]"
+                      >
+                        <p class="text-xs text-accent">{{ q.respuesta_esperada }}</p>
+                      </div>
+                    </div>
                     <ng-container [ngSwitch]="q.tipo">
                       <div *ngSwitchCase="'LIKERT'" class="flex flex-wrap gap-3">
                         <label
@@ -772,6 +796,80 @@ import { AuthService } from '../auth.service';
         box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
       }
 
+      /* =========================================================
+         ESTILOS PARA BOTÓN +/- DEL BLOQUE DE CONFIGURACIÓN DEL PILAR
+         ========================================================= */
+      .toggle-icon-btn {
+        min-width: 2rem;
+        padding: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .toggle-icon {
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1;
+        color: rgb(31, 41, 55); /* text-neutral-800 - color más acorde al estilo de la página */
+        user-select: none;
+        transition: color 0.2s ease, transform 0.2s ease;
+      }
+
+      .toggle-icon-btn:hover .toggle-icon {
+        color: rgb(17, 24, 39); /* text-neutral-900 - más oscuro en hover */
+      }
+
+      .toggle-icon-small {
+        font-size: 1rem;
+        margin-left: 0.5rem;
+        color: rgb(75, 85, 99); /* text-neutral-600 - color más acorde al estilo de la página */
+        transition: color 0.2s ease;
+      }
+
+      .respuesta-esperada-header:hover .toggle-icon-small {
+        color: rgb(31, 41, 55); /* text-neutral-800 - más oscuro en hover */
+      }
+
+      /* =========================================================
+         ESTILOS PARA ACORDEÓN "RESPUESTA ESPERADA"
+         ========================================================= */
+      .respuesta-esperada-container {
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+        padding-top: 0.75rem;
+        margin-top: 0.75rem;
+      }
+
+      .respuesta-esperada-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0.5rem 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+
+      .respuesta-esperada-header:hover {
+        opacity: 0.8;
+      }
+
+      .respuesta-esperada-body {
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+        padding: 0;
+      }
+
+      .respuesta-esperada-expanded {
+        max-height: 500px; /* Suficiente para contenido largo */
+        padding-top: 0.75rem;
+        opacity: 1;
+      }
+
       /* Animación de resaltado para la barra de búsqueda */
       .search-highlight {
         animation: searchPulse 1s ease-in-out infinite;
@@ -822,6 +920,11 @@ export class SurveyComponent implements OnInit, OnDestroy {
   likertLevels: LikertLevel[] = [];
   private likertLevelsMap: Record<number, LikertLevel> = {};
   showLikertInfo = true;
+
+  // =========================================================
+  // ESTADO DE ACORDEÓN "RESPUESTA ESPERADA" POR PREGUNTA
+  // =========================================================
+  expandedExpectedAnswers: Record<number, boolean> = {};
 
   empresas: Empresa[] = [];
   departamentos: Departamento[] = [];
@@ -1705,6 +1808,13 @@ export class SurveyComponent implements OnInit, OnDestroy {
 
   toggleLikertInfo(): void {
     this.showLikertInfo = !this.showLikertInfo;
+  }
+
+  // =========================================================
+  // TOGGLE ACORDEÓN "RESPUESTA ESPERADA" POR PREGUNTA
+  // =========================================================
+  toggleExpectedAnswer(questionId: number): void {
+    this.expandedExpectedAnswers[questionId] = !this.expandedExpectedAnswers[questionId];
   }
 
   private cancelSearchDebounce(): void {
