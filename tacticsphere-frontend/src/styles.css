@@ -304,41 +304,28 @@
   background: rgba(15, 23, 42, 0.15);
 }
 
-/* Esfera wireframe decorativa del hero */
-.sphere-bg {
+/* Esfera 3D wireframe decorativa del hero */
+.hero-sphere-3d {
   position: fixed;
-  right: -25%;
-  bottom: -50%;
-  top: auto;
-  width: 900px;
-  height: 900px;
-  opacity: 0.15;
-  z-index: 0;
+  right: -30%;
+  bottom: -70%;
+  width: 1100px;
+  height: 1100px;
   pointer-events: none;
-  animation: sphereRotate 60s linear infinite;
+  z-index: 0;
 }
 
 @media (max-width: 1024px) {
-  .sphere-bg {
-    width: 650px;
-    height: 650px;
-    right: -30%;
-    bottom: -45%;
+  .hero-sphere-3d {
+    width: 800px;
+    height: 800px;
+    right: -33%;
+    bottom: -72%;
   }
 }
 
 @media (max-width: 768px) {
-  .sphere-bg {
-    width: 500px;
-    height: 500px;
-    right: -35%;
-    bottom: -40%;
-    opacity: 0.1;
-  }
-}
-
-@media (max-width: 640px) {
-  .sphere-bg {
+  .hero-sphere-3d {
     display: none;
   }
 }

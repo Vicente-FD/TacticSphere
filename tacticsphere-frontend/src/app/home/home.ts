@@ -20,6 +20,7 @@ import {
 import { ModalComponent } from '../shared/ui/modal/modal.component';
 import { LeadService } from '../core/services/lead.service';
 import { LucideAngularModule } from 'lucide-angular';
+import { HeroSphere3dComponent } from './hero-sphere-3d.component';
 import {
   animate,
   style,
@@ -45,6 +46,7 @@ type SectionContent = {
     ReactiveFormsModule,
     ModalComponent,
     LucideAngularModule,
+    HeroSphere3dComponent,
   ],
   templateUrl: './home.html',
   animations: [
