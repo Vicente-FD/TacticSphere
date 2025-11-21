@@ -7,6 +7,7 @@ import { finalize } from 'rxjs/operators';
 import { CompanyService } from '../../company.service';
 import { UserService } from '../../user.service';
 import { AuthService } from '../../auth.service';
+import { NotificationCenterService } from '../../core/services/notification-center.service';
 import { ModalComponent } from '../../shared/ui/modal/modal.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 
@@ -355,7 +356,7 @@ interface EditDialogState {
             </ng-template>
           </div>
 
-          <div *ngIf="isAdminSistema" class="ts-card space-y-4">
+          <div *ngIf="isAdminSistema" class="ts-card space-y-4" id="solicitudes-password">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-3">
               <app-icon name="bell-ring" size="20" class="h-5 w-5 text-accent" strokeWidth="1.75"></app-icon>
@@ -364,6 +365,42 @@ interface EditDialogState {
                 <p class="text-sm text-neutral-400">
                   Atiende las solicitudes enviadas desde la pantalla de recuperación.
                 </p>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary text-xs sm:text-sm"
+                (click)="loadPasswordRequests()"
+                [disabled]="loadingPasswordRequests"
+              >
+                <app-icon
+                  *ngIf="!loadingPasswordRequests"
+                  name="refresh-ccw"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="loadingPasswordRequests"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ loadingPasswordRequests ? 'Recargando...' : 'Recargar' }}</span>
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary text-xs sm:text-sm"
+                (click)="openClearPasswordRequestsDialog()"
+                [disabled]="loadingPasswordRequests || !passwordRequests().length || clearingPasswordRequests"
+              >
+                Limpiar solicitudes
+              </button>
+              <div class="ts-chip">
+                <app-icon name="bell-ring" size="16" class="h-4 w-4 text-ink" strokeWidth="1.75"></app-icon>
+                {{ passwordRequests().length }} solicitudes
               </div>
             </div>
           </div>
@@ -650,6 +687,55 @@ interface EditDialogState {
           </button>
         </ng-container>
       </div>
+
+      <!-- Modal de confirmación para limpiar solicitudes de contraseña -->
+      <ts-modal
+        title="Limpiar solicitudes de cambio de contraseña"
+        [open]="clearPasswordRequestsDialog.open"
+        (close)="closeClearPasswordRequestsDialog()"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            ¿Estás seguro de que deseas eliminar todas las solicitudes de cambio de contraseña pendientes?
+            Esta acción no se puede deshacer.
+          </p>
+          <p class="text-sm font-medium text-ink">
+            Se eliminarán <strong>{{ passwordRequests().length }}</strong> solicitud{{ passwordRequests().length !== 1 ? 'es' : '' }} pendiente{{ passwordRequests().length !== 1 ? 's' : '' }}.
+          </p>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeClearPasswordRequestsDialog()"
+              [disabled]="clearPasswordRequestsDialog.busy"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--danger"
+              (click)="confirmClearPasswordRequests()"
+              [disabled]="clearPasswordRequestsDialog.busy"
+            >
+              <app-icon
+                *ngIf="!clearPasswordRequestsDialog.busy"
+                name="trash2"
+                size="16"
+                class="h-4 w-4"
+                strokeWidth="1.75"
+              ></app-icon>
+              <app-icon
+                *ngIf="clearPasswordRequestsDialog.busy"
+                name="loader2"
+                size="16"
+                class="h-4 w-4 animate-spin"
+                strokeWidth="1.75"
+              ></app-icon>
+              <span>{{ clearPasswordRequestsDialog.busy ? 'Limpiando...' : 'Limpiar solicitudes' }}</span>
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -657,6 +743,7 @@ export class UsersComponent implements OnInit, OnDestroy {
   private companies = inject(CompanyService);
   private usersApi = inject(UserService);
   private auth = inject(AuthService);
+  private notificationCenter = inject(NotificationCenterService);
   private cdr = inject(ChangeDetectorRef);
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
@@ -710,6 +797,13 @@ export class UsersComponent implements OnInit, OnDestroy {
     open: false,
     user: null as Usuario | null,
   };
+
+  // Modal de confirmación para limpiar solicitudes de contraseña
+  clearPasswordRequestsDialog = {
+    open: false,
+    busy: false,
+  };
+  clearingPasswordRequests = false;
 
   form: UsuarioCreate = {
     nombre: '',
@@ -827,10 +921,16 @@ export class UsersComponent implements OnInit, OnDestroy {
       .pipe(finalize(() => (this.loadingPasswordRequests = false)))
       .subscribe({
         next: (rows) => {
-          this.passwordRequests.set(rows ?? []);
+          const requests = rows ?? [];
+          
+          this.passwordRequests.set(requests);
+          // Actualizar contador en el servicio de notificaciones
+          this.notificationCenter.setInitialPasswordRequestsCount(requests.length);
+          this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('Error cargando solicitudes de contraseña', error);
+          this.cdr.markForCheck();
         },
       });
   }
@@ -1036,7 +1136,10 @@ export class UsersComponent implements OnInit, OnDestroy {
         .subscribe({
           next: () => {
             this.closePasswordDialog(true);
+            // Recargar solicitudes y actualizar contador
             this.loadPasswordRequests();
+            // Refrescar notificaciones para actualizar contador
+            this.notificationCenter.refresh(this.isAdminSistema);
           },
           error: (error) => {
             console.error('Error completando solicitud de contraseña', error);
@@ -1404,6 +1507,66 @@ export class UsersComponent implements OnInit, OnDestroy {
       default:
         return 'Editar';
     }
+  }
+
+  /**
+   * Abre el modal de confirmación para limpiar solicitudes de contraseña
+   */
+  openClearPasswordRequestsDialog(): void {
+    if (this.clearingPasswordRequests || !this.passwordRequests().length) {
+      return;
+    }
+    this.clearPasswordRequestsDialog = {
+      open: true,
+      busy: false,
+    };
+  }
+
+  /**
+   * Cierra el modal de confirmación
+   */
+  closeClearPasswordRequestsDialog(): void {
+    if (this.clearPasswordRequestsDialog.busy) {
+      return;
+    }
+    this.clearPasswordRequestsDialog = {
+      open: false,
+      busy: false,
+    };
+  }
+
+  /**
+   * Confirma y ejecuta la limpieza de solicitudes de contraseña
+   */
+  confirmClearPasswordRequests(): void {
+    if (this.clearPasswordRequestsDialog.busy || !this.passwordRequests().length) {
+      return;
+    }
+
+    this.clearPasswordRequestsDialog.busy = true;
+    this.clearingPasswordRequests = true;
+
+    this.usersApi.clearPasswordChangeRequests().subscribe({
+      next: () => {
+        // Cerrar el modal
+        this.clearPasswordRequestsDialog = {
+          open: false,
+          busy: false,
+        };
+        // Recargar la lista
+        this.loadPasswordRequests();
+        // Refrescar notificaciones
+        this.notificationCenter.refresh(this.isAdminSistema);
+        this.clearingPasswordRequests = false;
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error limpiando solicitudes de contraseña', error);
+        this.clearPasswordRequestsDialog.busy = false;
+        this.clearingPasswordRequests = false;
+        this.cdr.markForCheck();
+      },
+    });
   }
 }
 

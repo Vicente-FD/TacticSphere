@@ -3,9 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { CompanyService } from '../../company.service';
 import { LeadService } from '../../core/services/lead.service';
+import { NotificationCenterService } from '../../core/services/notification-center.service';
 import { Empresa, Lead } from '../../types';
 
 @Component({
@@ -16,6 +18,7 @@ import { Empresa, Lead } from '../../types';
     FormsModule,
     NgxSkeletonLoaderModule,
     IconComponent,
+    ModalComponent,
   ],
   template: `
     <div class="ts-page">
@@ -211,7 +214,7 @@ import { Empresa, Lead } from '../../types';
           </div>
         </div>
 
-        <div class="ts-card space-y-4">
+        <div class="ts-card space-y-4" data-section="consulting-requests">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="space-y-1">
               <h2 class="text-xl font-semibold text-ink">Empresas que desean una consultoría</h2>
@@ -223,7 +226,29 @@ import { Empresa, Lead } from '../../types';
               <button
                 type="button"
                 class="ts-btn ts-btn--secondary text-xs sm:text-sm"
-                (click)="clearLeads()"
+                (click)="loadLeads()"
+                [disabled]="loadingLeads"
+              >
+                <app-icon
+                  *ngIf="!loadingLeads"
+                  name="refresh-ccw"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="loadingLeads"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ loadingLeads ? 'Recargando...' : 'Recargar' }}</span>
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary text-xs sm:text-sm"
+                (click)="openClearLeadsDialog()"
                 [disabled]="loadingLeads || !leads().length || leadActionId() !== null"
               >
                 Limpiar solicitudes
@@ -295,6 +320,55 @@ import { Empresa, Lead } from '../../types';
             Aún no recibimos solicitudes de consultoría. Cuando lleguen, aparecerán aquí.
           </div>
         </div>
+
+        <!-- Modal de confirmación para limpiar leads -->
+        <ts-modal
+          title="Limpiar solicitudes de consultoría"
+          [open]="clearLeadsDialog.open"
+          (close)="closeClearLeadsDialog()"
+        >
+          <div class="space-y-4">
+            <p class="text-sm text-neutral-500">
+              ¿Estás seguro de que deseas eliminar todas las solicitudes de consultoría?
+              Esta acción no se puede deshacer.
+            </p>
+            <p class="text-sm font-medium text-ink">
+              Se eliminarán <strong>{{ leads().length }}</strong> solicitud{{ leads().length !== 1 ? 'es' : '' }} pendiente{{ leads().length !== 1 ? 's' : '' }}.
+            </p>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary"
+                (click)="closeClearLeadsDialog()"
+                [disabled]="clearLeadsDialog.busy"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--danger"
+                (click)="clearLeads()"
+                [disabled]="clearLeadsDialog.busy"
+              >
+                <app-icon
+                  *ngIf="!clearLeadsDialog.busy"
+                  name="trash2"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="clearLeadsDialog.busy"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ clearLeadsDialog.busy ? 'Limpiando...' : 'Limpiar solicitudes' }}</span>
+              </button>
+            </div>
+          </div>
+        </ts-modal>
       </div>
     </div>
   `,
@@ -302,6 +376,7 @@ import { Empresa, Lead } from '../../types';
 export class CompaniesComponent implements OnInit {
   private api = inject(CompanyService);
   private leadsApi = inject(LeadService);
+  private notificationCenter = inject(NotificationCenterService);
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;
@@ -319,6 +394,12 @@ export class CompaniesComponent implements OnInit {
   leads: WritableSignal<Lead[]> = signal<Lead[]>([]);
   loadingLeads = true;
   readonly leadActionId = signal<number | null>(null);
+
+  // Modal de confirmación para limpiar leads
+  clearLeadsDialog = {
+    open: false,
+    busy: false,
+  };
 
   form = {
     nombre: '',
@@ -341,14 +422,17 @@ export class CompaniesComponent implements OnInit {
     });
   }
 
-  private loadLeads(): void {
+  loadLeads(): void {
     this.loadingLeads = true;
     this.leadsApi.listLeads().subscribe({
       next: (rows: Lead[]) => {
         const ordered = [...(rows ?? [])].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
+        
         this.leads.set(ordered);
+        // Actualizar contador en el servicio de notificaciones
+        this.notificationCenter.setInitialConsultingRequestsCount(ordered.length);
       },
       error: (error) => {
         console.error('Error cargando leads', error);
@@ -528,6 +612,8 @@ export class CompaniesComponent implements OnInit {
     this.leadsApi.deleteLead(lead.id).subscribe({
       next: () => {
         this.leads.set(this.leads().filter((item) => item.id !== lead.id));
+        // Refrescar notificaciones para actualizar contador
+        this.notificationCenter.refresh(false);
       },
       error: (error) => {
         console.error('No se pudo procesar la solicitud', error);
@@ -547,6 +633,8 @@ export class CompaniesComponent implements OnInit {
     this.leadsApi.deleteLead(lead.id).subscribe({
       next: () => {
         this.leads.set(this.leads().filter((item) => item.id !== lead.id));
+        // Refrescar notificaciones para actualizar contador
+        this.notificationCenter.refresh(false);
       },
       error: (error) => {
         console.error('No se pudo eliminar la solicitud', error);
@@ -558,17 +646,58 @@ export class CompaniesComponent implements OnInit {
     });
   }
 
-  clearLeads(): void {
-    if (!this.leads().length) return;
-    if (!confirm('¿Deseas limpiar todas las solicitudes de consultoría?')) return;
+  /**
+   * Abre el modal de confirmación para limpiar leads
+   */
+  openClearLeadsDialog(): void {
+    if (!this.leads().length || this.leadActionId() !== null) {
+      return;
+    }
+    this.clearLeadsDialog = {
+      open: true,
+      busy: false,
+    };
+  }
 
+  /**
+   * Cierra el modal de confirmación
+   */
+  closeClearLeadsDialog(): void {
+    if (this.clearLeadsDialog.busy) {
+      return;
+    }
+    this.clearLeadsDialog = {
+      open: false,
+      busy: false,
+    };
+  }
+
+  /**
+   * Confirma y ejecuta la limpieza de leads
+   */
+  clearLeads(): void {
+    if (!this.leads().length || this.clearLeadsDialog.busy) {
+      return;
+    }
+
+    this.clearLeadsDialog.busy = true;
     this.leadActionId.set(-1);
+
     this.leadsApi.clearLeads().subscribe({
       next: () => {
+        // Cerrar el modal
+        this.clearLeadsDialog = {
+          open: false,
+          busy: false,
+        };
         this.leads.set([]);
+        // Refrescar notificaciones para actualizar contador
+        this.notificationCenter.refresh(false);
+        this.leadActionId.set(null);
       },
       error: (error) => {
         console.error('No se pudo limpiar las solicitudes', error);
+        this.clearLeadsDialog.busy = false;
         this.leadActionId.set(null);
       },
       complete: () => {

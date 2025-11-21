@@ -19,6 +19,7 @@ import {
 } from '@angular/forms';
 import { ModalComponent } from '../shared/ui/modal/modal.component';
 import { LeadService } from '../core/services/lead.service';
+import { NotificationCenterService } from '../core/services/notification-center.service';
 import { LucideAngularModule } from 'lucide-angular';
 import { HeroSphere3dComponent } from './hero-sphere-3d.component';
 import {
@@ -73,6 +74,7 @@ type SectionContent = {
 export class HomeComponent implements AfterViewInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly leadService = inject(LeadService);
+  private readonly notificationCenter = inject(NotificationCenterService);
   private readonly destroyRef = inject(DestroyRef);
 
   @ViewChildren('sectionBlock') sectionBlocks!: QueryList<ElementRef<HTMLElement>>;
@@ -165,9 +167,13 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
       .createLead(payload)
       .pipe(take(1))
       .subscribe({
-        next: () => {
+        next: (lead) => {
           this.submitState.set('success');
           this.form.reset();
+          
+          // Notificar al servicio de notificaciones en tiempo real
+          // Esto actualizará el contador y disparará la alerta para los admins
+          this.notificationCenter.notifyNewConsultingRequest(lead);
         },
         error: (error) => {
           console.error('No se pudo enviar la solicitud', error);

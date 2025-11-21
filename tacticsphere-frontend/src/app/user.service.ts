@@ -87,4 +87,11 @@ export class UserService {
     }
     return this.http.get<PasswordChangeRequest[]>(`${this.base}/password-change-requests`);
   }
+
+  /**
+   * Limpia todas las solicitudes de cambio de contraseña pendientes (solo Admin Sistema).
+   */
+  clearPasswordChangeRequests(): Observable<void> {
+    return this.http.delete<void>(`${this.base}/password-change-requests`);
+  }
 }

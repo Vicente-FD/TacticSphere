@@ -17,7 +17,8 @@ type IconName =
   | 'bell-ring'
   | 'pencil'
   | 'plus'
-  | 'x';
+  | 'x'
+  | 'refresh-ccw';
 
 @Component({
   standalone: true,
@@ -148,6 +149,14 @@ type IconName =
         <g *ngSwitchCase="'x'">
           <line x1="18" x2="6" y1="6" y2="18" />
           <line x1="6" x2="18" y1="6" y2="18" />
+        </g>
+
+        <!-- RefreshCcw (Recargar) -->
+        <g *ngSwitchCase="'refresh-ccw'">
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+          <path d="M16 16h5v5" />
         </g>
       </ng-container>
     </svg>

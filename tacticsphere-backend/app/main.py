@@ -1119,6 +1119,17 @@ def list_password_change_requests_endpoint(
     return crud.list_password_change_requests(db, include_resolved=include_resolved)
 
 
+@app.delete("/password-change-requests", status_code=204)
+def clear_password_change_requests_endpoint(
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    if current.rol != RolEnum.ADMIN_SISTEMA:
+        raise HTTPException(status_code=403, detail="Permisos insuficientes")
+    crud.clear_password_change_requests(db)
+    return None
+
+
 
 # ======================================================
 

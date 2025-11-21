@@ -6,6 +6,7 @@ import { finalize } from 'rxjs/operators';
 import { LucideAngularModule } from 'lucide-angular';
 
 import { AuthService } from '../auth.service';
+import { NotificationCenterService } from '../core/services/notification-center.service';
 
 @Component({
   standalone: true,
@@ -67,6 +68,7 @@ import { AuthService } from '../auth.service';
 })
 export class ForgotPasswordComponent {
   private auth = inject(AuthService);
+  private notificationCenter = inject(NotificationCenterService);
 
   email = '';
   loadingRequest = false;
@@ -91,7 +93,12 @@ export class ForgotPasswordComponent {
       .subscribe({
         next: () => {
           this.message = this.successMessage;
+          const emailValue = this.email;
           this.email = '';
+          
+          // Notificar al servicio de notificaciones en tiempo real
+          // Esto actualizará el contador y disparará la alerta para los admins
+          this.notificationCenter.notifyNewPasswordRequest(emailValue);
         },
         error: (err) => {
           console.error('Error solicitando cambio de contraseña', err);

@@ -165,6 +165,13 @@ def resolve_password_change_request(
     db.refresh(record)
     return record
 
+
+def clear_password_change_requests(db: Session) -> int:
+    """Elimina todas las solicitudes de cambio de contraseña pendientes"""
+    count = db.query(PasswordChangeRequest).filter(PasswordChangeRequest.resolved.is_(False)).delete()
+    db.commit()
+    return count
+
 # ======================================================
 # EMPRESAS
 # ======================================================
