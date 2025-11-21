@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable, of } from 'rxjs';
@@ -86,16 +86,19 @@ import { AuthService } from '../auth.service';
                       Busca por nombre, correo o RUT. Si no seleccionas empresa, usaremos tu alcance actual.
                     </p>
                   </div>
-                  <span class="ts-chip" *ngIf="employees.length">{{ employees.length }} coincidencias</span>
+                    <span class="ts-chip" *ngIf="!selectedColaborador && employees.length">{{ employees.length }} coincidencias</span>
+                    <span class="ts-chip" *ngIf="selectedColaborador">1 colaborador seleccionado</span>
                 </div>
                 <div class="relative">
                   <input
                     type="search"
                     class="ts-input pr-28"
+                    [class.search-highlight]="highlightSearchBar"
                     placeholder="Ej: maria@empresa.com o 12.345.678-9"
                     [(ngModel)]="searchTerm"
                     (ngModelChange)="onSearchTermChange($event)"
                     (keyup.enter)="forceEmployeeSearch()"
+                    (focus)="highlightSearchBar = false"
                   />
                   <button
                     type="button"
@@ -218,15 +221,17 @@ import { AuthService } from '../auth.service';
             </div>
           </div>
 
-          <!-- Resultados de búsqueda (fuera de la card, siempre visibles) -->
-          <div class="space-y-4" *ngIf="employees.length || hasEmployeeSearch || loadingEmployees">
-            <ng-container *ngIf="employees.length; else searchState">
-              <div class="space-y-3">
-                <div
-                  class="rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-accent/40 hover:shadow-card"
-                  *ngFor="let emp of employees"
-                  [ngClass]="{ 'border-accent shadow-card': selectedEmployee?.id === emp.id }"
-                >
+          <!-- Resultados de búsqueda: alterna entre lista completa y colaborador seleccionado -->
+          <div class="space-y-4" *ngIf="employees.length || hasEmployeeSearch || loadingEmployees || selectedColaborador">
+            <ng-container *ngIf="!selectedColaborador; else colaboradorSeleccionado">
+              <!-- Lista completa de resultados -->
+              <ng-container *ngIf="employees.length; else searchState">
+                <div class="space-y-3">
+                  <div
+                    class="rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-accent/40 hover:shadow-card"
+                    *ngFor="let emp of employees"
+                    [ngClass]="{ 'border-accent shadow-card': selectedEmployee?.id === emp.id }"
+                  >
                   <div class="flex flex-wrap justify-between gap-3">
                     <div>
                       <p class="text-base font-semibold text-ink">
@@ -246,7 +251,7 @@ import { AuthService } from '../auth.service';
                     <button
                       class="ts-btn ts-btn--secondary"
                       type="button"
-                      (click)="seleccionarEmpleado(emp)"
+                      (click)="usarEnEncuesta(emp)"
                       [disabled]="selectedEmployee?.id === emp.id"
                     >
                       {{ selectedEmployee?.id === emp.id ? 'Seleccionado' : 'Usar en encuesta' }}
@@ -307,9 +312,52 @@ import { AuthService } from '../auth.service';
                       </button>
                     </div>
                   </div>
+                  </div>
+                </div>
+              </ng-container>
+            </ng-container>
+            
+            <!-- Tarjeta única del colaborador seleccionado -->
+            <ng-template #colaboradorSeleccionado>
+              <div class="space-y-3" *ngIf="selectedColaborador">
+                <div
+                  class="rounded-xl border border-accent bg-white p-4 shadow-card"
+                >
+                  <div class="flex flex-wrap justify-between gap-3">
+                    <div>
+                      <p class="text-base font-semibold text-ink">
+                        {{ selectedColaborador.nombre }} {{ selectedColaborador.apellidos || '' }}
+                      </p>
+                      <p class="text-sm text-neutral-500">
+                        {{ selectedColaborador.email || 'Sin correo registrado' }} - {{ selectedColaborador.cargo || 'Sin cargo' }}
+                      </p>
+                    </div>
+                    <div class="text-right text-sm text-neutral-500">
+                      <p>ID #{{ selectedColaborador.id }}</p>
+                      <p>RUT: {{ selectedColaborador.rut || '--' }}</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      class="ts-btn ts-btn--positive"
+                      type="button"
+                      disabled
+                    >
+                      Colaborador seleccionado
+                    </button>
+                    <button
+                      class="ts-btn ts-btn--ghost"
+                      type="button"
+                      (click)="limpiarColaboradorSeleccionado()"
+                    >
+                      Cambiar colaborador
+                    </button>
+                  </div>
                 </div>
               </div>
-            </ng-container>
+            </ng-template>
+            
             <ng-template #searchState>
               <div class="rounded-xl border border-dashed border-neutral-200 bg-neutral-100/60 px-4 py-3 text-sm text-neutral-500">
                 <ng-container *ngIf="loadingEmployees">Buscando colaboradores...</ng-container>
@@ -373,7 +421,8 @@ import { AuthService } from '../auth.service';
         </div>
 
         <ng-container *ngIf="progress as pr; else noProgress">
-          <div class="ts-card space-y-6" id="preguntas-por-pilar">
+          <!-- Sección "Preguntas por pilar": referencia para scroll automático -->
+          <section #preguntasPorPilarSection class="ts-card space-y-6" id="preguntas-por-pilar">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div class="space-y-1">
                 <h2 class="text-xl font-semibold text-ink">Preguntas por pilar</h2>
@@ -553,7 +602,7 @@ import { AuthService } from '../auth.service';
                 </ng-template>
               </div>
             </div>
-          </div>
+          </section>
         </ng-container>
 
         <ng-template #noProgress>
@@ -722,6 +771,24 @@ import { AuthService } from '../auth.service';
         background-color: rgba(239, 68, 68, 0.05);
         box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
       }
+
+      /* Animación de resaltado para la barra de búsqueda */
+      .search-highlight {
+        animation: searchPulse 1s ease-in-out infinite;
+        border-color: rgb(59, 130, 246) !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+      }
+
+      @keyframes searchPulse {
+        0%, 100% {
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+          border-color: rgb(59, 130, 246);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.4);
+          border-color: rgb(37, 99, 235);
+        }
+      }
     `,
   ],
 })
@@ -729,6 +796,21 @@ export class SurveyComponent implements OnInit, OnDestroy {
   asignacionId: number | null = null;
   empleadoId: number | null = null;
   selectedEmployee: Empleado | null = null;
+  
+  // =========================================================
+  // COLABORADOR SELECCIONADO PARA ENCUESTA
+  // =========================================================
+  selectedColaborador: Empleado | null = null;
+  
+  // =========================================================
+  // RESALTADO DE LA BARRA DE BÚSQUEDA
+  // =========================================================
+  highlightSearchBar = false;
+  
+  // =========================================================
+  // REFERENCIA A LA SECCIÓN "PREGUNTAS POR PILAR" PARA SCROLL
+  // =========================================================
+  @ViewChild('preguntasPorPilarSection') preguntasPorPilarSection?: ElementRef<HTMLElement>;
 
   progress: AssignmentProgress | null = null;
   progressMap: Partial<Record<number, PillarProgress>> = {};
@@ -957,28 +1039,111 @@ export class SurveyComponent implements OnInit, OnDestroy {
     });
   }
 
-  seleccionarEmpleado(emp: Empleado): void {
+  // =========================================================
+  // USAR COLABORADOR EN ENCUESTA: Selecciona colaborador y hace scroll a preguntas
+  // =========================================================
+  usarEnEncuesta(colaborador: Empleado): void {
+    // Mantener la lógica actual de selección
     this.clearFeedback();
-    const companyChanged = !this.formEmp.empresa_id || this.formEmp.empresa_id !== emp.empresa_id;
+    const companyChanged = !this.formEmp.empresa_id || this.formEmp.empresa_id !== colaborador.empresa_id;
     if (companyChanged) {
-      this.formEmp.empresa_id = emp.empresa_id;
-      this.loadDepartmentsForCompany(emp.empresa_id);
-      this.refreshAssignments(emp.empresa_id);
+      this.formEmp.empresa_id = colaborador.empresa_id;
+      this.loadDepartmentsForCompany(colaborador.empresa_id);
+      this.refreshAssignments(colaborador.empresa_id);
     }
-    this.formEmp.departamento_id = emp.departamento_id ?? null;
+    this.formEmp.departamento_id = colaborador.departamento_id ?? null;
 
-    this.selectedEmployee = emp;
+    // Guardar colaborador seleccionado
+    this.selectedEmployee = colaborador;
+    this.selectedColaborador = colaborador;
     this.clearSurveyData();
-    this.onEmpleadoIdInput(emp.id);
-    const nombreCompleto = [emp.nombre, emp.apellidos].filter((v) => !!v).join(' ');
+    this.onEmpleadoIdInput(colaborador.id);
+    const nombreCompleto = [colaborador.nombre, colaborador.apellidos].filter((v) => !!v).join(' ');
     const etiqueta = nombreCompleto ? ` - ${nombreCompleto}` : '';
-    this.message = `Empleado seleccionado: #${emp.id}${etiqueta}`;
+    this.message = `Empleado seleccionado: #${colaborador.id}${etiqueta}`;
     this.triggerAutoBeginIfReady();
+    
+    // Hacer scroll suave hacia la sección "Preguntas por pilar" después de un delay
+    // para asegurar que el DOM se haya actualizado y que la sección esté disponible
+    // Intentar varias veces en caso de que la sección aún no esté renderizada
+    this.scrollToPreguntasPorPilar();
+  }
+
+  // =========================================================
+  // SELECCIONAR EMPLEADO: Método original (mantenido para compatibilidad)
+  // =========================================================
+  seleccionarEmpleado(emp: Empleado): void {
+    // Redirigir al nuevo método
+    this.usarEnEncuesta(emp);
+  }
+
+  // =========================================================
+  // LIMPIAR COLABORADOR SELECCIONADO: Permite volver a la lista completa y cerrar la encuesta
+  // =========================================================
+  limpiarColaboradorSeleccionado(): void {
+    this.selectedColaborador = null;
+    // Vaciar la barra de búsqueda
+    this.searchTerm = '';
+    this.employees = [];
+    this.hasEmployeeSearch = false;
+    
+    // Cerrar la encuesta: limpiar todo el estado relacionado
+    this.empleadoId = null;
+    this.selectedEmployee = null;
+    this.clearSurveyData();
+    this.cancelAutoBegin();
+    this.clearFeedback();
+    
+    // Resaltar la barra de búsqueda para indicar que debe buscar un nuevo colaborador
+    this.highlightSearchBar = true;
+    
+    // Quitar el resaltado después de 3 segundos
+    setTimeout(() => {
+      this.highlightSearchBar = false;
+    }, 3000);
+  }
+
+  // =========================================================
+  // SCROLL A PREGUNTAS POR PILAR: Hace scroll suave a la sección de preguntas
+  // =========================================================
+  private scrollToPreguntasPorPilar(attempt = 0): void {
+    const maxAttempts = 10; // Intentar hasta 10 veces
+    const delay = 100; // 100ms entre intentos
+
+    if (attempt >= maxAttempts) {
+      return; // No hacer nada si ya intentamos muchas veces
+    }
+
+    setTimeout(() => {
+      if (this.preguntasPorPilarSection?.nativeElement) {
+        // Si la sección está disponible, hacer scroll
+        this.preguntasPorPilarSection.nativeElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      } else if (this.progress) {
+        // Si hay progreso pero la sección aún no está disponible, intentar de nuevo
+        this.scrollToPreguntasPorPilar(attempt + 1);
+      } else {
+        // Si no hay progreso, intentar usar el ID del elemento directamente
+        const section = document.getElementById('preguntas-por-pilar');
+        if (section) {
+          section.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        } else if (attempt < maxAttempts - 1) {
+          // Intentar de nuevo si aún no encontramos la sección
+          this.scrollToPreguntasPorPilar(attempt + 1);
+        }
+      }
+    }, delay * (attempt + 1)); // Aumentar el delay con cada intento
   }
 
   limpiarSeleccionEmpleado(): void {
     this.empleadoId = null;
     this.selectedEmployee = null;
+    this.selectedColaborador = null; // Limpiar también el colaborador seleccionado
     this.clearSurveyData();
     this.cancelAutoBegin();
     this.clearFeedback();
