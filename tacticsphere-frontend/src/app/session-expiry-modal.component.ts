@@ -43,6 +43,7 @@ export class SessionExpiryModalComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private router = inject(Router);
   private warningSubscription?: Subscription;
+  private autoLogoutTimer: ReturnType<typeof setTimeout> | null = null;
   
   showWarning = false;
 
@@ -50,21 +51,49 @@ export class SessionExpiryModalComponent implements OnInit, OnDestroy {
     // Suscribirse a las advertencias de inactividad
     this.warningSubscription = this.inactivityService.warning$.subscribe(() => {
       this.showWarning = true;
+      // Iniciar timer de 1 minuto para auto-logout
+      this.startAutoLogoutTimer();
     });
   }
 
   ngOnDestroy(): void {
+    this.clearAutoLogoutTimer();
     if (this.warningSubscription) {
       this.warningSubscription.unsubscribe();
     }
   }
 
+  private startAutoLogoutTimer(): void {
+    this.clearAutoLogoutTimer();
+    // Timer de 1 minuto (60000 ms) para auto-logout
+    this.autoLogoutTimer = setTimeout(() => {
+      this.performAutoLogout();
+    }, 60000);
+  }
+
+  private clearAutoLogoutTimer(): void {
+    if (this.autoLogoutTimer) {
+      clearTimeout(this.autoLogoutTimer);
+      this.autoLogoutTimer = null;
+    }
+  }
+
+  private performAutoLogout(): void {
+    this.clearAutoLogoutTimer();
+    this.inactivityService.stopTracking();
+    this.authService.logout();
+    this.showWarning = false;
+    this.router.navigate(['/login']);
+  }
+
   onExtendSession(): void {
+    this.clearAutoLogoutTimer();
     this.inactivityService.extendSession();
     this.showWarning = false;
   }
 
   onLogout(): void {
+    this.clearAutoLogoutTimer();
     // Cerrar sesión inmediatamente si el usuario lo solicita
     this.inactivityService.stopTracking();
     this.authService.logout();
@@ -73,8 +102,9 @@ export class SessionExpiryModalComponent implements OnInit, OnDestroy {
   }
 
   onClose(): void {
-    // Si el usuario cierra el modal sin acción, no extendemos la sesión
-    // La sesión se cerrará automáticamente después de 1 minuto
+    // Si el usuario cierra el modal con X, no extendemos la sesión
+    // pero el timer de auto-logout debe seguir funcionando
+    // No limpiamos el timer aquí, solo ocultamos el modal
     this.showWarning = false;
   }
 }

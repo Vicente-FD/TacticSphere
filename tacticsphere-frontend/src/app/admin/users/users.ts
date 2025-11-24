@@ -119,7 +119,7 @@ interface EditDialogState {
                 <label class="block space-y-2">
                   <span class="ts-label">Rol</span>
                   <select class="ts-select" [(ngModel)]="form.rol">
-                    <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
+                    <option *ngFor="let r of roles" [ngValue]="r">{{ formatRoleForSelect(r) }}</option>
                   </select>
                 </label>
               </div>
@@ -243,20 +243,9 @@ interface EditDialogState {
                         </td>
                         <td class="text-sm text-neutral-500">{{ u.email }}</td>
                         <td>
-                          <select
-                            class="ts-select"
-                            [ngModel]="u.rol"
-                            (ngModelChange)="onRoleChange(u, $event)"
-                            [disabled]="updatingRoleId === u.id || (!isAdminSistema && u.rol === 'ADMIN_SISTEMA')"
-                          >
-                            <option
-                              *ngFor="let r of roles"
-                              [ngValue]="r"
-                              [disabled]="!isAdminSistema && r === 'ADMIN_SISTEMA' && u.rol !== 'ADMIN_SISTEMA'"
-                            >
-                              {{ r }}
-                            </option>
-                          </select>
+                          <span class="ts-chip inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium">
+                            {{ formatRoleLabel(u.rol) }}
+                          </span>
                         </td>
                         <td>{{ empresaName(u.empresa_id) }}</td>
                         <td>
@@ -564,7 +553,7 @@ interface EditDialogState {
                     !isAdminSistema && r === 'ADMIN_SISTEMA' && editDialog.user?.rol !== 'ADMIN_SISTEMA'
                   "
                 >
-                  {{ r }}
+                  {{ formatRoleForSelect(r) }}
                 </option>
               </select>
             </label>
@@ -965,21 +954,17 @@ export class UsersComponent implements OnInit, OnDestroy {
     });
   }
 
-  onRoleChange(u: Usuario, nextRole: RolEnum): void {
-    const previousRole = u.rol;
-    if (nextRole === previousRole) {
-      return;
+  formatRoleLabel(rol: RolEnum): string {
+    // Mapear ANALISTA a CONSULTOR para mostrar en la UI
+    if (rol === 'ANALISTA') {
+      return 'CONSULTOR';
     }
-    if (!this.isAdminSistema) {
-      if (nextRole === 'ADMIN_SISTEMA' && previousRole !== 'ADMIN_SISTEMA') {
-        return;
-      }
-      if (previousRole === 'ADMIN_SISTEMA' && nextRole !== 'ADMIN_SISTEMA') {
-        return;
-      }
-    }
-    u.rol = nextRole;
-    this.changeRole(u, nextRole, previousRole);
+    return rol;
+  }
+
+  formatRoleForSelect(rol: RolEnum): string {
+    // Mapear ANALISTA a CONSULTOR para mostrar en selects
+    return this.formatRoleLabel(rol);
   }
 
   changeRole(u: Usuario, rol: RolEnum, previousRole?: RolEnum): void {
@@ -1174,6 +1159,7 @@ export class UsersComponent implements OnInit, OnDestroy {
     this.deletingId = user.id;
     this.usersApi.delete(user.id).subscribe({
       next: () => {
+        this.deletingId = null;
         // Cerrar el modal inmediatamente después de confirmar
         this.deleteConfirmDialog = {
           open: false,

@@ -140,6 +140,7 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
   openModal(): void {
     this.submitState.set('idle');
+    this.form.reset();
     this.modalOpen.set(true);
   }
 
@@ -169,11 +170,17 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
       .subscribe({
         next: (lead) => {
           this.submitState.set('success');
-          this.form.reset();
           
           // Notificar al servicio de notificaciones en tiempo real
           // Esto actualizará el contador y disparará la alerta para los admins
           this.notificationCenter.notifyNewConsultingRequest(lead);
+          
+          // Auto-cerrar el modal después de 4 segundos y limpiar formulario
+          setTimeout(() => {
+            this.closeModal();
+            this.form.reset();
+            this.submitState.set('idle');
+          }, 4000);
         },
         error: (error) => {
           console.error('No se pudo enviar la solicitud', error);

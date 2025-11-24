@@ -39,6 +39,7 @@ interface LikertBucketConfig {
 export class LikertBucketsComponent {
   @Input() employees: LikertBucketEmployee[] = [];
   @Input() filter: LikertBucketsFilter | null = null;
+  @Input() selectedEmployeeId: number | null = null; // Para resaltar el empleado seleccionado
   @Output() employeeClick = new EventEmitter<number>();
 
   private readonly buckets: LikertBucketConfig[] = [

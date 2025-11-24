@@ -169,6 +169,13 @@
   transform: translateX(2px);
 }
 
+.likert-card__employee--active {
+  background: #dbeafe !important;
+  border-color: #3b82f6 !important;
+  border-width: 2px !important;
+  font-weight: 600;
+}
+
 .likert-card__employee-name {
   font-weight: 500;
   color: #0f172a;

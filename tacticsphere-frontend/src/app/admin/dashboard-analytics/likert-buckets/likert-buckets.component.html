@@ -33,7 +33,12 @@
         <ng-container *ngIf="bucket.employees.length; else emptyBucket">
           <ul class="likert-card__list">
             <li *ngFor="let employee of bucket.employees; trackBy: trackByEmployee">
-              <button class="likert-card__employee" type="button" (click)="handleEmployeeClick(employee.id)">
+              <button 
+                class="likert-card__employee" 
+                type="button" 
+                (click)="handleEmployeeClick(employee.id)"
+                [class.likert-card__employee--active]="selectedEmployeeId === employee.id"
+              >
                 <span class="likert-card__employee-name">{{ formatEmployeeIdentity(employee) }}</span>
                 <span class="likert-card__chevron" aria-hidden="true">&rarr;</span>
               </button>

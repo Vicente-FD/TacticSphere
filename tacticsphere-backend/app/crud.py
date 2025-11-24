@@ -186,6 +186,7 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
     db.flush()  # para conseguir emp.id
     if departamentos:
         seen: set[str] = set()
+        dept_objects = []
         for raw in departamentos:
             if not raw:
                 continue
@@ -196,7 +197,21 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
             if key in seen:
                 continue
             seen.add(key)
-            db.add(Departamento(nombre=n, empresa_id=emp.id))
+            # Verificar si el departamento ya existe para esta empresa antes de crearlo
+            existing = db.scalar(
+                select(Departamento).where(
+                    and_(
+                        Departamento.empresa_id == emp.id,
+                        func.lower(Departamento.nombre) == key
+                    )
+                )
+            )
+            if not existing:
+                dept_objects.append(Departamento(nombre=n, empresa_id=emp.id))
+        # Agregar todos los departamentos de una vez
+        if dept_objects:
+            db.add_all(dept_objects)
+            db.flush()  # Flush después de agregar departamentos para detectar errores temprano
     db.commit()
     db.refresh(emp)
     return emp
@@ -226,6 +241,7 @@ def update_empresa(
         # Eliminar departamentos existentes
         for dep in emp.departamentos:
             db.delete(dep)
+        db.flush()  # Asegurar que los departamentos se eliminen antes de crear nuevos
         
         # Crear nuevos departamentos
         seen: set[str] = set()
@@ -239,7 +255,17 @@ def update_empresa(
             if key in seen:
                 continue
             seen.add(key)
-            db.add(Departamento(nombre=n, empresa_id=emp.id))
+            # Verificar si el departamento ya existe para esta empresa antes de crearlo
+            existing = db.scalar(
+                select(Departamento).where(
+                    and_(
+                        Departamento.empresa_id == emp.id,
+                        func.lower(Departamento.nombre) == key
+                    )
+                )
+            )
+            if not existing:
+                db.add(Departamento(nombre=n, empresa_id=emp.id))
     
     db.commit()
     db.refresh(emp)

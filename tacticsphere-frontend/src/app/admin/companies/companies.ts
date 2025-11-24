@@ -37,15 +37,9 @@ import { Empresa, Lead } from '../../types';
         <div class="grid gap-6 lg:grid-cols-[minmax(0,0.65fr)_minmax(0,1fr)]">
           <div class="ts-card space-y-6">
             <div>
-              <h2 class="text-xl font-semibold text-ink">
-                {{ editingEmpresa ? 'Editar empresa' : 'Crear empresa' }}
-              </h2>
+              <h2 class="text-xl font-semibold text-ink">Crear empresa</h2>
               <p class="text-sm text-muted">
-                {{
-                  editingEmpresa
-                    ? 'Modifica los datos de la empresa seleccionada.'
-                    : 'Completa los datos para dar de alta una nueva empresa.'
-                }}
+                Completa los datos para dar de alta una nueva empresa.
               </p>
             </div>
 
@@ -81,44 +75,26 @@ import { Empresa, Lead } from '../../types';
             <div class="flex flex-wrap gap-3">
               <button
                 class="ts-btn ts-btn--positive w-full md:w-auto"
-                (click)="editingEmpresa ? guardarCambios() : crear()"
-                [disabled]="creating || updating || !form.nombre.trim()"
+                (click)="crear()"
+                [disabled]="creating || !form.nombre.trim()"
               >
                 <app-icon
-                  *ngIf="!creating && !updating"
-                  [name]="editingEmpresa ? 'check' : 'plus'"
+                  *ngIf="!creating"
+                  name="plus"
                   size="16"
                   class="h-4 w-4"
                   strokeWidth="1.75"
                 ></app-icon>
                 <app-icon
-                  *ngIf="creating || updating"
+                  *ngIf="creating"
                   name="loader2"
                   size="16"
                   class="h-4 w-4 animate-spin"
                   strokeWidth="1.75"
                 ></app-icon>
                 <span>
-                  {{
-                    creating
-                      ? 'Creando...'
-                      : updating
-                        ? 'Guardando...'
-                        : editingEmpresa
-                          ? 'Guardar cambios'
-                          : 'Crear empresa'
-                  }}
+                  {{ creating ? 'Creando...' : 'Crear empresa' }}
                 </span>
-              </button>
-              <button
-                *ngIf="editingEmpresa"
-                type="button"
-                class="ts-btn ts-btn--secondary w-full md:w-auto"
-                (click)="cancelarEdicion()"
-                [disabled]="creating || updating"
-              >
-                <app-icon name="x" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
-                <span>Cancelar edición</span>
               </button>
             </div>
 
@@ -170,8 +146,8 @@ import { Empresa, Lead } from '../../types';
                       <button
                         type="button"
                         class="ts-btn ts-btn--ghost border border-neutral-200 text-neutral-500 hover:text-ink"
-                        (click)="editarEmpresa(e)"
-                        [disabled]="deletingId === e.id || creating || updating"
+                        (click)="abrirModalEdicion(e)"
+                        [disabled]="deletingId === e.id || creating"
                         aria-label="Editar empresa"
                       >
                         <app-icon name="pencil" size="16" class="h-4 w-4" strokeWidth="1.75"></app-icon>
@@ -180,7 +156,7 @@ import { Empresa, Lead } from '../../types';
                         type="button"
                         class="ts-btn ts-btn--danger"
                         (click)="eliminar(e)"
-                        [disabled]="deletingId === e.id || creating || updating"
+                        [disabled]="deletingId === e.id || creating"
                       >
                         <app-icon
                           *ngIf="deletingId !== e.id"
@@ -369,6 +345,183 @@ import { Empresa, Lead } from '../../types';
             </div>
           </div>
         </ts-modal>
+
+        <!-- Modal de confirmación para eliminar empresa -->
+        <ts-modal
+          title="¿Eliminar empresa?"
+          [open]="deleteConfirmModal.open"
+          (close)="closeDeleteConfirmModal()"
+        >
+          <div class="space-y-4">
+            <p class="text-sm text-neutral-500">
+              ¿Estás seguro de que deseas eliminar la empresa <strong>{{ deleteConfirmModal.empresa?.nombre }}</strong>?
+              Esta acción es irreversible y eliminará todos los datos asociados.
+            </p>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary"
+                (click)="closeDeleteConfirmModal()"
+                [disabled]="deleteConfirmModal.busy"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--danger"
+                (click)="confirmDeleteEmpresa()"
+                [disabled]="deleteConfirmModal.busy"
+              >
+                <app-icon
+                  *ngIf="!deleteConfirmModal.busy"
+                  name="trash2"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="deleteConfirmModal.busy"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ deleteConfirmModal.busy ? 'Eliminando...' : 'Eliminar' }}</span>
+              </button>
+            </div>
+          </div>
+        </ts-modal>
+
+        <!-- Modal de confirmación para eliminar solicitud de consultoría -->
+        <ts-modal
+          title="¿Eliminar solicitud de consultoría?"
+          [open]="deleteLeadConfirmModal.open"
+          (close)="closeDeleteLeadConfirmModal()"
+        >
+          <div class="space-y-4">
+            <p class="text-sm text-neutral-500">
+              ¿Estás seguro de que deseas eliminar la solicitud de consultoría de <strong>{{ deleteLeadConfirmModal.lead?.company }}</strong>?
+              Esta acción es irreversible.
+            </p>
+            <div class="flex justify-end gap-3">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary"
+                (click)="closeDeleteLeadConfirmModal()"
+                [disabled]="deleteLeadConfirmModal.busy"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--danger"
+                (click)="confirmDeleteLead()"
+                [disabled]="deleteLeadConfirmModal.busy"
+              >
+                <app-icon
+                  *ngIf="!deleteLeadConfirmModal.busy"
+                  name="trash2"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="deleteLeadConfirmModal.busy"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ deleteLeadConfirmModal.busy ? 'Eliminando...' : 'Eliminar' }}</span>
+              </button>
+            </div>
+          </div>
+        </ts-modal>
+
+        <!-- Modal de edición de empresa -->
+        <ts-modal
+          title="Editar empresa"
+          [open]="editModal.open"
+          (close)="cerrarModalEdicion()"
+        >
+          <div class="space-y-4">
+            <label class="block space-y-2">
+              <span class="ts-label">Nombre</span>
+              <input
+                class="ts-input"
+                [(ngModel)]="editModal.form.nombre"
+                placeholder="Ej: Acme SpA"
+                [disabled]="editModal.busy"
+              />
+            </label>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="block space-y-2">
+                <span class="ts-label">RUT</span>
+                <input
+                  class="ts-input"
+                  [(ngModel)]="editModal.form.rut"
+                  placeholder="12345678-9"
+                  [disabled]="editModal.busy"
+                />
+              </label>
+
+              <label class="block space-y-2">
+                <span class="ts-label">Giro</span>
+                <input
+                  class="ts-input"
+                  [(ngModel)]="editModal.form.giro"
+                  placeholder="Tecnología"
+                  [disabled]="editModal.busy"
+                />
+              </label>
+            </div>
+
+            <label class="block space-y-2">
+              <span class="ts-label">Departamentos</span>
+              <input
+                class="ts-input"
+                [(ngModel)]="editModal.form.departamentos"
+                placeholder="Ventas, Marketing, Operaciones"
+                [disabled]="editModal.busy"
+              />
+              <span class="text-xs text-muted">Separa cada departamento con coma.</span>
+            </label>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-border">
+              <button
+                type="button"
+                class="ts-btn ts-btn--secondary"
+                (click)="cerrarModalEdicion()"
+                [disabled]="editModal.busy"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                class="ts-btn ts-btn--positive"
+                (click)="guardarCambios()"
+                [disabled]="editModal.busy || !editModal.form.nombre.trim()"
+              >
+                <app-icon
+                  *ngIf="!editModal.busy"
+                  name="check"
+                  size="16"
+                  class="h-4 w-4"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <app-icon
+                  *ngIf="editModal.busy"
+                  name="loader2"
+                  size="16"
+                  class="h-4 w-4 animate-spin"
+                  strokeWidth="1.75"
+                ></app-icon>
+                <span>{{ editModal.busy ? 'Guardando...' : 'Guardar cambios' }}</span>
+              </button>
+            </div>
+          </div>
+        </ts-modal>
       </div>
     </div>
   `,
@@ -381,13 +534,11 @@ export class CompaniesComponent implements OnInit {
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;
   creating = false;
-  updating = false;
   deletingId: number | null = null;
   
   // =========================================================
   // MODO EDICIÓN
   // =========================================================
-  editingEmpresa: Empresa | null = null;
   message = '';
   messageType: 'success' | 'error' | null = null;
 
@@ -450,10 +601,22 @@ export class CompaniesComponent implements OnInit {
   // CREAR EMPRESA (sin cambios, se mantiene igual)
   // =========================================================
   crear(): void {
-    const deps = this.form.departamentos
+    // Normalizar y eliminar duplicados de departamentos
+    const depsRaw = this.form.departamentos
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
+    
+    // Eliminar duplicados (case insensitive)
+    const seen = new Set<string>();
+    const deps: string[] = [];
+    for (const dep of depsRaw) {
+      const key = dep.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        deps.push(dep);
+      }
+    }
 
     const payload = {
       nombre: this.form.nombre.trim(),
@@ -462,7 +625,7 @@ export class CompaniesComponent implements OnInit {
       departamentos: deps.length ? deps : undefined,
     };
 
-    if (!payload.nombre || this.creating || this.updating) return;
+    if (!payload.nombre || this.creating) return;
 
     this.creating = true;
     this.clearMessage();
@@ -484,48 +647,73 @@ export class CompaniesComponent implements OnInit {
   }
 
   // =========================================================
-  // MODO EDICIÓN: Cargar empresa en el formulario
+  // MODAL DE EDICIÓN: Separado del formulario de creación
   // =========================================================
-  editarEmpresa(empresa: Empresa): void {
-    if (this.creating || this.updating) return;
+  editModal = {
+    open: false,
+    empresa: null as Empresa | null,
+    form: {
+      nombre: '',
+      rut: '',
+      giro: '',
+      departamentos: '',
+    },
+    busy: false,
+  };
+
+  abrirModalEdicion(empresa: Empresa): void {
+    if (this.creating) return;
     
-    this.editingEmpresa = empresa;
+    this.editModal = {
+      open: true,
+      empresa,
+      form: {
+        nombre: empresa.nombre,
+        rut: empresa.rut || '',
+        giro: empresa.giro || '',
+        departamentos: empresa.departamentos && empresa.departamentos.length > 0
+          ? empresa.departamentos.map(d => d.nombre).join(', ')
+          : '',
+      },
+      busy: false,
+    };
     this.clearMessage();
-    
-    // Cargar datos en el formulario
-    this.form.nombre = empresa.nombre;
-    this.form.rut = empresa.rut || '';
-    this.form.giro = empresa.giro || '';
-    
-    // Convertir array de departamentos a string separado por comas
-    if (empresa.departamentos && empresa.departamentos.length > 0) {
-      this.form.departamentos = empresa.departamentos.map(d => d.nombre).join(', ');
-    } else {
-      this.form.departamentos = '';
-    }
+  }
+
+  cerrarModalEdicion(): void {
+    if (this.editModal.busy) return;
+    this.editModal = {
+      open: false,
+      empresa: null,
+      form: { nombre: '', rut: '', giro: '', departamentos: '' },
+      busy: false,
+    };
+    this.clearMessage();
   }
 
   // =========================================================
-  // MODO EDICIÓN: Cancelar edición y volver a modo creación
-  // =========================================================
-  cancelarEdicion(): void {
-    if (this.creating || this.updating) return;
-    
-    this.editingEmpresa = null;
-    this.form = { nombre: '', rut: '', giro: '', departamentos: '' };
-    this.clearMessage();
-  }
-
-  // =========================================================
-  // MODO EDICIÓN: Guardar cambios de la empresa
+  // MODAL DE EDICIÓN: Guardar cambios de la empresa
   // =========================================================
   guardarCambios(): void {
-    if (!this.editingEmpresa || this.creating || this.updating) return;
+    const empresa = this.editModal.empresa;
+    if (!empresa || this.editModal.busy) return;
 
-    const deps = this.form.departamentos
+    // Normalizar y eliminar duplicados de departamentos
+    const depsRaw = this.editModal.form.departamentos
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
+    
+    // Eliminar duplicados (case insensitive)
+    const seen = new Set<string>();
+    const deps: string[] = [];
+    for (const dep of depsRaw) {
+      const key = dep.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        deps.push(dep);
+      }
+    }
 
     const payload: {
       nombre?: string;
@@ -535,18 +723,18 @@ export class CompaniesComponent implements OnInit {
     } = {};
 
     // Solo incluir campos que han cambiado
-    if (this.form.nombre.trim() !== this.editingEmpresa.nombre) {
-      payload.nombre = this.form.nombre.trim();
+    if (this.editModal.form.nombre.trim() !== empresa.nombre) {
+      payload.nombre = this.editModal.form.nombre.trim();
     }
-    if ((this.form.rut || '') !== (this.editingEmpresa.rut || '')) {
-      payload.rut = this.form.rut || undefined;
+    if ((this.editModal.form.rut || '') !== (empresa.rut || '')) {
+      payload.rut = this.editModal.form.rut || undefined;
     }
-    if ((this.form.giro || '') !== (this.editingEmpresa.giro || '')) {
-      payload.giro = this.form.giro || undefined;
+    if ((this.editModal.form.giro || '') !== (empresa.giro || '')) {
+      payload.giro = this.editModal.form.giro || undefined;
     }
     
     // Comparar departamentos actuales con los del formulario
-    const currentDepartamentos = (this.editingEmpresa.departamentos || []).map(d => d.nombre).sort();
+    const currentDepartamentos = (empresa.departamentos || []).map(d => d.nombre).sort();
     const newDepartamentos = deps.sort();
     if (JSON.stringify(currentDepartamentos) !== JSON.stringify(newDepartamentos)) {
       payload.departamentos = deps.length ? deps : [];
@@ -558,33 +746,33 @@ export class CompaniesComponent implements OnInit {
       return;
     }
 
-    if (!this.form.nombre.trim()) {
+    if (!this.editModal.form.nombre.trim()) {
       this.showMessage('El nombre es obligatorio', 'error');
       return;
     }
 
-    this.updating = true;
+    this.editModal.busy = true;
     this.clearMessage();
 
-    this.api.update(this.editingEmpresa.id, payload).subscribe({
+    this.api.update(empresa.id, payload).subscribe({
       next: (updated) => {
         // Actualizar la empresa en la lista
         this.empresas.set(
           this.empresas().map((e) => (e.id === updated.id ? updated : e))
         );
         
-        // Salir del modo edición
-        this.cancelarEdicion();
+        // Cerrar modal
+        this.cerrarModalEdicion();
         this.showMessage('Empresa actualizada correctamente', 'success');
       },
       error: (error) => {
         console.error('Error actualizando empresa', error);
         const errorMsg = error.error?.detail || error.message || 'Error al actualizar la empresa';
         this.showMessage(errorMsg, 'error');
-        this.updating = false;
+        this.editModal.busy = false;
       },
       complete: () => {
-        this.updating = false;
+        this.editModal.busy = false;
       },
     });
   }
@@ -625,23 +813,60 @@ export class CompaniesComponent implements OnInit {
     });
   }
 
+  // Modal de confirmación para eliminar solicitud
+  deleteLeadConfirmModal = {
+    open: false,
+    lead: null as Lead | null,
+    busy: false,
+  };
+
   deleteLead(lead: Lead): void {
     if (!lead) return;
-    if (!confirm(`¿Eliminar la solicitud de ${lead.company}?`)) return;
+    this.deleteLeadConfirmModal = {
+      open: true,
+      lead,
+      busy: false,
+    };
+  }
 
+  closeDeleteLeadConfirmModal(): void {
+    if (this.deleteLeadConfirmModal.busy) return;
+    this.deleteLeadConfirmModal = {
+      open: false,
+      lead: null,
+      busy: false,
+    };
+  }
+
+  confirmDeleteLead(): void {
+    const lead = this.deleteLeadConfirmModal.lead;
+    if (!lead || this.deleteLeadConfirmModal.busy) return;
+
+    this.deleteLeadConfirmModal.busy = true;
     this.leadActionId.set(lead.id);
     this.leadsApi.deleteLead(lead.id).subscribe({
       next: () => {
         this.leads.set(this.leads().filter((item) => item.id !== lead.id));
         // Refrescar notificaciones para actualizar contador
         this.notificationCenter.refresh(false);
+        this.leadActionId.set(null);
+        this.deleteLeadConfirmModal = {
+          open: false,
+          lead: null,
+          busy: false,
+        };
       },
       error: (error) => {
         console.error('No se pudo eliminar la solicitud', error);
         this.leadActionId.set(null);
+        this.deleteLeadConfirmModal.busy = false;
       },
       complete: () => {
         this.leadActionId.set(null);
+        // Asegurar que el estado busy se resetee incluso si hay error
+        if (this.deleteLeadConfirmModal.busy) {
+          this.deleteLeadConfirmModal.busy = false;
+        }
       },
     });
   }
@@ -706,20 +931,57 @@ export class CompaniesComponent implements OnInit {
     });
   }
 
-  eliminar(e: Empresa): void {
-    if (!confirm(`¿Eliminar empresa ${e.nombre}?`)) return;
+  // Modal de confirmación para eliminar empresa
+  deleteConfirmModal = {
+    open: false,
+    empresa: null as Empresa | null,
+    busy: false,
+  };
 
-    this.deletingId = e.id;
-    this.api.delete(e.id).subscribe({
+  eliminar(e: Empresa): void {
+    this.deleteConfirmModal = {
+      open: true,
+      empresa: e,
+      busy: false,
+    };
+  }
+
+  closeDeleteConfirmModal(): void {
+    if (this.deleteConfirmModal.busy) return;
+    this.deleteConfirmModal = {
+      open: false,
+      empresa: null,
+      busy: false,
+    };
+  }
+
+  confirmDeleteEmpresa(): void {
+    const empresa = this.deleteConfirmModal.empresa;
+    if (!empresa || this.deleteConfirmModal.busy) return;
+
+    this.deleteConfirmModal.busy = true;
+    this.deletingId = empresa.id;
+    this.api.delete(empresa.id).subscribe({
       next: () => {
-        this.empresas.set(this.empresas().filter((x) => x.id !== e.id));
+        this.empresas.set(this.empresas().filter((x) => x.id !== empresa.id));
+        this.deletingId = null;
+        this.deleteConfirmModal = {
+          open: false,
+          empresa: null,
+          busy: false,
+        };
       },
       error: (error) => {
         console.error('Error eliminando empresa', error);
         this.deletingId = null;
+        this.deleteConfirmModal.busy = false;
       },
       complete: () => {
         this.deletingId = null;
+        // Asegurar que el estado busy se resetee incluso si hay error
+        if (this.deleteConfirmModal.busy) {
+          this.deleteConfirmModal.busy = false;
+        }
       },
     });
   }

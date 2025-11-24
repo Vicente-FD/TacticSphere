@@ -64,9 +64,14 @@ export class InactivityService implements OnDestroy {
     // Timer para mostrar advertencia (14 minutos)
     this.warningTimer = setTimeout(() => {
       this.warningSubject.next();
+      // Cancelar el logoutTimer ya que el modal se encargará del auto-logout
+      if (this.logoutTimer) {
+        clearTimeout(this.logoutTimer);
+        this.logoutTimer = null;
+      }
     }, this.WARNING_TIME);
     
-    // Timer para cerrar sesión (15 minutos)
+    // Timer para cerrar sesión (15 minutos) - solo si no se muestra el warning
     this.logoutTimer = setTimeout(() => {
       this.performLogout();
     }, this.INACTIVITY_TIMEOUT);

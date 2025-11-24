@@ -43,6 +43,12 @@ export class AuditService {
     });
   }
 
+  backupAndClear(password: string) {
+    return this.http.post<Blob>(`${this.base}/audit/backup-and-clear`, { password }, {
+      responseType: 'blob' as 'json',
+    });
+  }
+
   private toParams(filters: AuditFilters): HttpParams {
     let params = new HttpParams();
     Object.entries(filters ?? {}).forEach(([key, value]) => {

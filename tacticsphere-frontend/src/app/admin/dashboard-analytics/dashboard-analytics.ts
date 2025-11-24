@@ -107,6 +107,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private readonly role = this.auth.getRole();
   private readonly empresaId = this.auth.getEmpresaId();
   readonly isUser = this.role === "USUARIO";
+  readonly isConsultor = this.role === "ANALISTA"; // CONSULTOR (internamente ANALISTA)
 
   private analyticsSignal = signal<DashboardAnalyticsResponse | null>(null);
   private companiesSignal = signal<Empresa[]>([]);
@@ -164,13 +165,40 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   exportingCsv = this.exportingCsvSignal.asReadonly();
   comparisonError = this.comparisonErrorSignal.asReadonly();
 
-  selectedCompanyId: number | null = null;
-  selectedDepartmentId: number | null = null;
-  selectedEmployeeId: number | null = null;
-  selectedPillar: number | "ALL" = "ALL";
-  dateFrom: string | null = null;
-  dateTo: string | null = null;
-  employeeSearch = "";
+  // Signals para los filtros (para que los computed se actualicen automáticamente)
+  private selectedCompanyIdSignal = signal<number | null>(null);
+  private selectedDepartmentIdSignal = signal<number | null>(null);
+  private selectedPillarSignal = signal<number | "ALL">("ALL");
+  private selectedEmployeeIdSignal = signal<number | null>(null);
+
+  // Getters y setters para mantener compatibilidad con el código existente
+  get selectedCompanyId(): number | null {
+    return this.selectedCompanyIdSignal();
+  }
+  set selectedCompanyId(value: number | null) {
+    this.selectedCompanyIdSignal.set(value);
+  }
+
+  get selectedDepartmentId(): number | null {
+    return this.selectedDepartmentIdSignal();
+  }
+  set selectedDepartmentId(value: number | null) {
+    this.selectedDepartmentIdSignal.set(value);
+  }
+
+  get selectedPillar(): number | "ALL" {
+    return this.selectedPillarSignal();
+  }
+  set selectedPillar(value: number | "ALL") {
+    this.selectedPillarSignal.set(value);
+  }
+
+  get selectedEmployeeId(): number | null {
+    return this.selectedEmployeeIdSignal();
+  }
+  set selectedEmployeeId(value: number | null) {
+    this.selectedEmployeeIdSignal.set(value);
+  }
   
   // Comparación
   compareType: "DEPARTMENT" | "EMPLOYEE" | null = null;
@@ -179,7 +207,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private comparisonSectionExpandedSignal = signal<boolean>(false);
   comparisonSectionExpanded = this.comparisonSectionExpandedSignal.asReadonly();
   
-  private employeeSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
   private resizeScheduled = false;
   private rafId: number | null = null;
@@ -191,23 +218,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   readonly chartInitOpts = { renderer: "canvas" as const };
 
   readonly filteredEmployees = computed(() => {
-    const search = this.employeeSearch.trim().toLowerCase();
-    if (!search) return this.employees();
-    return this.employees().filter((employee) => {
-      if (!employee) return false;
-      const name = employee.nombre?.toLowerCase() ?? "";
-      const lastName = employee.apellidos?.toLowerCase() ?? "";
-      const email = employee.email?.toLowerCase() ?? "";
-      const id = String(employee.id ?? "").toLowerCase();
-      const rut = employee.rut?.toLowerCase() ?? "";
-      return (
-        name.includes(search) ||
-        lastName.includes(search) ||
-        email.includes(search) ||
-        id.includes(search) ||
-        rut.includes(search)
-      );
-    });
+    // Filtro de empleados removido - ya no se usa búsqueda de empleados
+    return this.employees();
   });
 
   readonly likertBucketEmployees = computed<LikertBucketEmployee[]>(() => {
@@ -478,7 +490,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   ngOnInit(): void {
     this.loadCompanies();
     if (this.empresaId != null) {
-      this.selectedCompanyId = this.empresaId;
+      this.selectedCompanyIdSignal.set(this.empresaId);
       this.updateFilter();
     }
   }
@@ -493,10 +505,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.filterEffect.destroy();
     this.subscriptions.forEach((sub) => sub.unsubscribe());
     this.filterUpdates$.complete();
-    if (this.employeeSearchDebounce) {
-      clearTimeout(this.employeeSearchDebounce);
-      this.employeeSearchDebounce = null;
-    }
     if (this.resizeTimer) {
       clearTimeout(this.resizeTimer);
       this.resizeTimer = null;
@@ -519,23 +527,14 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   clearFilters(): void {
     // Limpiar todos los filtros
-    const previousCompanyId = this.selectedCompanyId;
-    this.selectedCompanyId = this.isUser ? this.empresaId : null;
-    this.selectedDepartmentId = null;
-    this.selectedEmployeeId = null;
-    this.selectedPillar = "ALL";
-    this.dateFrom = null;
-    this.dateTo = null;
-    this.employeeSearch = "";
+    const previousCompanyId = this.selectedCompanyIdSignal();
+    this.selectedCompanyIdSignal.set(this.isUser ? this.empresaId : null);
+    this.selectedDepartmentIdSignal.set(null);
+    this.selectedPillarSignal.set("ALL");
+    this.selectedEmployeeIdSignal.set(null); // Limpiar también el filtro de empleado
 
     // Limpiar comparación también
     this.clearComparison();
-
-    // Limpiar el debounce si existe
-    if (this.employeeSearchDebounce) {
-      clearTimeout(this.employeeSearchDebounce);
-      this.employeeSearchDebounce = null;
-    }
 
     // Limpiar el error y info signals para un estado limpio
     this.errorSignal.set("");
@@ -566,10 +565,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   onCompanyChange(companyId: number | null): void {
-    this.selectedCompanyId = companyId;
-    this.selectedDepartmentId = null;
-    this.selectedEmployeeId = null;
-    this.employeeSearch = "";
+    this.selectedCompanyIdSignal.set(companyId);
+    this.selectedDepartmentIdSignal.set(null);
+    this.selectedEmployeeIdSignal.set(null); // Limpiar filtro de empleado al cambiar empresa
     if (companyId != null) {
       this.loadDepartments(companyId);
       this.loadEmployees(companyId, null);
@@ -584,30 +582,23 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   onDepartmentChange(departmentId: number | null): void {
-    this.selectedDepartmentId = departmentId;
-    if (this.selectedCompanyId != null) {
-      this.loadEmployees(this.selectedCompanyId, departmentId ?? undefined);
+    this.selectedDepartmentIdSignal.set(departmentId);
+    this.selectedEmployeeIdSignal.set(null); // Limpiar filtro de empleado al cambiar departamento
+    const companyId = this.selectedCompanyIdSignal();
+    if (companyId != null) {
+      this.loadEmployees(companyId, departmentId ?? undefined);
     }
     this.updateFilter();
   }
 
   onPillarChange(selection: number | "ALL"): void {
-    this.selectedPillar = selection;
+    this.selectedPillarSignal.set(selection);
+    this.selectedEmployeeIdSignal.set(null); // Limpiar filtro de empleado al cambiar pilar
     this.updateFilter();
   }
 
   onEmployeeChange(employeeId: number | null): void {
-    // Ensure we always have a number or null, never an object
-    if (employeeId != null && typeof employeeId !== 'number') {
-      const emp = employeeId as any;
-      if (emp && typeof emp.id === 'number') {
-        this.selectedEmployeeId = emp.id;
-      } else {
-        this.selectedEmployeeId = null;
-      }
-    } else {
-      this.selectedEmployeeId = employeeId;
-    }
+    // Método removido - ya no se usa filtro de empleados
     this.updateFilter();
   }
 
@@ -663,7 +654,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private validateAndLoadComparison(): void {
-    if (!this.selectedCompanyId) {
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    if (!companyId) {
       this.comparisonErrorSignal.set("Selecciona una empresa primero.");
       this.comparisonAnalyticsSignal.set(null);
       return;
@@ -671,7 +663,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
     if (this.compareType === "DEPARTMENT" && this.compareDepartmentId != null) {
       // Validar que el departamento de comparación sea diferente al principal
-      if (this.compareDepartmentId === this.selectedDepartmentId) {
+      if (this.compareDepartmentId === this.selectedDepartmentIdSignal()) {
         this.comparisonErrorSignal.set("El departamento de comparación debe ser diferente al principal.");
         this.comparisonAnalyticsSignal.set(null);
         return;
@@ -688,13 +680,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       this.comparisonErrorSignal.set("");
       this.loadComparisonData();
     } else if (this.compareType === "EMPLOYEE" && this.compareEmployeeId != null) {
-      // Validar que el empleado de comparación sea diferente al principal
-      if (this.compareEmployeeId === this.selectedEmployeeId) {
-        this.comparisonErrorSignal.set("El empleado de comparación debe ser diferente al principal.");
-        this.comparisonAnalyticsSignal.set(null);
-        return;
-      }
-      
       // Los empleados ya están filtrados por empresa/departamento, así que si existe en la lista, pertenece a la empresa seleccionada
       const compareEmp = this.employees().find((e) => e.id === this.compareEmployeeId);
       if (!compareEmp) {
@@ -709,22 +694,23 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private loadComparisonData(): void {
-    if (!this.selectedCompanyId) {
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    if (!companyId) {
       this.comparisonErrorSignal.set("Selecciona una empresa primero.");
+      this.comparisonAnalyticsSignal.set(null);
+      this.loadingSignal.set(false);
       return;
     }
 
     const filter: AnalyticsQueryParams = {
-      companyId: this.selectedCompanyId,
-      dateFrom: this.dateFrom || undefined,
-      dateTo: this.dateTo || undefined,
+      companyId,
       departmentIds: this.compareType === "DEPARTMENT" && this.compareDepartmentId
         ? [this.compareDepartmentId]
         : undefined,
       employeeIds: this.compareType === "EMPLOYEE" && this.compareEmployeeId
         ? [this.compareEmployeeId]
         : undefined,
-      pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
+      pillarIds: this.selectedPillarSignal() !== "ALL" ? [this.selectedPillarSignal() as number] : undefined,
     };
 
     this.loadingSignal.set(true);
@@ -744,31 +730,12 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     });
   }
 
-  onEmployeeSearchChange(value: string): void {
-    // Ensure we always work with strings
-    const searchValue = typeof value === 'string' ? value : String(value ?? '');
-    this.employeeSearch = searchValue;
-    
-    // Clear previous debounce
-    if (this.employeeSearchDebounce) {
-      clearTimeout(this.employeeSearchDebounce);
-    }
-    
-    // Debounce the filter update
-    this.employeeSearchDebounce = setTimeout(() => {
-      this.employeeSearchDebounce = null;
-      // The computed filteredEmployees will automatically update
-    }, 300);
-  }
-
-  onDateChange(): void {
-    this.updateFilter();
-  }
 
   onPillarBarClick(event: any): void {
     const pillarId = event?.data?.pillarId as number | undefined;
     if (pillarId == null) return;
-    this.selectedPillar = this.selectedPillar === pillarId ? "ALL" : pillarId;
+    const currentPillar = this.selectedPillarSignal();
+    this.selectedPillarSignal.set(currentPillar === pillarId ? "ALL" : pillarId);
     this.updateFilter();
   }
 
@@ -777,36 +744,115 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const departmentId = event?.data?.departmentId as number | undefined;
     if (pillarId == null && departmentId == null) return;
     if (pillarId != null) {
-      this.selectedPillar = pillarId;
+      this.selectedPillarSignal.set(pillarId);
     }
     if (departmentId != null) {
-      this.selectedDepartmentId = departmentId;
+      this.selectedDepartmentIdSignal.set(departmentId);
     }
     this.updateFilter();
   }
 
   onLikertEmployeeClick(employeeId: number): void {
     if (employeeId == null) return;
-    this.onEmployeeChange(employeeId);
+    // Si el mismo empleado está seleccionado, deseleccionarlo
+    if (this.selectedEmployeeIdSignal() === employeeId) {
+      this.selectedEmployeeIdSignal.set(null);
+    } else {
+      this.selectedEmployeeIdSignal.set(employeeId);
+    }
+    this.updateFilter();
+  }
+
+  clearEmployeeFilter(): void {
+    this.selectedEmployeeIdSignal.set(null);
+    this.updateFilter();
   }
 
   filterSummary(): string[] {
     const summary: string[] = [];
-    const company = this.resolveCompanyName(this.selectedCompanyId ?? this.empresaId);
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    const company = this.resolveCompanyName(companyId);
     summary.push(`Empresa: ${company}`);
-    if (this.selectedDepartmentId != null) {
-      summary.push(`Departamento: ${this.resolveDepartmentName(this.selectedDepartmentId)}`);
+    const departmentId = this.selectedDepartmentIdSignal();
+    if (departmentId != null) {
+      summary.push(`Departamento: ${this.resolveDepartmentName(departmentId)}`);
     }
-    if (this.selectedEmployeeId != null) {
-      summary.push(`Empleado: ${this.resolveEmployeeName(this.selectedEmployeeId)}`);
+    const pillarId = this.selectedPillarSignal();
+    if (pillarId !== "ALL") {
+      const pillar = this.analytics()?.pillars.find((p) => p.pillar_id === pillarId)?.pillar_name;
+      summary.push(`Pilar: ${pillar ?? `#${pillarId}`}`);
     }
-    if (this.selectedPillar !== "ALL") {
-      const pillar = this.analytics()?.pillars.find((p) => p.pillar_id === this.selectedPillar)?.pillar_name;
-      summary.push(`Pilar: ${pillar ?? `#${this.selectedPillar}`}`);
-    }
-    if (this.dateFrom) summary.push(`Desde: ${this.dateFrom}`);
-    if (this.dateTo) summary.push(`Hasta: ${this.dateTo}`);
     return summary;
+  }
+
+  // Computed para el resumen de filtros activos (para la columna derecha)
+  // Ahora se actualiza automáticamente porque usa signals
+  readonly activeFiltersSummary = computed(() => {
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    const departmentId = this.selectedDepartmentIdSignal();
+    const pillarId = this.selectedPillarSignal();
+    
+    // Empresa
+    const companyName = companyId 
+      ? this.resolveCompanyName(companyId) 
+      : "Sin empresa seleccionada";
+    
+    // Departamento
+    const departmentName = departmentId != null 
+      ? this.resolveDepartmentName(departmentId) 
+      : "Todos los departamentos";
+    
+    // Pilar
+    const pillarName = pillarId !== "ALL"
+      ? (this.analytics()?.pillars.find((p) => p.pillar_id === pillarId)?.pillar_name ?? `Pilar #${pillarId}`)
+      : "Todos los pilares";
+    
+    return {
+      company: companyName,
+      department: departmentName,
+      pillar: pillarName,
+    };
+  });
+
+  // Labels individuales para la vista rápida (computed para reactividad)
+  readonly quickCompanyLabel = computed(() => {
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    return companyId 
+      ? this.resolveCompanyName(companyId) 
+      : "Sin empresa seleccionada";
+  });
+
+  readonly quickDepartmentLabel = computed(() => {
+    const departmentId = this.selectedDepartmentIdSignal();
+    return departmentId != null 
+      ? this.resolveDepartmentName(departmentId) 
+      : "Todos los departamentos";
+  });
+
+  readonly quickPillarLabel = computed(() => {
+    const pillarId = this.selectedPillarSignal();
+    return pillarId !== "ALL"
+      ? (this.analytics()?.pillars.find((p) => p.pillar_id === pillarId)?.pillar_name ?? `Pilar #${pillarId}`)
+      : "Todos los pilares";
+  });
+
+  // Computed para contar filtros activos
+  readonly activeFiltersCount = computed(() => {
+    let count = 0;
+    // Solo contar empresa si no es usuario (usuarios siempre tienen empresa asignada)
+    if (!this.isUser && (this.selectedCompanyIdSignal() != null || this.empresaId != null)) count++;
+    if (this.selectedDepartmentIdSignal() != null) count++;
+    if (this.selectedPillarSignal() !== "ALL") count++;
+    return count;
+  });
+
+  // Método para obtener el nombre del empleado seleccionado
+  getSelectedEmployeeName(): string | null {
+    const employeeId = this.selectedEmployeeIdSignal();
+    if (!employeeId) return null;
+    const employee = this.employees().find((e) => e.id === employeeId);
+    if (!employee) return null;
+    return this.formatEmployeeIdentity(employee);
   }
 
   pillarOptions() {
@@ -1302,9 +1348,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       const identity = identityMap.get(emp.id) ?? { nombre: emp.name ?? `Empleado ${emp.id}` };
       return this.formatEmployeeIdentity(identity, emp.name);
     });
-    const focusId = this.selectedEmployeeId;
-    const focusIndex = focusId != null ? employees.findIndex((emp) => emp.id === focusId) : -1;
-    const focusPoint = focusIndex >= 0 ? employees[focusIndex] : null;
     const baseData = employees.map((emp, index) => [index, this.round(emp.percent), index]);
     const buildTooltip = (emp: EmployeePoint | null) => {
       if (!emp) return "";
@@ -1312,7 +1355,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       const label = this.formatLikertLabel(emp.level);
       return `${this.formatEmployeeIdentity(identity, emp.name)}<br/>${this.formatNumber(emp.percent)}% · ${label}`;
     };
-    const dimmedData = focusPoint ? baseData.filter((item) => item[2] !== focusIndex) : baseData;
+    const dimmedData = baseData;
     
     // Calcular regresión lineal para la línea de tendencia
     const calculateLinearRegression = (data: number[][]): { slope: number; intercept: number } => {
@@ -1360,7 +1403,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       animationDuration: 800,
       animationEasing: "cubicOut",
       tooltip: {
-        show: !focusPoint,
+        show: true,
         formatter: (params: any) => {
           const data: number[] | undefined = params?.data;
           const idx = Array.isArray(data) ? data[2] : undefined;
@@ -1384,13 +1427,13 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         {
           type: "scatter",
           name: "Equipo",
-          symbolSize: focusPoint ? 10 : 14,
+          symbolSize: 14,
           data: dimmedData,
           itemStyle: {
-            color: focusPoint ? "rgba(148,163,184,0.45)" : TS_COLORS.primary,
+            color: TS_COLORS.primary,
           },
-          emphasis: { focus: focusPoint ? "none" : "series" },
-          silent: !!focusPoint,
+          emphasis: { focus: "series" },
+          silent: false,
         },
         {
           type: "line",
@@ -1408,40 +1451,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           },
           z: 1,
         },
-        ...(focusPoint
-          ? [
-              {
-                type: "scatter" as const,
-                name: "Empleado seleccionado",
-                symbolSize: 28,
-                data: [[focusIndex, this.round(focusPoint.percent), focusIndex]],
-                itemStyle: { color: TS_COLORS.primary },
-                tooltip: {
-                  formatter: () => buildTooltip(focusPoint),
-                },
-                label: {
-                  show: true,
-                  position: "top" as const,
-                  formatter: () => `${this.formatNumber(focusPoint.percent)}%`,
-                  color: TS_COLORS.text,
-                  fontWeight: 600,
-                },
-                markLine: {
-                  symbol: "none",
-                  silent: true,
-                  lineStyle: { color: TS_COLORS.gridLine, type: "dashed" as const },
-                  data: [{ yAxis: this.round(focusPoint.percent) }],
-                  label: {
-                    formatter: () => `${this.formatNumber(focusPoint.percent)}%`,
-                    color: TS_COLORS.text,
-                    backgroundColor: "rgba(255,255,255,0.9)",
-                    padding: [2, 6],
-                    borderRadius: 4,
-                  },
-                },
-              },
-            ]
-          : []),
       ],
     };
   }
@@ -1599,7 +1608,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         let companies = rows ?? [];
         if (this.isUser && this.empresaId != null) {
           companies = companies.filter((company) => company.id === this.empresaId);
-          this.selectedCompanyId = this.empresaId;
+          this.selectedCompanyIdSignal.set(this.empresaId);
           if (companies.length) {
             this.loadDepartments(this.empresaId);
             this.loadEmployees(this.empresaId, null);
@@ -1638,7 +1647,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private updateFilter(): void {
-    const companyId = this.selectedCompanyId ?? this.empresaId ?? null;
+    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId ?? null;
     if (companyId == null) {
       this.infoSignal.set("Selecciona una empresa para ver resultados.");
       this.analyticsSignal.set(null);
@@ -1650,11 +1659,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     // Crear un nuevo objeto filtro cada vez para asegurar que el signal detecte el cambio
     const filter: AnalyticsQueryParams = {
       companyId,
-      dateFrom: this.dateFrom || undefined,
-      dateTo: this.dateTo || undefined,
-      departmentIds: this.selectedDepartmentId != null ? [this.selectedDepartmentId] : undefined,
-      employeeIds: this.selectedEmployeeId != null ? [this.selectedEmployeeId] : undefined,
-      pillarIds: this.selectedPillar !== "ALL" ? [this.selectedPillar] : undefined,
+      departmentIds: this.selectedDepartmentIdSignal() != null ? [this.selectedDepartmentIdSignal()!] : undefined,
+      pillarIds: this.selectedPillarSignal() !== "ALL" ? [this.selectedPillarSignal() as number] : undefined,
+      employeeIds: this.selectedEmployeeIdSignal() != null ? [this.selectedEmployeeIdSignal()!] : undefined,
       includeTimeline: false,
     };
     // Establecer el filtro - el signal detectará el cambio automáticamente
@@ -1665,11 +1672,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private buildCacheKey(filter: AnalyticsQueryParams): string {
     return JSON.stringify({
       companyId: filter.companyId,
-      dateFrom: filter.dateFrom ?? null,
-      dateTo: filter.dateTo ?? null,
       departmentIds: filter.departmentIds ?? [],
-      employeeIds: filter.employeeIds ?? [],
       pillarIds: filter.pillarIds ?? [],
+      employeeIds: filter.employeeIds ?? [],
       includeTimeline: filter.includeTimeline ?? true,
     });
   }
@@ -2232,6 +2237,28 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       this.exportReceiptSignal.set(receipt);
       this.closeReportModal();
       this.receiptModalOpenSignal.set(true);
+      
+      // Registrar evento de auditoría
+      const filter = this.filterSignal();
+      if (filter?.companyId) {
+        const companyName = this.resolveCompanyName(filter.companyId);
+        const departmentName = filter.departmentIds?.[0] 
+          ? this.resolveDepartmentName(filter.departmentIds[0])
+          : 'Todos';
+        const pillarName = filter.pillarIds?.[0]
+          ? this.analytics()?.pillars.find((p) => p.pillar_id === filter.pillarIds![0])?.pillar_name
+          : 'Todos';
+        
+        const notes = `Generó informe: Empresa: ${companyName}, Departamento: ${departmentName}, Pilar: ${pillarName}, Formatos: ${selectedFormatNames.join(', ')}`;
+        this.auditSvc.logReportExport('dashboard', notes).subscribe({
+          error: (err) => console.error('Error registrando auditoría de informe', err),
+        });
+      }
+      
+      // Auto-cerrar el modal de resumen después de 5 segundos
+      setTimeout(() => {
+        this.closeReceiptModal();
+      }, 5000);
     } catch (error) {
       console.error("Error generating reports", error);
       this.reportErrorSignal.set("Ocurrió un error al generar los informes. Intenta nuevamente.");

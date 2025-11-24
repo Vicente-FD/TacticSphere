@@ -66,7 +66,7 @@ type FilterValue = string | number | null;
               <span class="ts-label">Rol</span>
               <select class="ts-select" [(ngModel)]="filters.user_role" name="user_role">
                 <option value="">Todos</option>
-                <option *ngFor="let r of roles" [value]="r">{{ r }}</option>
+                <option *ngFor="let r of roles" [value]="r">{{ formatRoleLabel(r) }}</option>
               </select>
             </label>
             <label class="space-y-2">
@@ -206,7 +206,7 @@ type FilterValue = string | number | null;
             </div>
             <div>
               <span class="font-semibold text-ink">Rol:</span>
-              <span class="ml-2 text-neutral-600">{{ selectedLog.user_role || '—' }}</span>
+              <span class="ml-2 text-neutral-600">{{ selectedLog.user_role ? formatRoleLabel(selectedLog.user_role) : '—' }}</span>
             </div>
             <div>
               <span class="font-semibold text-ink">Acción:</span>
@@ -363,6 +363,14 @@ export class AuditAdminComponent implements OnInit {
   totalPages = 1;
 
   roles: RolEnum[] = ['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA', 'USUARIO'];
+  
+  formatRoleLabel(rol: RolEnum | string): string {
+    // Mapear ANALISTA a CONSULTOR para mostrar en la UI
+    if (rol === 'ANALISTA') {
+      return 'CONSULTOR';
+    }
+    return rol;
+  }
   auditActions: string[] = [
     'LOGIN',
     'LOGOUT',
@@ -644,23 +652,36 @@ export class AuditAdminComponent implements OnInit {
     this.error = '';
     this.message = '';
     this.clearing = true;
+    
+    // Primero generar CSV y descargarlo, luego vaciar
     this.audit
-      .clearAll(password)
+      .backupAndClear(password)
       .pipe(
         finalize(() => {
           this.clearing = false;
         })
       )
       .subscribe({
-        next: (response) => {
+        next: (blob) => {
+          // Descargar el CSV automáticamente
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+          anchor.download = `auditoria-respaldo-${timestamp}.csv`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          
           this.closeClearAllDialog();
-          this.message = `Registro de auditoría vaciado correctamente. ${response.deleted_count} registros eliminados.`;
+          this.message = 'Respaldo CSV descargado y registro de auditoría vaciado correctamente.';
           this.currentPage = 1;
           this.loadLogs(true);
         },
         error: (err) => {
           console.error('Error vaciando auditoría', err);
-          this.error = err?.error?.detail ?? 'No fue posible vaciar el registro de auditoría.';
+          this.error = err?.error?.detail ?? 'No fue posible generar el respaldo y vaciar el registro de auditoría.';
         },
       });
   }

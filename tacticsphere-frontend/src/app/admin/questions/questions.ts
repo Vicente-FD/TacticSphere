@@ -317,6 +317,53 @@ interface QuestionView {
           </div>
         </div>
       </ts-modal>
+
+      <!-- Modal de confirmación para eliminar pregunta -->
+      <ts-modal
+        title="¿Eliminar pregunta?"
+        [open]="deleteConfirmModal.open"
+        (close)="closeDeleteConfirmModal()"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            ¿Estás seguro de que deseas eliminar esta pregunta?
+            Esta acción es irreversible.
+          </p>
+          <div class="rounded-lg border border-border bg-[#F8FAFC] p-3">
+            <p class="text-sm font-medium text-ink">{{ deleteConfirmModal.preguntaEnunciado }}</p>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeDeleteConfirmModal()"
+              [disabled]="deleteConfirmModal.busy"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--danger"
+              (click)="confirmDeletePregunta()"
+              [disabled]="deleteConfirmModal.busy"
+            >
+              <lucide-icon
+                *ngIf="!deleteConfirmModal.busy"
+                name="Trash2"
+                class="h-4 w-4"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <lucide-icon
+                *ngIf="deleteConfirmModal.busy"
+                name="Loader2"
+                class="h-4 w-4 animate-spin"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <span>{{ deleteConfirmModal.busy ? 'Eliminando...' : 'Eliminar' }}</span>
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -474,8 +521,41 @@ export class QuestionsComponent implements OnInit {
     });
   }
 
+  // Modal de confirmación para eliminar pregunta
+  deleteConfirmModal = {
+    open: false,
+    preguntaId: null as number | null,
+    preguntaEnunciado: '',
+    busy: false,
+  };
+
   eliminarPregunta(id: number | null | undefined): void {
     if (!id || this.deletingId) return;
+    
+    const pregunta = this.preguntas().find(p => p.id === id);
+    this.deleteConfirmModal = {
+      open: true,
+      preguntaId: id,
+      preguntaEnunciado: pregunta?.enunciado || `Pregunta #${id}`,
+      busy: false,
+    };
+  }
+
+  closeDeleteConfirmModal(): void {
+    if (this.deleteConfirmModal.busy) return;
+    this.deleteConfirmModal = {
+      open: false,
+      preguntaId: null,
+      preguntaEnunciado: '',
+      busy: false,
+    };
+  }
+
+  confirmDeletePregunta(): void {
+    const id = this.deleteConfirmModal.preguntaId;
+    if (!id || this.deleteConfirmModal.busy) return;
+
+    this.deleteConfirmModal.busy = true;
     this.deletingId = id;
 
     this.questionsSrv.delete(id).subscribe({
@@ -483,14 +563,26 @@ export class QuestionsComponent implements OnInit {
         if (this.editingQuestionId === id) {
           this.resetEditingState();
         }
+        this.deletingId = null;
+        this.deleteConfirmModal = {
+          open: false,
+          preguntaId: null,
+          preguntaEnunciado: '',
+          busy: false,
+        };
         if (this.selectedPilarId) this.cargarPreguntas(this.selectedPilarId);
       },
       error: (error) => {
         console.error('Error eliminando pregunta', error);
         this.deletingId = null;
+        this.deleteConfirmModal.busy = false;
       },
       complete: () => {
         this.deletingId = null;
+        // Asegurar que el estado busy se resetee incluso si hay error
+        if (this.deleteConfirmModal.busy) {
+          this.deleteConfirmModal.busy = false;
+        }
       },
     });
   }

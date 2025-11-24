@@ -2561,6 +2561,85 @@ def delete_audit_entry(
     return None
 
 
+@app.post("/audit/backup-and-clear", status_code=200)
+def backup_and_clear_audit_logs(
+    payload: AuditDeleteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Genera un CSV de respaldo y luego vacía el registro de auditoría."""
+    if current.rol != RolEnum.ADMIN_SISTEMA:
+        raise HTTPException(status_code=403, detail="Solo ADMIN_SISTEMA puede vaciar el registro de auditoría")
+    if not verify_password(payload.password, current.password_hash):
+        raise HTTPException(status_code=403, detail="Contraseña inválida")
+    
+    import csv
+    import io
+    from datetime import datetime
+    
+    # Leer todos los registros de auditoría
+    logs = crud.list_audit_logs(
+        db,
+        limit=100000,  # Límite alto para obtener todos
+        offset=0,
+    )
+    
+    # Generar CSV en memoria
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    
+    # Encabezados
+    writer.writerow([
+        "id", "created_at", "user_id", "user_email", "user_role", "empresa_id",
+        "action", "entity_type", "entity_id", "notes", "ip", "user_agent",
+        "method", "path"
+    ])
+    
+    # Escribir datos
+    for log in logs:
+        writer.writerow([
+            log.id,
+            log.created_at.isoformat() if log.created_at else "",
+            log.user_id or "",
+            log.user_email or "",
+            log.user_role or "",
+            log.empresa_id or "",
+            log.action.value if log.action else "",
+            log.entity_type or "",
+            log.entity_id or "",
+            log.notes or "",
+            log.ip or "",
+            log.user_agent or "",
+            log.method or "",
+            log.path or "",
+        ])
+    
+    csv_content = buffer.getvalue()
+    buffer.close()
+    
+    # Vaciar el registro
+    scope_empresa_id = None
+    if current.rol == RolEnum.ADMIN:
+        scope_empresa_id = current.empresa_id
+    
+    deleted_count = crud.clear_all_audit_logs(db, scope_empresa_id=scope_empresa_id)
+    
+    # Generar nombre de archivo con timestamp
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    filename = f"auditoria-respaldo-{timestamp}.csv"
+    
+    from fastapi.responses import StreamingResponse
+    
+    return StreamingResponse(
+        io.BytesIO(csv_content.encode('utf-8')),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 @app.delete("/audit", status_code=200)
 def clear_all_audit_logs(
     payload: AuditDeleteRequest,

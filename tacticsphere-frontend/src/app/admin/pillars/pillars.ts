@@ -224,6 +224,50 @@ import { Pilar } from '../../types';
           </div>
         </div>
       </ts-modal>
+
+      <!-- Modal de confirmación para eliminar pilar -->
+      <ts-modal
+        title="¿Eliminar pilar?"
+        [open]="deleteConfirmModal.open"
+        (close)="closeDeleteConfirmModal()"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-neutral-500">
+            ¿Estás seguro de que deseas eliminar el pilar <strong>{{ deleteConfirmModal.pilar?.nombre }}</strong>?
+            Esta acción eliminará el pilar y todas sus preguntas asociadas. Esta acción es irreversible.
+          </p>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="ts-btn ts-btn--secondary"
+              (click)="closeDeleteConfirmModal()"
+              [disabled]="deleteConfirmModal.busy"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="ts-btn ts-btn--danger"
+              (click)="confirmDeletePilar()"
+              [disabled]="deleteConfirmModal.busy"
+            >
+              <lucide-icon
+                *ngIf="!deleteConfirmModal.busy"
+                name="Trash2"
+                class="h-4 w-4"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <lucide-icon
+                *ngIf="deleteConfirmModal.busy"
+                name="Loader2"
+                class="h-4 w-4 animate-spin"
+                strokeWidth="1.75"
+              ></lucide-icon>
+              <span>{{ deleteConfirmModal.busy ? 'Eliminando...' : 'Eliminar' }}</span>
+            </button>
+          </div>
+        </div>
+      </ts-modal>
     </div>
   `,
 })
@@ -353,26 +397,60 @@ export class PillarsComponent implements OnInit {
     });
   }
 
+  // Modal de confirmación para eliminar pilar
+  deleteConfirmModal = {
+    open: false,
+    pilar: null as Pilar | null,
+    busy: false,
+  };
+
   confirmarEliminar(pilar: Pilar): void {
     this.clearFeedback();
-    const confirmado = confirm(
-      `Eliminarás el pilar "${pilar.nombre}" y todas sus preguntas asociadas. ¿Deseas continuar?`
-    );
-    if (!confirmado) return;
+    this.deleteConfirmModal = {
+      open: true,
+      pilar,
+      busy: false,
+    };
+  }
 
+  closeDeleteConfirmModal(): void {
+    if (this.deleteConfirmModal.busy) return;
+    this.deleteConfirmModal = {
+      open: false,
+      pilar: null,
+      busy: false,
+    };
+  }
+
+  confirmDeletePilar(): void {
+    const pilar = this.deleteConfirmModal.pilar;
+    if (!pilar || this.deleteConfirmModal.busy) return;
+
+    this.deleteConfirmModal.busy = true;
     this.deletingId = pilar.id;
 
     this.pillarsSrv.delete(pilar.id, true).subscribe({
       next: () => {
         this.message = `Pilar "${pilar.nombre}" eliminado.`;
+        this.deletingId = null;
+        this.deleteConfirmModal = {
+          open: false,
+          pilar: null,
+          busy: false,
+        };
         this.loadPilares();
       },
       error: (err) => {
         this.error = this.formatError(err, 'No se pudo eliminar el pilar');
         this.deletingId = null;
+        this.deleteConfirmModal.busy = false;
       },
       complete: () => {
         this.deletingId = null;
+        // Asegurar que el estado busy se resetee incluso si hay error
+        if (this.deleteConfirmModal.busy) {
+          this.deleteConfirmModal.busy = false;
+        }
       },
     });
   }
