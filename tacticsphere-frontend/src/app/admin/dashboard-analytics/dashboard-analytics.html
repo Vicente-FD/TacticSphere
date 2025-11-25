@@ -27,6 +27,7 @@
                 panelClass="ts-select-panel"
               >
                 <option [ngValue]="null">Selecciona empresa...</option>
+                <option *ngIf="isAdminSistema" [ngValue]="'GLOBAL'">Global (todas las empresas)</option>
                 <option *ngFor="let company of companies(); trackBy: trackById" [ngValue]="company.id">{{ company.nombre }}</option>
               </select>
             </label>

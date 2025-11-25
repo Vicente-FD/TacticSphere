@@ -410,6 +410,27 @@ def list_pilares(db: Session, empresa_id: Optional[int]) -> List[Pilar]:
         stmt = stmt.where(Pilar.empresa_id.is_(None))
     return db.scalars(stmt.order_by(Pilar.id)).all()
 
+def update_pilar(
+    db: Session,
+    pilar_id: int,
+    *,
+    nombre: Optional[str] = None,
+    descripcion: Optional[str] = None,
+    peso: Optional[int] = None,
+) -> Optional[Pilar]:
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        return None
+    if nombre is not None:
+        p.nombre = nombre
+    if descripcion is not None:
+        p.descripcion = descripcion
+    if peso is not None:
+        p.peso = peso
+    db.commit()
+    db.refresh(p)
+    return p
+
 def delete_pilar(db: Session, pilar_id: int, cascade: bool = False) -> Tuple[bool, Optional[str]]:
     p = db.get(Pilar, pilar_id)
     if not p:
@@ -1231,7 +1252,7 @@ def compute_assignment_progress(
 
 def compute_dashboard_analytics(
     db: Session,
-    empresa_id: int,
+    empresa_id: Optional[int],
     fecha_desde: Optional[date] = None,
     fecha_hasta: Optional[date] = None,
     departamento_ids: Optional[List[int]] = None,
@@ -1239,7 +1260,19 @@ def compute_dashboard_analytics(
     pilar_ids: Optional[List[int]] = None,
     include_timeline: bool = True,
 ) -> Dict:
-    """Calcula todas las mÃ©tricas del dashboard basadas en Likert."""
+    """
+    Calcula todas las métricas del dashboard basadas en Likert.
+    
+    MODO GLOBAL (empresa_id = None):
+    - Agrupa respuestas de TODAS las empresas sin filtrar por empresa_id
+    - Los departamentos y empleados se cargan de todas las empresas
+    - Las respuestas se agrupan globalmente, aplicando otros filtros (departamento, pilar, empleado) si están presentes
+    
+    MODO NORMAL (empresa_id = número):
+    - Filtra respuestas solo de la empresa especificada
+    - Los departamentos y empleados se cargan solo de esa empresa
+    - Aplica otros filtros normalmente
+    """
 
     dept_filter = [int(x) for x in (departamento_ids or []) if x is not None]
     emp_filter = [int(x) for x in (empleado_ids or []) if x is not None]
@@ -1260,14 +1293,16 @@ def compute_dashboard_analytics(
             return [0.0] * 5
         return [round((value / weight_sum) * 100, 1) for value in levels]
 
-    dept_rows = db.execute(
-        select(Departamento.id, Departamento.nombre).where(Departamento.empresa_id == empresa_id)
-    ).all()
+    # Si empresa_id es None, vista global (todas las empresas)
+    dept_stmt = select(Departamento.id, Departamento.nombre)
+    if empresa_id is not None:
+        dept_stmt = dept_stmt.where(Departamento.empresa_id == empresa_id)
+    dept_rows = db.execute(dept_stmt).all()
     dept_lookup = {row.id: row.nombre for row in dept_rows}
 
-    emp_stmt = select(Empleado.id, Empleado.nombre, Empleado.departamento_id).where(
-        Empleado.empresa_id == empresa_id
-    )
+    emp_stmt = select(Empleado.id, Empleado.nombre, Empleado.departamento_id)
+    if empresa_id is not None:
+        emp_stmt = emp_stmt.where(Empleado.empresa_id == empresa_id)
     if emp_filter:
         emp_stmt = emp_stmt.where(Empleado.id.in_(emp_filter))
     elif dept_filter:
@@ -1308,10 +1343,11 @@ def compute_dashboard_analytics(
         .outerjoin(Empleado, Respuesta.empleado_id == Empleado.id)
         .outerjoin(Departamento, Empleado.departamento_id == Departamento.id)
         .where(
-            Asignacion.empresa_id == empresa_id,
             Pregunta.tipo == TipoPreguntaEnum.LIKERT,
         )
     )
+    if empresa_id is not None:
+        stmt = stmt.where(Asignacion.empresa_id == empresa_id)
     if start_dt:
         stmt = stmt.where(Respuesta.fecha_respuesta >= start_dt)
     if end_dt:

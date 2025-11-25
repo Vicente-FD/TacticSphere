@@ -378,16 +378,24 @@ export class PillarsComponent implements OnInit {
 
     this.pillarsSrv.update(this.editingId, body).subscribe({
       next: (updated) => {
-        this.message = `Pilar "${updated.nombre}" actualizado.`;
+        this.message = `Pilar "${updated.nombre}" actualizado correctamente.`;
+        // Actualizar el pilar en la lista sin recargar todo
+        this.pilares.set(
+          this.pilares().map((p) => (p.id === updated.id ? updated : p))
+        );
         this.cerrarModalEdicion();
-        this.loadPilares();
       },
       error: (err) => {
-        this.error = this.formatError(err, 'No se pudo actualizar el pilar');
+        console.error('Error actualizando pilar', err);
+        const errorMsg = err.error?.detail || err.message || 'No se pudo actualizar el pilar';
+        this.error = errorMsg;
         this.saving = false;
       },
       complete: () => {
-        this.saving = false;
+        // Asegurar que el estado se resetee incluso si hay error
+        if (this.saving) {
+          this.saving = false;
+        }
       },
     });
   }

@@ -109,6 +109,16 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   private readonly empresaId = this.auth.getEmpresaId();
   readonly isUser = this.role === "USUARIO";
   readonly isConsultor = this.role === "ANALISTA"; // CONSULTOR (internamente ANALISTA)
+  readonly isAdminSistema = this.role === "ADMIN_SISTEMA";
+
+  /**
+   * Indica si estamos en modo vista global (todas las empresas).
+   * Solo disponible para ADMIN_SISTEMA cuando selectedCompanyId es 'GLOBAL'.
+   * En modo global, el filtro no incluye companyId (undefined) y el backend agrupa datos de todas las empresas.
+   */
+  readonly isGlobalView = computed(() => {
+    return this.isAdminSistema && this.selectedCompanyIdSignal() === 'GLOBAL';
+  });
 
   private analyticsSignal = signal<DashboardAnalyticsResponse | null>(null);
   private companiesSignal = signal<Empresa[]>([]);
@@ -167,16 +177,16 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   comparisonError = this.comparisonErrorSignal.asReadonly();
 
   // Signals para los filtros (para que los computed se actualicen automáticamente)
-  private selectedCompanyIdSignal = signal<number | null>(null);
+  private selectedCompanyIdSignal = signal<number | 'GLOBAL' | null>(null);
   private selectedDepartmentIdSignal = signal<number | null>(null);
   private selectedPillarSignal = signal<number | "ALL">("ALL");
   private selectedEmployeeIdSignal = signal<number | null>(null);
 
   // Getters y setters para mantener compatibilidad con el código existente
-  get selectedCompanyId(): number | null {
+  get selectedCompanyId(): number | 'GLOBAL' | null {
     return this.selectedCompanyIdSignal();
   }
-  set selectedCompanyId(value: number | null) {
+  set selectedCompanyId(value: number | 'GLOBAL' | null) {
     this.selectedCompanyIdSignal.set(value);
   }
 
@@ -476,8 +486,15 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         })
       )
       .subscribe((filter) => {
-        // Solo hacer fetch si hay un filtro válido
-        if (filter && filter.companyId) {
+        // MODO GLOBAL: Cuando selectedCompanyId es 'GLOBAL', el filtro tiene companyId = undefined.
+        // Solo ADMIN_SISTEMA puede usar modo global. En este caso, el backend agrupa datos de todas las empresas.
+        // MODO NORMAL: Cuando hay una empresa específica seleccionada, el filtro tiene companyId = número.
+        // En este caso, el backend filtra por esa empresa específica.
+        const isGlobalMode = filter && filter.companyId == null && this.isAdminSistema;
+        const isNormalMode = filter && filter.companyId != null;
+        const isValidFilter = isGlobalMode || isNormalMode;
+        
+        if (isValidFilter) {
           this.fetchAnalytics(filter);
         } else if (!filter) {
           // Si el filtro es null, limpiar los analytics
@@ -545,7 +562,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.filterSignal.set(null);
 
     // Si hay una empresa seleccionada, recargar departamentos y empleados
-    if (this.selectedCompanyId != null) {
+    if (this.selectedCompanyId != null && this.selectedCompanyId !== 'GLOBAL') {
       // Recargar departamentos y empleados para asegurar que los datos estén actualizados
       this.loadDepartments(this.selectedCompanyId);
       this.loadEmployees(this.selectedCompanyId, null);
@@ -565,20 +582,28 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.updateFilter();
   }
 
-  onCompanyChange(companyId: number | null): void {
+  onCompanyChange(companyId: number | 'GLOBAL' | null): void {
+    // MODO GLOBAL: Cuando companyId es 'GLOBAL', el backend agrupa datos de todas las empresas.
+    // MODO NORMAL: Cuando companyId es un número, el backend filtra por esa empresa específica.
+    
     this.selectedCompanyIdSignal.set(companyId);
-    this.selectedDepartmentIdSignal.set(null);
+    this.selectedDepartmentIdSignal.set(null); // Limpiar filtro de departamento al cambiar empresa
     this.selectedEmployeeIdSignal.set(null); // Limpiar filtro de empleado al cambiar empresa
-    if (companyId != null) {
+    
+    if (companyId != null && companyId !== 'GLOBAL') {
+      // Modo normal: cargar departamentos y empleados de la empresa seleccionada
       this.loadDepartments(companyId);
       this.loadEmployees(companyId, null);
     } else {
+      // Modo global o sin empresa: limpiar departamentos y empleados
+      // En modo global, el backend carga todos los datos internamente
       this.departmentsSignal.set([]);
       this.employeesSignal.set([]);
     }
+    
     // Limpiar el error signal antes de actualizar
     this.errorSignal.set("");
-    // Actualizar el filtro - esto disparará el effect y la consulta
+    // Actualizar el filtro - esto disparará el effect y la consulta al backend
     this.updateFilter();
   }
 
@@ -586,7 +611,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.selectedDepartmentIdSignal.set(departmentId);
     this.selectedEmployeeIdSignal.set(null); // Limpiar filtro de empleado al cambiar departamento
     const companyId = this.selectedCompanyIdSignal();
-    if (companyId != null) {
+    if (companyId != null && companyId !== 'GLOBAL') {
       this.loadEmployees(companyId, departmentId ?? undefined);
     }
     this.updateFilter();
@@ -695,7 +720,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private loadComparisonData(): void {
-    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    const companyId = selectedCompanyId === 'GLOBAL' ? null : (selectedCompanyId ?? this.empresaId);
     if (!companyId) {
       this.comparisonErrorSignal.set("Selecciona una empresa primero.");
       this.comparisonAnalyticsSignal.set(null);
@@ -704,7 +730,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     }
 
     const filter: AnalyticsQueryParams = {
-      companyId,
+      companyId: selectedCompanyId === 'GLOBAL' ? undefined : companyId,
       departmentIds: this.compareType === "DEPARTMENT" && this.compareDepartmentId
         ? [this.compareDepartmentId]
         : undefined,
@@ -771,8 +797,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   filterSummary(): string[] {
     const summary: string[] = [];
-    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
-    const company = this.resolveCompanyName(companyId);
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    const companyId = selectedCompanyId === 'GLOBAL' ? null : (selectedCompanyId ?? this.empresaId);
+    const company = selectedCompanyId === 'GLOBAL' 
+      ? 'Global (todas las empresas)'
+      : this.resolveCompanyName(companyId);
     summary.push(`Empresa: ${company}`);
     const departmentId = this.selectedDepartmentIdSignal();
     if (departmentId != null) {
@@ -789,14 +818,17 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   // Computed para el resumen de filtros activos (para la columna derecha)
   // Ahora se actualiza automáticamente porque usa signals
   readonly activeFiltersSummary = computed(() => {
-    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    const companyId = selectedCompanyId === 'GLOBAL' ? null : (selectedCompanyId ?? this.empresaId);
     const departmentId = this.selectedDepartmentIdSignal();
     const pillarId = this.selectedPillarSignal();
     
     // Empresa
-    const companyName = companyId 
-      ? this.resolveCompanyName(companyId) 
-      : "Sin empresa seleccionada";
+    const companyName = selectedCompanyId === 'GLOBAL'
+      ? "Global (todas las empresas)"
+      : (companyId 
+        ? this.resolveCompanyName(companyId) 
+        : "Sin empresa seleccionada");
     
     // Departamento
     const departmentName = departmentId != null 
@@ -817,7 +849,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   // Labels individuales para la vista rápida (computed para reactividad)
   readonly quickCompanyLabel = computed(() => {
-    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId;
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    if (selectedCompanyId === 'GLOBAL') {
+      return '🌐 Global (todas las empresas)';
+    }
+    const companyId = selectedCompanyId ?? this.empresaId;
     return companyId 
       ? this.resolveCompanyName(companyId) 
       : "Sin empresa seleccionada";
@@ -1563,7 +1599,13 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   // ----------------------------------------
 
   private fetchAnalytics(filter: AnalyticsQueryParams): void {
-    if (!filter.companyId) {
+    // MODO GLOBAL: Si companyId es undefined/null y el usuario es ADMIN_SISTEMA, 
+    // permitir la carga (vista global de todas las empresas).
+    // En este caso, el backend agrupa datos de todas las empresas sin filtrar por empresa_id.
+    const isGlobalView = filter.companyId == null && this.isAdminSistema;
+    
+    if (!filter.companyId && !isGlobalView) {
+      // Modo normal: requiere companyId
       this.analyticsSignal.set(null);
       this.infoSignal.set("Selecciona una empresa para ver resultados");
       this.loadingSignal.set(false);
@@ -1648,31 +1690,44 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private updateFilter(): void {
-    const companyId = this.selectedCompanyIdSignal() ?? this.empresaId ?? null;
-    if (companyId == null) {
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    const companyId = selectedCompanyId === 'GLOBAL' ? null : (selectedCompanyId ?? this.empresaId ?? null);
+    
+    // MODO GLOBAL: Si selectedCompanyId es 'GLOBAL', el filtro tendrá companyId = undefined.
+    // Esto permite que el backend agrupe datos de todas las empresas sin filtrar por empresa_id.
+    // Solo ADMIN_SISTEMA puede usar este modo.
+    // MODO NORMAL: Si hay una empresa seleccionada, el filtro tendrá companyId = número.
+    // Esto permite que el backend filtre por esa empresa específica.
+    
+    if (companyId == null && selectedCompanyId !== 'GLOBAL') {
+      // No es modo global y no hay empresa seleccionada - mostrar mensaje
       this.infoSignal.set("Selecciona una empresa para ver resultados.");
       this.analyticsSignal.set(null);
-      // Establecer el filtro como null para que el sistema sepa que no hay filtro activo
       this.filterSignal.set(null);
       return;
     }
+    
     this.infoSignal.set("");
-    // Crear un nuevo objeto filtro cada vez para asegurar que el signal detecte el cambio
+    
+    // Crear el objeto filtro. En modo global, companyId es undefined para indicar al backend que agrupe todas las empresas.
+    // En modo normal, companyId es un número que identifica la empresa específica.
     const filter: AnalyticsQueryParams = {
-      companyId,
+      companyId: selectedCompanyId === 'GLOBAL' ? undefined : companyId,
       departmentIds: this.selectedDepartmentIdSignal() != null ? [this.selectedDepartmentIdSignal()!] : undefined,
       pillarIds: this.selectedPillarSignal() !== "ALL" ? [this.selectedPillarSignal() as number] : undefined,
       employeeIds: this.selectedEmployeeIdSignal() != null ? [this.selectedEmployeeIdSignal()!] : undefined,
       includeTimeline: false,
     };
+    
     // Establecer el filtro - el signal detectará el cambio automáticamente
-    // Usar un nuevo objeto para forzar la detección del cambio
     this.filterSignal.set({ ...filter });
   }
 
   private buildCacheKey(filter: AnalyticsQueryParams): string {
+    // Genera una clave única para cachear los resultados del dashboard.
+    // En modo global (companyId = undefined), la clave incluye 'GLOBAL' para diferenciarlo del modo normal.
     return JSON.stringify({
-      companyId: filter.companyId,
+      companyId: filter.companyId ?? 'GLOBAL', // 'GLOBAL' cuando es undefined (modo global)
       departmentIds: filter.departmentIds ?? [],
       pillarIds: filter.pillarIds ?? [],
       employeeIds: filter.employeeIds ?? [],
@@ -2241,7 +2296,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       
       // Registrar evento de auditoría
       const filter = this.filterSignal();
-      if (filter?.companyId) {
+      if (filter?.companyId != null) {
         const companyName = this.resolveCompanyName(filter.companyId);
         const departmentName = filter.departmentIds?.[0] 
           ? this.resolveDepartmentName(filter.departmentIds[0])

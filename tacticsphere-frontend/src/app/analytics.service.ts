@@ -6,7 +6,7 @@ import { DashboardAnalyticsResponse } from './types';
 import { environment } from './../environments/environment';
 
 export interface AnalyticsQueryParams {
-  companyId: number;
+  companyId?: number | null; // Opcional para vista global
   dateFrom?: string | null;
   dateTo?: string | null;
   departmentIds?: number[];
@@ -22,7 +22,13 @@ export class AnalyticsService {
   constructor(private http: HttpClient) {}
 
   getDashboardAnalytics(params: AnalyticsQueryParams): Observable<DashboardAnalyticsResponse> {
-    let httpParams = new HttpParams().set('empresa_id', params.companyId);
+    let httpParams = new HttpParams();
+    // MODO GLOBAL: Si companyId es undefined/null, no se envía empresa_id al backend.
+    // El backend detecta esto y agrupa datos de todas las empresas (solo para ADMIN_SISTEMA).
+    // MODO NORMAL: Si companyId es un número, se envía empresa_id para filtrar por esa empresa específica.
+    if (params.companyId != null) {
+      httpParams = httpParams.set('empresa_id', params.companyId);
+    }
     if (params.dateFrom) {
       httpParams = httpParams.set('fecha_desde', params.dateFrom);
     }
@@ -48,7 +54,11 @@ export class AnalyticsService {
   }
 
   exportResponsesCsv(params: AnalyticsQueryParams): Observable<Blob> {
-    let httpParams = new HttpParams().set('empresa_id', params.companyId);
+    let httpParams = new HttpParams();
+    // Solo incluir empresa_id si está definido (no incluir para vista global)
+    if (params.companyId != null) {
+      httpParams = httpParams.set('empresa_id', params.companyId);
+    }
     if (params.dateFrom) {
       httpParams = httpParams.set('fecha_desde', params.dateFrom);
     }

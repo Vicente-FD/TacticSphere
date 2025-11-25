@@ -52,7 +52,12 @@ export class LikertBucketsComponent {
 
   get shouldDisplay(): boolean {
     const scope = this.filter?.scope;
-    return scope === 'company' || scope === 'department';
+    // Mostrar el gráfico de Estadios Likert en:
+    // - Vista global (todas las empresas): scope === 'global'
+    // - Vista por empresa: scope === 'company'
+    // - Vista por departamento: scope === 'department'
+    // No mostrar en vista por empleado individual: scope === 'employee'
+    return scope === 'global' || scope === 'company' || scope === 'department';
   }
 
   get totalEmployeesCount(): number {

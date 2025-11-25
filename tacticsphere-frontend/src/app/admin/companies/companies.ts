@@ -761,7 +761,7 @@ export class CompaniesComponent implements OnInit {
           this.empresas().map((e) => (e.id === updated.id ? updated : e))
         );
         
-        // Cerrar modal
+        // Cerrar modal y resetear estado
         this.cerrarModalEdicion();
         this.showMessage('Empresa actualizada correctamente', 'success');
       },
@@ -769,10 +769,14 @@ export class CompaniesComponent implements OnInit {
         console.error('Error actualizando empresa', error);
         const errorMsg = error.error?.detail || error.message || 'Error al actualizar la empresa';
         this.showMessage(errorMsg, 'error');
+        // NO cerrar el modal en caso de error para que el usuario pueda corregir
         this.editModal.busy = false;
       },
       complete: () => {
-        this.editModal.busy = false;
+        // Asegurar que el estado se resetee incluso si hay error
+        if (this.editModal.busy) {
+          this.editModal.busy = false;
+        }
       },
     });
   }

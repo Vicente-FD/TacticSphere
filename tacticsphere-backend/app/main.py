@@ -67,7 +67,7 @@ from .schemas import (
 
     # Pilares / Preguntas
 
-    PilarCreate, PilarRead,
+    PilarCreate, PilarRead, PilarUpdate,
 
     PreguntaCreate, PreguntaRead, PreguntaUpdate,
 
@@ -1232,6 +1232,57 @@ def create_pillar(
     return pilar
 
 
+@app.patch("/pillars/{pilar_id}", response_model=PilarRead)
+def update_pillar(
+    pilar_id: int,
+    data: PilarUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    # Guardar estado antes para auditoría
+    before = {
+        "id": p.id,
+        "nombre": p.nombre,
+        "descripcion": p.descripcion,
+        "peso": p.peso,
+    }
+    
+    payload = data.model_dump(exclude_unset=True)
+    if not payload:
+        return p
+    
+    updated = crud.update_pilar(
+        db,
+        pilar_id,
+        nombre=payload.get("nombre"),
+        descripcion=payload.get("descripcion"),
+        peso=payload.get("peso"),
+    )
+    
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.PILLAR_UPDATE,
+        current_user=current,
+        empresa_id=p.empresa_id,
+        entity_type="Pilar",
+        entity_id=updated.id,
+        notes=f"Actualizó pilar {updated.nombre}",
+        diff_before=before,
+        diff_after={"id": updated.id, "nombre": updated.nombre, "descripcion": updated.descripcion, "peso": updated.peso},
+        request=request,
+    )
+    return updated
+
 
 @app.delete("/pillars/{pilar_id}", status_code=204)
 def delete_pillar(
@@ -2023,7 +2074,7 @@ def survey_pillar_questions(
 
 @app.get("/analytics/dashboard", response_model=DashboardAnalyticsResponse)
 def analytics_dashboard(
-    empresa_id: int = Query(...),
+    empresa_id: Optional[int] = Query(None),
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     departamento_ids: Optional[List[int]] = Query(None),
@@ -2033,7 +2084,28 @@ def analytics_dashboard(
     db: Session = Depends(get_db),
     current: Usuario = Depends(get_current_user),
 ):
-    _ensure_company_access(current, empresa_id)
+    """
+    Endpoint para obtener métricas del dashboard de analytics.
+    
+    MODO GLOBAL (empresa_id = None):
+    - Solo disponible para ADMIN_SISTEMA
+    - Agrupa datos de TODAS las empresas sin filtrar por empresa_id
+    - Aplica otros filtros (departamento, pilar, empleado) si están presentes
+    
+    MODO NORMAL (empresa_id = número):
+    - Disponible para usuarios con acceso a esa empresa
+    - Filtra datos solo de la empresa especificada
+    - Aplica otros filtros normalmente
+    """
+    # Validación de permisos: modo global solo para ADMIN_SISTEMA
+    if empresa_id is None:
+        if current.rol != RolEnum.ADMIN_SISTEMA:
+            raise HTTPException(status_code=403, detail="Solo ADMIN_SISTEMA puede ver la vista global")
+    else:
+        # Modo normal: validar acceso a la empresa específica
+        _ensure_company_access(current, empresa_id)
+    
+    # compute_dashboard_analytics maneja empresa_id=None agrupando datos de todas las empresas
     data = crud.compute_dashboard_analytics(
         db,
         empresa_id=empresa_id,

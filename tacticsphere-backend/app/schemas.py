@@ -153,6 +153,11 @@ class PilarRead(BaseModel):
     peso: int
     model_config = ConfigDict(from_attributes=True)
 
+class PilarUpdate(BaseModel):
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    peso: Optional[int] = None
+
 class PreguntaCreate(BaseModel):
     pilar_id: int
     enunciado: str
@@ -454,7 +459,8 @@ class CoverageByDepartmentEntry(BaseModel):
 
 
 class AnalyticsFilters(BaseModel):
-    empresa_id: int
+    # empresa_id es opcional para soportar modo global (None = todas las empresas, solo para ADMIN_SISTEMA)
+    empresa_id: Optional[int] = None
     fecha_desde: Optional[date] = None
     fecha_hasta: Optional[date] = None
     departamento_ids: List[int] = Field(default_factory=list)

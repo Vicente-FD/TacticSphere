@@ -613,7 +613,10 @@ export class QuestionsComponent implements OnInit {
   guardarEdicion(): void {
     if (!this.editingQuestionId || this.updatingQuestion) return;
     const trimmedEnunciado = this.editForm.enunciado.trim();
-    if (!trimmedEnunciado) return;
+    if (!trimmedEnunciado) {
+      // Mostrar error en el modal si es necesario
+      return;
+    }
     const payload: {
       enunciado: string;
       tipo: TipoPreguntaEnum;
@@ -632,15 +635,28 @@ export class QuestionsComponent implements OnInit {
     }
     this.updatingQuestion = true;
     this.questionsSrv.update(this.editingQuestionId, payload).subscribe({
-      next: () => {
-        this.resetEditingState();
+      next: (updated) => {
+        // Actualizar la pregunta en la lista sin recargar todo
         if (this.selectedPilarId) {
-          this.cargarPreguntas(this.selectedPilarId);
+          this.preguntas.set(
+            this.preguntas().map((p) => (p.id === updated.id ? updated : p))
+          );
         }
+        this.resetEditingState();
       },
       error: (error) => {
         console.error('Error actualizando pregunta', error);
+        // Mantener el modal abierto para que el usuario pueda corregir
+        // Solo resetear el estado de carga
         this.updatingQuestion = false;
+        // Opcional: mostrar un mensaje de error en el modal
+        // Puedes agregar una variable para mostrar errores en el modal si lo deseas
+      },
+      complete: () => {
+        // Asegurar que el estado se resetee incluso si hay error
+        if (this.updatingQuestion) {
+          this.updatingQuestion = false;
+        }
       },
     });
   }
