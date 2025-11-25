@@ -1,6 +1,6 @@
 ﻿# app/main.py
 
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 import csv
 
@@ -451,6 +451,11 @@ def create_company(
     current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
 ):
     empresa = crud.create_empresa(db, data.nombre, data.rut, data.giro, data.departamentos)
+    
+    # Validación final: asegurar que la empresa solo tiene los departamentos correctos
+    # (esto es redundante pero crítico para prevenir problemas de datos corruptos)
+    empresa.departamentos = [d for d in empresa.departamentos if d.empresa_id == empresa.id]
+    
     audit_log(
         db,
         action=AuditActionEnum.COMPANY_CREATE,
@@ -473,9 +478,15 @@ def update_company(
     db: Session = Depends(get_db),
     current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
 ):
-    empresa = db.get(Empresa, empresa_id)
+    # Cargar empresa con sus departamentos para asegurar que tenemos todos los datos
+    from sqlalchemy.orm import joinedload
+    stmt = select(Empresa).options(joinedload(Empresa.departamentos)).where(Empresa.id == empresa_id)
+    empresa = db.scalar(stmt)
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    
+    # Validación: asegurar que los departamentos pertenecen a esta empresa
+    empresa.departamentos = [d for d in empresa.departamentos if d.empresa_id == empresa.id]
     
     # Guardar estado antes para auditoría
     before = {
@@ -497,6 +508,11 @@ def update_company(
     
     if not updated:
         raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    
+    # Refrescar la empresa desde la base de datos para obtener los departamentos actualizados
+    db.refresh(updated, ["departamentos"])
+    # Validación adicional: asegurar que los departamentos pertenecen a esta empresa
+    updated.departamentos = [d for d in updated.departamentos if d.empresa_id == updated.id]
     
     # Registrar en auditoría
     after = {
@@ -595,6 +611,39 @@ def add_department(
         request=request,
     )
     return departamento
+
+@app.get("/diagnostics/orphan-departments", response_model=Dict)
+def diagnose_orphan_departments(
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
+):
+    """
+    Endpoint de diagnóstico: encuentra departamentos huérfanos (departamentos sin empresa válida).
+    Solo disponible para ADMIN_SISTEMA.
+    """
+    orphan_depts = crud.find_orphan_departments(db)
+    return {
+        "count": len(orphan_depts),
+        "departments": [
+            {"id": d.id, "nombre": d.nombre, "empresa_id": d.empresa_id}
+            for d in orphan_depts
+        ]
+    }
+
+@app.post("/diagnostics/cleanup-orphan-departments", response_model=Dict)
+def cleanup_orphan_departments(
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
+):
+    """
+    Endpoint de limpieza: elimina departamentos huérfanos de la base de datos.
+    Solo disponible para ADMIN_SISTEMA.
+    """
+    deleted_count = crud.cleanup_orphan_departments(db)
+    return {
+        "message": f"Se eliminaron {deleted_count} departamentos huérfanos",
+        "deleted_count": deleted_count
+    }
 
 @app.delete("/departments/{dep_id}", status_code=204)
 def delete_department(

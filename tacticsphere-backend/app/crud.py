@@ -177,13 +177,49 @@ def clear_password_change_requests(db: Session) -> int:
 # ======================================================
 
 def list_empresas(db: Session) -> List[Empresa]:
-    return db.scalars(select(Empresa)).all()
+    """
+    Lista todas las empresas con sus departamentos.
+    Usa joinedload para cargar los departamentos de forma eficiente y asegurar
+    que cada empresa solo tenga sus propios departamentos (filtrados por empresa_id).
+    """
+    stmt = select(Empresa).options(joinedload(Empresa.departamentos))
+    empresas = list(db.scalars(stmt).unique().all())
+    # Validación adicional: asegurar que los departamentos están correctamente filtrados
+    # por empresa_id (SQLAlchemy debería hacer esto automáticamente vía Foreign Key,
+    # pero esta validación previene cualquier problema de datos corruptos)
+    for empresa in empresas:
+        empresa.departamentos = [d for d in empresa.departamentos if d.empresa_id == empresa.id]
+    return empresas
 
 def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[str],
                    departamentos: Optional[List[str]] = None):
+    """
+    Crea una nueva empresa y sus departamentos.
+    IMPORTANTE: Solo crea los departamentos especificados, no carga departamentos existentes de otras empresas.
+    """
     emp = Empresa(nombre=nombre, rut=rut, giro=giro, activa=True)
     db.add(emp)
     db.flush()  # para conseguir emp.id
+    
+    # CRÍTICO: Limpiar departamentos huérfanos que puedan existir para este empresa_id
+    # Esto previene errores de UNIQUE constraint cuando SQLite reutiliza IDs de empresas eliminadas.
+    # Si una empresa fue eliminada pero sus departamentos no (departamentos huérfanos),
+    # y SQLite reutiliza ese ID para la nueva empresa, al intentar crear departamentos
+    # con el mismo nombre fallaría por el constraint único.
+    # Solución: Eliminar cualquier departamento existente para este empresa_id antes de crear los nuevos.
+    existing_depts = db.scalars(
+        select(Departamento).where(Departamento.empresa_id == emp.id)
+    ).all()
+    # Si hay departamentos existentes para este empresa_id, eliminarlos (son huérfanos)
+    # porque estamos creando una empresa nueva, no debería tener departamentos todavía
+    if existing_depts:
+        for orphan_dept in existing_depts:
+            db.delete(orphan_dept)
+        db.flush()  # Eliminar huérfanos antes de crear nuevos departamentos
+    
+    # Inicializar la lista de departamentos como vacía para evitar problemas de lazy loading
+    emp.departamentos = []
+    
     if departamentos:
         seen: set[str] = set()
         dept_objects = []
@@ -197,7 +233,11 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
             if key in seen:
                 continue
             seen.add(key)
-            # Verificar si el departamento ya existe para esta empresa antes de crearlo
+            
+            # Verificar si el departamento ya existe para ESTA empresa antes de crearlo
+            # Esto previene errores de UNIQUE constraint (empresa_id, nombre)
+            # IMPORTANTE: Si hay departamentos huérfanos de empresas eliminadas,
+            # esta verificación los detectará y evitaremos crear duplicados
             existing = db.scalar(
                 select(Departamento).where(
                     and_(
@@ -208,13 +248,33 @@ def create_empresa(db: Session, nombre: str, rut: Optional[str], giro: Optional[
             )
             if not existing:
                 dept_objects.append(Departamento(nombre=n, empresa_id=emp.id))
+        
         # Agregar todos los departamentos de una vez
         if dept_objects:
             db.add_all(dept_objects)
             db.flush()  # Flush después de agregar departamentos para detectar errores temprano
+    
     db.commit()
-    db.refresh(emp)
-    return emp
+    
+    # CRÍTICO: Expulsar la empresa de la sesión y recargarla completamente
+    # Esto evita problemas de caché o lazy loading que puedan traer departamentos incorrectos
+    db.expire(emp)
+    
+    # Recargar la empresa desde cero usando joinedload para asegurar que solo cargue sus departamentos
+    empresa_id = emp.id
+    stmt = select(Empresa).options(joinedload(Empresa.departamentos)).where(Empresa.id == empresa_id)
+    emp_reloaded = db.scalar(stmt)
+    
+    if not emp_reloaded:
+        # Si por alguna razón no se encuentra, retornar la original sin departamentos
+        emp.departamentos = []
+        return emp
+    
+    # Validación crítica: filtrar SOLO los departamentos que pertenecen a esta empresa
+    # Esto previene que se incluyan departamentos de otras empresas o huérfanos
+    emp_reloaded.departamentos = [d for d in emp_reloaded.departamentos if d.empresa_id == empresa_id]
+    
+    return emp_reloaded
 
 def update_empresa(
     db: Session,
@@ -224,9 +284,14 @@ def update_empresa(
     giro: Optional[str] = None,
     departamentos: Optional[List[str]] = None,
 ) -> Optional[Empresa]:
-    emp = db.get(Empresa, empresa_id)
+    # Cargar empresa con sus departamentos usando joinedload para asegurar que tenemos todos los datos
+    stmt = select(Empresa).options(joinedload(Empresa.departamentos)).where(Empresa.id == empresa_id)
+    emp = db.scalar(stmt)
     if not emp:
         return None
+    
+    # Validación: asegurar que los departamentos pertenecen a esta empresa
+    emp.departamentos = [d for d in emp.departamentos if d.empresa_id == emp.id]
     
     # Actualizar campos básicos
     if nombre is not None:
@@ -238,9 +303,10 @@ def update_empresa(
     
     # Si se proporcionan departamentos, reemplazar los existentes
     if departamentos is not None:
-        # Eliminar departamentos existentes
+        # Eliminar departamentos existentes (solo los que pertenecen a esta empresa)
         for dep in emp.departamentos:
-            db.delete(dep)
+            if dep.empresa_id == emp.id:  # Validación adicional de seguridad
+                db.delete(dep)
         db.flush()  # Asegurar que los departamentos se eliminen antes de crear nuevos
         
         # Crear nuevos departamentos
@@ -268,7 +334,10 @@ def update_empresa(
                 db.add(Departamento(nombre=n, empresa_id=emp.id))
     
     db.commit()
-    db.refresh(emp)
+    # Refrescar la empresa y cargar los departamentos actualizados
+    db.refresh(emp, ["departamentos"])
+    # Validación final: asegurar que solo se devuelven departamentos de esta empresa
+    emp.departamentos = [d for d in emp.departamentos if d.empresa_id == emp.id]
     return emp
 
 def delete_empresa(db: Session, empresa_id: int) -> bool:
@@ -284,7 +353,31 @@ def delete_empresa(db: Session, empresa_id: int) -> bool:
 # ======================================================
 
 def list_departamentos_by_empresa(db: Session, empresa_id: int) -> List[Departamento]:
+    """Lista todos los departamentos de una empresa específica."""
     return db.scalars(select(Departamento).where(Departamento.empresa_id == empresa_id)).all()
+
+def find_orphan_departments(db: Session) -> List[Departamento]:
+    """
+    Encuentra departamentos huérfanos (departamentos que no tienen una empresa válida).
+    Esto puede ocurrir si hay datos corruptos en la base de datos.
+    """
+    # Buscar departamentos cuya empresa_id no existe en la tabla empresas
+    empresas_ids = {e.id for e in db.scalars(select(Empresa)).all()}
+    all_departments = db.scalars(select(Departamento)).all()
+    orphan_departments = [d for d in all_departments if d.empresa_id not in empresas_ids]
+    return orphan_departments
+
+def cleanup_orphan_departments(db: Session) -> int:
+    """
+    Elimina departamentos huérfanos (departamentos que no tienen una empresa válida).
+    Retorna el número de departamentos eliminados.
+    """
+    orphan_departments = find_orphan_departments(db)
+    count = len(orphan_departments)
+    for dept in orphan_departments:
+        db.delete(dept)
+    db.commit()
+    return count
 
 def create_departamento(db: Session, empresa_id: int, nombre: str) -> Departamento:
     dep = Departamento(empresa_id=empresa_id, nombre=nombre)
