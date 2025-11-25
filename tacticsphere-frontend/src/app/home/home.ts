@@ -20,7 +20,7 @@ import {
 import { ModalComponent } from '../shared/ui/modal/modal.component';
 import { LeadService } from '../core/services/lead.service';
 import { NotificationCenterService } from '../core/services/notification-center.service';
-import { LucideAngularModule } from 'lucide-angular';
+import { IconComponent } from '../shared/ui/icon/icon.component';
 import { HeroSphere3dComponent } from './hero-sphere-3d.component';
 import {
   animate,
@@ -46,7 +46,7 @@ type SectionContent = {
     RouterLink,
     ReactiveFormsModule,
     ModalComponent,
-    LucideAngularModule,
+    IconComponent,
     HeroSphere3dComponent,
   ],
   templateUrl: './home.html',

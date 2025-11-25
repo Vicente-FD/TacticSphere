@@ -1,7 +1,7 @@
 import { Component, OnInit, WritableSignal, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { LucideAngularModule } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { PilarService } from '../../pillar.service';
@@ -10,7 +10,7 @@ import { Pilar } from '../../types';
 @Component({
   standalone: true,
   selector: 'app-pillars',
-  imports: [CommonModule, FormsModule, LucideAngularModule, ModalComponent],
+  imports: [CommonModule, FormsModule, IconComponent, ModalComponent],
   template: `
     <div class="ts-page">
       <div class="ts-container space-y-6">
@@ -22,7 +22,7 @@ import { Pilar } from '../../types';
             </p>
           </div>
           <div class="ts-chip h-fit">
-            <lucide-icon name="Layers" class="h-4 w-4 text-accent" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="layers" size="sm" variant="accent"></app-icon>
             {{ pilares().length }} registrados
           </div>
         </div>
@@ -45,7 +45,7 @@ import { Pilar } from '../../types';
         <div class="grid gap-6 xl:grid-cols-[minmax(0,_0.35fr)_minmax(0,_0.65fr)]">
           <div class="ts-card space-y-5">
             <div class="flex items-center gap-3">
-              <lucide-icon name="PlusCircle" class="h-5 w-5 text-accent" strokeWidth="1.75"></lucide-icon>
+              <app-icon name="plus-circle" size="md" variant="accent"></app-icon>
               <div>
                 <h2 class="text-lg font-semibold text-ink">Nuevo pilar</h2>
                 <p class="text-sm text-neutral-400">
@@ -106,11 +106,7 @@ import { Pilar } from '../../types';
                 (click)="loadPilares()"
                 [disabled]="loading"
               >
-                <lucide-icon
-                  name="RefreshCcw"
-                  class="mr-1 h-4 w-4"
-                  strokeWidth="1.75"
-                ></lucide-icon>
+                <app-icon name="refresh-ccw" size="sm" class="mr-1"></app-icon>
                 Recargar
               </button>
             </div>
@@ -251,18 +247,17 @@ import { Pilar } from '../../types';
               (click)="confirmDeletePilar()"
               [disabled]="deleteConfirmModal.busy"
             >
-              <lucide-icon
+              <app-icon
                 *ngIf="!deleteConfirmModal.busy"
-                name="Trash2"
-                class="h-4 w-4"
-                strokeWidth="1.75"
-              ></lucide-icon>
-              <lucide-icon
+                name="trash2"
+                size="sm"
+              ></app-icon>
+              <app-icon
                 *ngIf="deleteConfirmModal.busy"
-                name="Loader2"
-                class="h-4 w-4 animate-spin"
-                strokeWidth="1.75"
-              ></lucide-icon>
+                name="loader2"
+                size="sm"
+                class="animate-spin"
+              ></app-icon>
               <span>{{ deleteConfirmModal.busy ? 'Eliminando...' : 'Eliminar' }}</span>
             </button>
           </div>

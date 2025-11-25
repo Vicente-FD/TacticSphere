@@ -27,8 +27,7 @@
           aria-label="Ir al login"
         >
           <span>Ir al login</span>
-          <lucide-icon name="LogIn" class="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth="1.75">
-          </lucide-icon>
+          <app-icon name="log-in" size="sm" class="transition-transform group-hover:translate-x-1"></app-icon>
         </a>
         <button
           type="button"
@@ -37,11 +36,7 @@
           (click)="openModal()"
         >
           <span>Solicitar consultoría</span>
-          <lucide-icon
-            name="Sparkles"
-            class="h-4 w-4 transition-transform group-hover:rotate-3"
-            strokeWidth="1.75"
-          ></lucide-icon>
+          <app-icon name="sparkles" size="sm" class="transition-transform group-hover:rotate-3"></app-icon>
         </button>
       </div>
 
@@ -58,11 +53,7 @@
         (click)="scrollToContent()"
         @fadeUp
       >
-        <lucide-icon
-          name="ChevronDown"
-          class="h-5 w-5 text-ink"
-          strokeWidth="2"
-        ></lucide-icon>
+        <app-icon name="chevron-down" size="lg" class="text-ink"></app-icon>
       </button>
     </div>
   </section>
@@ -81,7 +72,7 @@
       >
         <div class="flex items-start gap-4">
           <div class="mt-1 hidden h-8 w-8 shrink-0 rounded-full border border-border bg-white sm:flex sm:items-center sm:justify-center">
-            <lucide-icon name="Layers" class="h-4 w-4 text-ink" strokeWidth="1.75"></lucide-icon>
+            <app-icon name="layers" size="sm" class="text-ink"></app-icon>
           </div>
           <div class="space-y-4">
             <h2 class="ts-title">{{ section.title }}</h2>
@@ -183,12 +174,12 @@
         class="ts-btn sm:w-auto"
         [disabled]="submitState() === 'loading'"
       >
-        <lucide-icon
+        <app-icon
           *ngIf="submitState() === 'loading'"
-          name="Loader2"
-          class="h-4 w-4 animate-spin"
-          strokeWidth="1.75"
-        ></lucide-icon>
+          name="loader2"
+          size="sm"
+          class="animate-spin"
+        ></app-icon>
         <span>{{ submitState() === 'loading' ? 'Enviando...' : 'Enviar solicitud' }}</span>
       </button>
     </div>

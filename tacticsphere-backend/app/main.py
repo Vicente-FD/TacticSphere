@@ -2059,7 +2059,6 @@ def analytics_responses_export(
     current: Usuario = Depends(get_current_user),
 ):
     _ensure_company_access(current, empresa_id)
-    include_expected = current.rol in (RolEnum.ADMIN_SISTEMA, RolEnum.ADMIN, RolEnum.ANALISTA)
     rows = crud.list_responses_for_export(
         db,
         empresa_id=empresa_id,
@@ -2085,8 +2084,6 @@ def analytics_responses_export(
         "departamento_nombre",
         "valor",
     ]
-    if include_expected:
-        headers.insert(headers.index("pilar_id"), "respuesta_esperada")
 
     def iter_rows():
         buffer = io.StringIO()
@@ -2104,19 +2101,13 @@ def analytics_responses_export(
                 row["alcance_id"],
                 row["pregunta_id"],
                 row["pregunta_enunciado"],
+                row["pilar_id"],
+                row["pilar_nombre"],
+                row["empleado_id"],
+                row["empleado_nombre"],
+                row["departamento_nombre"],
+                row["valor"],
             ]
-            if include_expected:
-                record.append(row.get("pregunta_respuesta_esperada"))
-            record.extend(
-                [
-                    row["pilar_id"],
-                    row["pilar_nombre"],
-                    row["empleado_id"],
-                    row["empleado_nombre"],
-                    row["departamento_nombre"],
-                    row["valor"],
-                ]
-            )
             writer.writerow(record)
             yield buffer.getvalue()
             buffer.seek(0)

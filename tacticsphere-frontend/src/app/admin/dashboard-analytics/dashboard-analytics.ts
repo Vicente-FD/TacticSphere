@@ -28,6 +28,7 @@ import { AnalyticsService, AnalyticsQueryParams } from "../../analytics.service"
 import { CompanyService } from "../../company.service";
 import { EmployeeService } from "../../employee.service";
 import { AuthService } from "../../auth.service";
+import { IconComponent } from "../../shared/ui/icon/icon.component";
 import { AuditService } from "../../services/audit.service";
 import {
   DashboardAnalyticsResponse,
@@ -89,7 +90,7 @@ interface KpiCard {
 @Component({
   standalone: true,
   selector: "app-dashboard-analytics",
-  imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent, ModalComponent],
+  imports: [CommonModule, FormsModule, NgxEchartsModule, LikertBucketsComponent, ModalComponent, IconComponent],
   templateUrl: "./dashboard-analytics.html",
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -2302,7 +2303,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           try {
             const text = await blob.text();
             const lines = text.split("\n");
-            const headers = lines[0].split(",");
+            let headers = lines[0].split(",").map(h => h.trim());
             const data: any[] = [];
 
             for (let i = 1; i < lines.length; i++) {
@@ -2311,19 +2312,35 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               if (values.length === headers.length) {
                 const obj: any = {};
                 headers.forEach((header, idx) => {
-                  obj[header.trim()] = values[idx]?.trim() || "";
+                  obj[header] = values[idx]?.trim() || "";
                 });
                 data.push(obj);
               }
             }
 
+            // Filtrar respuesta_esperada
+            const { filteredHeaders, filteredData } = this.filterExpectedAnswerColumn(headers, data);
+            headers = filteredHeaders;
+            const finalData = filteredData.map(record => {
+              if (typeof record === 'object' && !Array.isArray(record)) {
+                const filtered: any = {};
+                filteredHeaders.forEach(header => {
+                  if (record.hasOwnProperty(header)) {
+                    filtered[header] = record[header];
+                  }
+                });
+                return filtered;
+              }
+              return record;
+            });
+
             const jsonData = {
               metadata: {
                 generatedAt: new Date().toISOString(),
                 filters: this.filterSummary(),
-                totalRecords: data.length,
+                totalRecords: finalData.length,
               },
-              data,
+              data: finalData,
             };
 
             const jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
@@ -2358,7 +2375,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           try {
             const text = await blob.text();
             const lines = text.split("\n");
-            const headers = lines[0].split(",");
+            let headers = lines[0].split(",").map(h => h.trim());
             const data: any[] = [];
 
             for (let i = 1; i < lines.length; i++) {
@@ -2367,11 +2384,27 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               if (values.length === headers.length) {
                 const obj: any = {};
                 headers.forEach((header, idx) => {
-                  obj[header.trim()] = values[idx]?.trim() || "";
+                  obj[header] = values[idx]?.trim() || "";
                 });
                 data.push(obj);
               }
             }
+
+            // Filtrar respuesta_esperada
+            const { filteredHeaders, filteredData } = this.filterExpectedAnswerColumn(headers, data);
+            headers = filteredHeaders;
+            const finalData = filteredData.map(record => {
+              if (typeof record === 'object' && !Array.isArray(record)) {
+                const filtered: any = {};
+                filteredHeaders.forEach(header => {
+                  if (record.hasOwnProperty(header)) {
+                    filtered[header] = record[header];
+                  }
+                });
+                return filtered;
+              }
+              return record;
+            });
 
             let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
             xml += "<report>\n";
@@ -2382,11 +2415,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               xml += `      <filter>${this.escapeXml(filter)}</filter>\n`;
             });
             xml += "    </filters>\n";
-            xml += `    <totalRecords>${data.length}</totalRecords>\n`;
+            xml += `    <totalRecords>${finalData.length}</totalRecords>\n`;
             xml += "  </metadata>\n";
             xml += "  <data>\n";
 
-            data.forEach((record) => {
+            finalData.forEach((record) => {
               xml += "    <record>\n";
               Object.keys(record).forEach((key) => {
                 const value = record[key];
@@ -2439,6 +2472,35 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     }
     result.push(current);
     return result;
+  }
+
+  private filterExpectedAnswerColumn(headers: string[], data: any[]): { filteredHeaders: string[]; filteredData: any[] } {
+    const expectedAnswerIndex = headers.findIndex(h => {
+      const normalized = h.trim().toLowerCase();
+      return normalized === "respuesta_esperada" || 
+             normalized === "expected_answer" ||
+             normalized === "respuesta esperada";
+    });
+    
+    if (expectedAnswerIndex === -1) {
+      return { filteredHeaders: headers, filteredData: data };
+    }
+
+    const filteredHeaders = headers.filter((_, idx) => idx !== expectedAnswerIndex);
+    const filteredData = data.map(record => {
+      if (typeof record === 'object' && !Array.isArray(record)) {
+        const filtered: any = {};
+        filteredHeaders.forEach(header => {
+          if (record.hasOwnProperty(header)) {
+            filtered[header] = record[header];
+          }
+        });
+        return filtered;
+      }
+      return record;
+    });
+
+    return { filteredHeaders, filteredData };
   }
 
   private escapeXml(str: string): string {
@@ -2654,7 +2716,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
         const text = await csvBlob.text();
         const lines = text.split("\n");
-        const headers = lines[0].split(",");
+        let headers = lines[0].split(",").map(h => h.trim());
         const data: any[][] = [];
 
         for (let i = 1; i < lines.length; i++) {
@@ -2663,6 +2725,20 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           if (values.length === headers.length) {
             data.push(values.map((v) => v.trim()));
           }
+        }
+
+        // Filtrar respuesta_esperada
+        const expectedAnswerIndex = headers.findIndex(h => 
+          h.toLowerCase() === "respuesta_esperada" || 
+          h.toLowerCase() === "expected_answer" ||
+          h === "respuesta esperada"
+        );
+        
+        if (expectedAnswerIndex !== -1) {
+          headers = headers.filter((_, idx) => idx !== expectedAnswerIndex);
+          const filteredData = data.map(row => row.filter((_, idx) => idx !== expectedAnswerIndex));
+          data.length = 0;
+          data.push(...filteredData);
         }
 
         // Create workbook
@@ -2681,7 +2757,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
         // Sheet 2: Data
         const dataSheet = workbook.addWorksheet("Datos");
-        dataSheet.addRow(headers.map((h) => h.trim()));
+        dataSheet.addRow(headers);
         data.forEach((row) => dataSheet.addRow(row));
 
         // Charts data sheets with native Excel charts
@@ -3192,7 +3268,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
     const text = await csvBlob.text();
     const lines = text.split("\n");
-    const headers = lines[0].split(",");
+    let headers = lines[0].split(",").map(h => h.trim());
     const data: any[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -3201,19 +3277,35 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       if (values.length === headers.length) {
         const obj: any = {};
         headers.forEach((header, idx) => {
-          obj[header.trim()] = values[idx]?.trim() || "";
+          obj[header] = values[idx]?.trim() || "";
         });
         data.push(obj);
       }
     }
 
+    // Filtrar respuesta_esperada
+    const { filteredHeaders, filteredData } = this.filterExpectedAnswerColumn(headers, data);
+    headers = filteredHeaders;
+    const finalData = filteredData.map(record => {
+      if (typeof record === 'object' && !Array.isArray(record)) {
+        const filtered: any = {};
+        filteredHeaders.forEach(header => {
+          if (record.hasOwnProperty(header)) {
+            filtered[header] = record[header];
+          }
+        });
+        return filtered;
+      }
+      return record;
+    });
+
     const jsonData = {
       metadata: {
         generatedAt: new Date().toISOString(),
         filters: this.filterSummary(),
-        totalRecords: data.length,
+        totalRecords: finalData.length,
       },
-      data,
+      data: finalData,
     };
 
     const jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
@@ -3230,7 +3322,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
     const text = await csvBlob.text();
     const lines = text.split("\n");
-    const headers = lines[0].split(",");
+    let headers = lines[0].split(",").map(h => h.trim());
     const data: any[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -3239,11 +3331,27 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       if (values.length === headers.length) {
         const obj: any = {};
         headers.forEach((header, idx) => {
-          obj[header.trim()] = values[idx]?.trim() || "";
+          obj[header] = values[idx]?.trim() || "";
         });
         data.push(obj);
       }
     }
+
+    // Filtrar respuesta_esperada
+    const { filteredHeaders, filteredData } = this.filterExpectedAnswerColumn(headers, data);
+    headers = filteredHeaders;
+    const finalData = filteredData.map(record => {
+      if (typeof record === 'object' && !Array.isArray(record)) {
+        const filtered: any = {};
+        filteredHeaders.forEach(header => {
+          if (record.hasOwnProperty(header)) {
+            filtered[header] = record[header];
+          }
+        });
+        return filtered;
+      }
+      return record;
+    });
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += "<report>\n";
@@ -3254,11 +3362,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       xml += `      <filter>${this.escapeXml(filter)}</filter>\n`;
     });
     xml += "    </filters>\n";
-    xml += `    <totalRecords>${data.length}</totalRecords>\n`;
+    xml += `    <totalRecords>${finalData.length}</totalRecords>\n`;
     xml += "  </metadata>\n";
     xml += "  <data>\n";
 
-    data.forEach((record) => {
+    finalData.forEach((record) => {
       xml += "    <record>\n";
       Object.keys(record).forEach((key) => {
         const value = record[key];
@@ -3290,7 +3398,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const csvBlob = await firstValueFrom(this.analyticsSvc.exportResponsesCsv(filter));
     const text = await csvBlob.text();
     const lines = text.split("\n");
-    const headers = lines[0].split(",");
+    let headers = lines[0].split(",").map(h => h.trim());
     const data: any[][] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -3299,6 +3407,20 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       if (values.length === headers.length) {
         data.push(values.map((v) => v.trim()));
       }
+    }
+
+    // Filtrar respuesta_esperada
+    const expectedAnswerIndex = headers.findIndex(h => 
+      h.toLowerCase() === "respuesta_esperada" || 
+      h.toLowerCase() === "expected_answer" ||
+      h === "respuesta esperada"
+    );
+    
+    if (expectedAnswerIndex !== -1) {
+      headers = headers.filter((_, idx) => idx !== expectedAnswerIndex);
+      const filteredData = data.map(row => row.filter((_, idx) => idx !== expectedAnswerIndex));
+      data.length = 0;
+      data.push(...filteredData);
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -3314,7 +3436,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     summarySheet.addRow(["Total de registros:", data.length]);
 
     const dataSheet = workbook.addWorksheet("Datos");
-    dataSheet.addRow(headers.map((h) => h.trim()));
+    dataSheet.addRow(headers);
     data.forEach((row) => dataSheet.addRow(row));
 
     const analytics = this.analytics();
