@@ -78,6 +78,7 @@ const TS_COLORS = {
   gridLine: "rgba(148,163,184,0.3)",
 };
 const AREA_FILL = "rgba(59,130,246,0.15)";
+const PARTICIPATION_TARGET = 80; // Meta de participación por departamento (%)
 
 interface KpiCard {
   label: string;
@@ -118,6 +119,15 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
    */
   readonly isGlobalView = computed(() => {
     return this.isAdminSistema && this.selectedCompanyIdSignal() === 'GLOBAL';
+  });
+
+  /**
+   * Verifica si todos los departamentos alcanzaron el 100% de participación
+   */
+  readonly allDepartmentsAt100 = computed(() => {
+    const coverage = this.analytics()?.coverage_by_department ?? [];
+    if (!coverage.length) return false;
+    return coverage.filter((item) => item.total > 0).every((item) => item.coverage_percent >= 100);
   });
 
   private analyticsSignal = signal<DashboardAnalyticsResponse | null>(null);
@@ -766,6 +776,17 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.updateFilter();
   }
 
+  /**
+   * Maneja clicks en el boxplot para filtrar por pilar (reutiliza la misma lógica que onPillarBarClick)
+   */
+  onBoxplotClick(event: any): void {
+    const pillarId = event?.data?.pillarId as number | undefined;
+    if (pillarId == null) return;
+    const currentPillar = this.selectedPillarSignal();
+    this.selectedPillarSignal.set(currentPillar === pillarId ? "ALL" : pillarId);
+    this.updateFilter();
+  }
+
   onHeatmapClick(event: any): void {
     const pillarId = event?.data?.pillarId as number | undefined;
     const departmentId = event?.data?.departmentId as number | undefined;
@@ -1325,12 +1346,21 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     return this.departmentParticipationOption();
   }
 
+
   departmentParticipationOption(): EChartsOption {
     const coverage = [...(this.analytics()?.coverage_by_department ?? [])].filter((item) => item.total > 0);
     if (!coverage.length) return this.emptyChartOption("Sin datos de participación");
     
-    // Ordenar por porcentaje de participación descendente
-    const sortedCoverage = [...coverage].sort((a, b) => b.coverage_percent - a.coverage_percent);
+    // Verificar si todos están al 100%
+    const allAt100 = coverage.every((item) => item.coverage_percent >= 100);
+    
+    // Ordenar: si todos están al 100%, ordenar alfabéticamente; si no, por porcentaje descendente
+    const sortedCoverage = [...coverage].sort((a, b) => {
+      if (allAt100) {
+        return a.department_name.localeCompare(b.department_name);
+      }
+      return b.coverage_percent - a.coverage_percent;
+    });
     const categories = sortedCoverage.map((item) => item.department_name);
 
     return {
@@ -1354,7 +1384,10 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         min: 0,
         max: 100,
         axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
-        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        splitLine: { 
+          lineStyle: { color: TS_COLORS.gridLine },
+          show: true,
+        },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       yAxis: {
@@ -1371,16 +1404,31 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
             color: (params: any) => {
               const entry = sortedCoverage[params.dataIndex];
               if (!entry || entry.respondents === 0) return "#E2E8F0"; // Gris claro para 0 respuestas
-              if (entry.coverage_percent >= 80) return "#22C55E"; // Verde para alta participación
-              if (entry.coverage_percent >= 50) return "#EAB308"; // Amarillo para media participación
-              return "#EF4444"; // Rojo para baja participación
+              // Si todos están al 100%, mantener verde sin resaltar
+              if (allAt100) return "#22C55E";
+              // Resaltar departamentos bajo la meta (80%) con color más intenso
+              if (entry.coverage_percent < PARTICIPATION_TARGET) return "#DC2626"; // Rojo más intenso para bajo la meta
+              if (entry.coverage_percent >= PARTICIPATION_TARGET) return "#22C55E"; // Verde para meta cumplida
+              return "#EAB308"; // Amarillo intermedio
             },
             borderRadius: [0, 8, 8, 0],
           },
-          data: sortedCoverage.map((item) => ({
+          emphasis: {
+            itemStyle: {
+              // Resaltar aún más en hover los departamentos bajo la meta
+              borderWidth: 2,
+              borderColor: "#DC2626",
+            },
+          },
+          data: sortedCoverage.map((item, index) => ({
             value: this.round(item.coverage_percent),
             respondents: item.respondents,
             total: item.total,
+            itemStyle: !allAt100 && item.coverage_percent < PARTICIPATION_TARGET ? {
+              // Resaltar visualmente con borde en los datos
+              borderWidth: 2,
+              borderColor: "#DC2626",
+            } : undefined,
           })),
           label: {
             show: true,
@@ -1394,6 +1442,30 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
             fontWeight: 600,
             fontSize: 12,
           },
+          // Línea de referencia vertical para la meta de participación (80%)
+          markLine: !allAt100 ? {
+            silent: true,
+            symbol: "none",
+            lineStyle: {
+              color: "#EF4444",
+              type: "dashed",
+              width: 2,
+            },
+            label: {
+              show: true,
+              formatter: `Meta: ${PARTICIPATION_TARGET}%`,
+              position: "end",
+              color: "#EF4444",
+              fontWeight: 600,
+              fontSize: 12,
+            },
+            data: [
+              {
+                xAxis: PARTICIPATION_TARGET,
+                name: `Meta ${PARTICIPATION_TARGET}%`,
+              },
+            ],
+          } : undefined,
         },
       ],
     };
@@ -1439,8 +1511,9 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       return {
         name: p.pillar_name,
         value: [min, q1, median, q3, max],
+        pillarId: p.pillar_id,
       };
-    }).filter((item): item is { name: string; value: number[] } => item !== null);
+    }).filter((item): item is { name: string; value: number[]; pillarId: number } => item !== null);
 
     if (!boxplotData.length) return this.emptyChartOption("Sin datos suficientes para boxplot");
 
@@ -1452,7 +1525,12 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         trigger: "item",
         formatter: (params: any) => {
           const data = params.value as number[];
-          return `${params.name}<br/>Mín: ${this.formatNumber(data[0])}%<br/>Q1: ${this.formatNumber(data[1])}%<br/>Mediana: ${this.formatNumber(data[2])}%<br/>Q3: ${this.formatNumber(data[3])}%<br/>Máx: ${this.formatNumber(data[4])}%`;
+          return `<strong>${params.name}</strong><br/>` +
+            `Mínimo: ${this.formatNumber(data[0])}%<br/>` +
+            `Q1: ${this.formatNumber(data[1])}%<br/>` +
+            `Mediana: ${this.formatNumber(data[2])}%<br/>` +
+            `Q3: ${this.formatNumber(data[3])}%<br/>` +
+            `Máximo: ${this.formatNumber(data[4])}%`;
         },
       },
       grid: { left: 120, right: 40, bottom: 60, top: 40, containLabel: false },
@@ -1473,16 +1551,22 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       series: [
         {
           type: "boxplot",
-          data: boxplotData.map((d) => d.value),
+          data: boxplotData.map((d) => ({
+            value: d.value,
+            pillarId: d.pillarId,
+          })),
           itemStyle: {
             color: TS_COLORS.primary,
             borderColor: TS_COLORS.text,
           },
+          // Activar visualización de outliers
+          boxWidth: ['20%', '40%'],
           emphasis: {
             itemStyle: {
               borderColor: TS_COLORS.primary,
               borderWidth: 2,
             },
+            focus: 'series',
           },
         },
       ],
@@ -1490,66 +1574,78 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   /**
-   * Treemap organizacional: Mapa jerárquico Empresa/Departamento/Colaboradores
+   * Treemap organizacional: Empresa → Departamento → Colaborador.
+   * - value[0] = tamaño (colaboradores)
+   * - value[1] = desempeño (para visualMap)
    */
   organizationalTreemapOption(): EChartsOption {
     const analytics = this.analytics();
     if (!analytics) return this.emptyChartOption("Sin datos");
 
-    const heatmap = analytics.heatmap;
+    const coverage = (analytics.coverage_by_department ?? []).filter((dept) => (dept.total ?? 0) > 0);
+    const heatmapRows = analytics.heatmap ?? [];
     const employees = analytics.employees ?? [];
     const isGlobal = this.isGlobalView();
 
-    // Construir estructura jerárquica
-    interface TreemapNode {
+    type TreemapNode = {
       name: string;
-      value: number;
+      value: [number, number]; // [tamaño, desempeño]
       children?: TreemapNode[];
-    }
-
-    const treeData: TreemapNode = {
-      name: isGlobal ? "Todas las empresas" : "Organización",
-      value: 0,
-      children: [],
     };
 
-    // Agrupar por departamento
-    const deptMap = new Map<number | null, { name: string; employees: EmployeePoint[]; avg: number }>();
-    
-    heatmap.forEach((row) => {
-      if (!deptMap.has(row.department_id)) {
-        deptMap.set(row.department_id, {
-          name: row.department_name,
-          employees: [],
-          avg: row.average,
-        });
-      }
-      const dept = deptMap.get(row.department_id)!;
-      // Encontrar empleados de este departamento
-      const deptEmployees = employees.filter((emp) => {
-        // Esta es una aproximación; en producción necesitarías mapear empleado->departamento
-        return true; // Por ahora incluimos todos
-      });
-      dept.employees = deptEmployees.slice(0, 10); // Limitar a 10 para no sobrecargar
-    });
-
-    // Construir nodos de departamento con empleados
-    deptMap.forEach((dept, deptId) => {
-      const deptNode: TreemapNode = {
-        name: dept.name,
-        value: dept.avg,
-        children: dept.employees.map((emp) => ({
-          name: emp.name,
-          value: emp.percent,
-        })),
-      };
-      treeData.children!.push(deptNode);
-      treeData.value += dept.avg;
-    });
-
-    if (!treeData.children?.length) {
-      return this.emptyChartOption("Sin datos organizacionales");
+    if (!coverage.length || !heatmapRows.length) {
+      return this.emptyChartOption("No hay información disponible para el mapa organizacional con los filtros actuales.");
     }
+
+    const heatmapByDept = new Map<number | null, number>();
+    heatmapRows.forEach((row) => {
+      heatmapByDept.set(row.department_id, row.average ?? 0);
+    });
+
+    const performanceSamples: number[] = [];
+    const deptNodes: TreemapNode[] = [];
+
+    coverage.forEach((dept, index) => {
+      const avgPerformance = heatmapByDept.get(dept.department_id) ?? 0;
+      performanceSamples.push(avgPerformance);
+
+      // Aproximación simple: asociar hasta 5 colaboradores al departamento
+      const approxEmployees = employees.slice(index * 5, index * 5 + 5);
+      approxEmployees.forEach((emp) => performanceSamples.push(emp.percent));
+
+      const children: TreemapNode[] = approxEmployees.map((emp) => ({
+        name: emp.name.length > 20 ? `${emp.name.substring(0, 20)}…` : emp.name,
+        value: [1, Math.max(0, Math.min(100, emp.percent ?? avgPerformance))],
+      }));
+
+      deptNodes.push({
+        name: dept.department_name,
+        value: [dept.total || children.length || 1, avgPerformance],
+        children,
+      });
+    });
+
+    const hasDepartments = deptNodes.some((node) => (node.value?.[0] ?? 0) > 0);
+    if (!hasDepartments) {
+      return this.emptyChartOption("No hay información disponible para el mapa organizacional con los filtros actuales.");
+    }
+
+    const totalEmployees = deptNodes.reduce((sum, node) => sum + (node.value?.[0] ?? 0), 0);
+    const totalPerformance =
+      performanceSamples.length > 0
+        ? performanceSamples.reduce((sum, val) => sum + (val ?? 0), 0) / performanceSamples.length
+        : 0;
+
+    const rootNode: TreemapNode = {
+      name: isGlobal ? "Todas las empresas" : "Organización",
+      value: [Math.max(totalEmployees, 1), totalPerformance],
+      children: deptNodes,
+    };
+
+    const minPerformance = Math.min(...performanceSamples, 0);
+    const maxPerformance = Math.max(...performanceSamples, 100);
+
+    console.log("Treemap data", rootNode);
 
     return {
       backgroundColor: TS_COLORS.background,
@@ -1558,26 +1654,63 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       tooltip: {
         trigger: "item",
         formatter: (params: any) => {
-          return `${params.name}<br/>Promedio: ${this.formatNumber(params.value)}%`;
+          const [collaborators, performance] = params.value as [number, number];
+          const depth = params.treePathInfo?.length ?? 0;
+
+          if (depth > 2) {
+            return `<strong>${params.name}</strong><br/>Desempeño: ${this.formatNumber(performance)}%`;
+          }
+
+          if (depth === 2) {
+            return `<strong>${params.name}</strong><br/>Colaboradores: ${collaborators}<br/>Desempeño promedio: ${this.formatNumber(
+              performance
+            )}%`;
+          }
+
+          return `<strong>${params.name}</strong><br/>Colaboradores: ${collaborators}<br/>Desempeño global: ${this.formatNumber(
+            performance
+          )}%`;
         },
+      },
+      visualMap: {
+        type: "continuous",
+        min: minPerformance,
+        max: maxPerformance,
+        left: "right",
+        top: "center",
+        orient: "vertical",
+        calculable: true,
+        inRange: {
+          color: ["#EF4444", "#F59E0B", "#22C55E"],
+        },
+        text: ["Alto desempeño", "Bajo desempeño"],
+        textStyle: { color: TS_COLORS.text },
       },
       series: [
         {
           type: "treemap",
-          data: [treeData],
+          data: [rootNode],
           roam: false,
-          nodeClick: false,
-          breadcrumb: { show: true },
+          nodeClick: "zoomToNode",
+          breadcrumb: { show: true, height: 22 },
+          leafDepth: 1,
           label: {
             show: true,
-            formatter: "{b}\n{c}%",
+            formatter: (params: any) => {
+              const performance = (params.value as [number, number])?.[1] ?? 0;
+              const text = params.name.length > 18 ? `${params.name.substring(0, 18)}…` : params.name;
+              return `${text}\n${this.formatNumber(performance)}%`;
+            },
             color: TS_COLORS.text,
             fontWeight: 600,
+            fontSize: 11,
           },
           upperLabel: {
             show: true,
-            height: 30,
+            height: 25,
             color: TS_COLORS.text,
+            fontSize: 12,
+            fontWeight: 600,
           },
           itemStyle: {
             borderColor: "#fff",
@@ -1590,7 +1723,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               borderWidth: 3,
             },
           },
-          visualDimension: 0,
+          visualDimension: 1,
           levels: [
             {
               itemStyle: {
@@ -1600,11 +1733,17 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               },
             },
             {
-              colorSaturation: [0.35, 0.5],
+              itemStyle: {
+                borderWidth: 2,
+                gapWidth: 2,
+                borderColor: "#fff",
+              },
+            },
+            {
               itemStyle: {
                 borderWidth: 1,
-                gapWidth: 2,
-                borderColorSaturation: 0.6,
+                gapWidth: 1,
+                borderColor: "#fff",
               },
             },
           ],
@@ -1631,10 +1770,15 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
     // Para la importancia, usamos el porcentaje de nivel >= 4 como proxy de importancia
     // En producción, deberías obtener el peso real del pilar desde la BD
-    const scatterData = pillars.map((p) => ({
-      name: p.pillar_name,
-      value: [p.percent, p.pct_ge4], // [desempeño, importancia aproximada por % >= 4]
-    }));
+    // Calcular número de respuestas por pilar (suma de todos los niveles) para tamaño de burbuja
+    const scatterData = pillars.map((p) => {
+      const totalResponses = p.levels.reduce((sum, count) => sum + (count || 0), 0);
+      return {
+        name: p.pillar_name,
+        value: [p.percent, p.pct_ge4], // [desempeño, importancia aproximada por % >= 4]
+        responseCount: totalResponses, // Número de respuestas para tamaño de burbuja
+      };
+    });
 
     return {
       backgroundColor: TS_COLORS.background,
@@ -1644,7 +1788,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         trigger: "item",
         formatter: (params: any) => {
           const data = params.value as number[];
-          return `${params.name}<br/>Desempeño: ${this.formatNumber(data[0])}%<br/>Importancia: ${this.formatNumber(data[1])}%`;
+          const responseCount = (params.data as any)?.responseCount || 0;
+          return `<strong>${params.name}</strong><br/>` +
+            `Desempeño: ${this.formatNumber(data[0])}%<br/>` +
+            `Importancia/Impacto: ${this.formatNumber(data[1])}%<br/>` +
+            `Número de respuestas: ${responseCount}`;
         },
       },
       grid: { left: 80, right: 40, bottom: 60, top: 60, containLabel: true },
@@ -1668,47 +1816,50 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
-      graphic: [
-        {
-          type: "line",
-          left: `${avgPerformance}%`,
-          top: "0%",
-          shape: {
-            x1: 0,
-            y1: 0,
-            x2: 0,
-            y2: 100,
-          },
-          style: {
-            stroke: "#EF4444",
-            lineWidth: 1,
-            lineDash: [5, 5],
-          },
-          z: 100,
-        },
-        {
-          type: "line",
-          left: "0%",
-          top: `${100 - avgImportance}%`,
-          shape: {
-            x1: 0,
-            y1: 0,
-            x2: 100,
-            y2: 0,
-          },
-          style: {
-            stroke: "#EF4444",
-            lineWidth: 1,
-            lineDash: [5, 5],
-          },
-          z: 100,
-        },
-      ],
       series: [
         {
           type: "scatter",
-          data: scatterData,
-          symbolSize: (data: any) => Math.sqrt(data[1]) * 8,
+          data: scatterData.map((d) => ({
+            name: d.name,
+            value: d.value,
+            responseCount: d.responseCount,
+          })),
+          // Tamaño de burbuja según número de respuestas (suma de niveles Likert = total respuestas por pilar)
+          symbolSize: (data: any, params: any) => {
+            const responseCount = params?.data?.responseCount || data?.responseCount || 1;
+            // Escalar el tamaño basado en número de respuestas (mín 25, máx 100)
+            const minSize = 25;
+            const maxSize = 100;
+            const maxResponses = Math.max(...scatterData.map(d => d.responseCount), 1);
+            if (maxResponses === 0) return minSize;
+            const scale = (responseCount / maxResponses) * (maxSize - minSize) + minSize;
+            return Math.max(minSize, Math.min(maxSize, scale));
+          },
+          // Líneas de referencia: vertical (promedio desempeño) y horizontal (promedio importancia)
+          markLine: {
+            silent: true,
+            symbol: "none",
+            lineStyle: {
+              color: "#EF4444",
+              type: "dashed",
+              width: 1.5,
+            },
+            label: {
+              show: false, // Opcional: mostrar etiquetas de cuadrantes
+            },
+            data: [
+              // Línea vertical en promedio de desempeño
+              {
+                xAxis: avgPerformance,
+                name: `Promedio desempeño: ${this.formatNumber(avgPerformance)}%`,
+              },
+              // Línea horizontal en promedio de importancia
+              {
+                yAxis: avgImportance,
+                name: `Promedio importancia: ${this.formatNumber(avgImportance)}%`,
+              },
+            ],
+          },
           itemStyle: {
             color: (params: any) => {
               const data = params.value as number[];
@@ -1806,20 +1957,54 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           const pillarA = pillarNames[data[1]];
           const pillarB = pillarNames[data[0]];
           const corr = data[2];
-          return `Correlación entre ${pillarA} y ${pillarB}: ${this.formatNumber(corr)}`;
+          
+          // Interpretación de la correlación
+          let interpretation = "";
+          if (Math.abs(corr) >= 0.7) {
+            interpretation = "Alta correlación";
+          } else if (Math.abs(corr) >= 0.4) {
+            interpretation = "Correlación media";
+          } else {
+            interpretation = "Baja correlación";
+          }
+          
+          // Si es la diagonal (mismo pilar), no mostrar interpretación
+          if (Math.abs(corr - 1.0) < 0.001 && pillarA === pillarB) {
+            return `Correlación entre ${pillarA} y ${pillarB}: —<br/>(Mismo pilar)`;
+          }
+          
+          const corrText = this.formatNumber(corr);
+          const interpretationText = corr > 0 
+            ? "Cuando mejora uno, suele mejorar el otro." 
+            : corr < 0 
+              ? "Cuando mejora uno, suele empeorar el otro." 
+              : "No hay relación clara.";
+          
+          return `Correlación entre ${pillarA} y ${pillarB}: ${corrText}<br/>` +
+            `Interpretación: ${interpretation}. ${interpretationText}`;
         },
       },
       grid: { left: 120, right: 40, bottom: 120, top: 40, containLabel: false },
       xAxis: {
         type: "category",
         data: pillarNames,
-        axisLabel: { rotate: 45, color: TS_COLORS.text, fontWeight: 500 },
+        axisLabel: { 
+          rotate: 45, 
+          color: TS_COLORS.text, 
+          fontWeight: 500,
+          interval: 0,
+          formatter: (value: string) => value.length > 15 ? value.substring(0, 15) + '...' : value,
+        },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       yAxis: {
         type: "category",
         data: pillarNames,
-        axisLabel: { color: TS_COLORS.text, fontWeight: 500 },
+        axisLabel: { 
+          color: TS_COLORS.text, 
+          fontWeight: 500,
+          formatter: (value: string) => value.length > 20 ? value.substring(0, 20) + '...' : value,
+        },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       visualMap: {
@@ -1829,10 +2014,11 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         orient: "horizontal",
         left: "center",
         bottom: 10,
+        // Escala divergente: rojo (baja/negativa) → blanco/gris (0) → verde (alta positiva)
         inRange: {
-          color: ["#EF4444", "#E2E8F0", "#22C55E"], // Rojo → Gris → Verde
+          color: ["#EF4444", "#FCA5A5", "#E2E8F0", "#86EFAC", "#22C55E"], // Rojo → Rojo claro → Gris → Verde claro → Verde
         },
-        text: ["Alta correlación", "Baja correlación"],
+        text: ["+1", "0", "-1"],
         textStyle: { color: TS_COLORS.text },
       },
       series: [
@@ -1842,11 +2028,20 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           label: {
             show: true,
             formatter: (params: any) => {
-              return this.formatNumber(params.value[2]);
+              const value = params.value[2];
+              const row = params.value[1];
+              const col = params.value[0];
+              // Diagonal principal (pilar vs mismo pilar): mostrar "—" en lugar de "1.0"
+              if (row === col && Math.abs(value - 1.0) < 0.001) {
+                return "—";
+              }
+              return this.formatNumber(value);
             },
             color: TS_COLORS.text,
             fontWeight: 600,
           },
+          // El color se maneja automáticamente por visualMap
+          // La diagonal se resalta solo en el label (mostrando "—")
           emphasis: {
             itemStyle: {
               shadowBlur: 10,
