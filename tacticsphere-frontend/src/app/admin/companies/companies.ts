@@ -681,7 +681,7 @@ export class CompaniesComponent implements OnInit {
   }
 
   cerrarModalEdicion(): void {
-    if (this.editModal.busy) return;
+    // Permitir cerrar siempre (incluso si está guardando, para poder cerrar después de un guardado exitoso)
     this.editModal = {
       open: false,
       empresa: null,
@@ -761,7 +761,9 @@ export class CompaniesComponent implements OnInit {
           this.empresas().map((e) => (e.id === updated.id ? updated : e))
         );
         
-        // Cerrar modal y resetear estado
+        // Resetear el estado de guardado antes de cerrar el modal
+        this.editModal.busy = false;
+        // Cerrar modal
         this.cerrarModalEdicion();
         this.showMessage('Empresa actualizada correctamente', 'success');
       },

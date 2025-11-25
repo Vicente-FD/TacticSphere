@@ -351,10 +351,12 @@ export class PillarsComponent implements OnInit {
   }
 
   cerrarModalEdicion(): void {
-    if (this.saving) return;
+    // Permitir cerrar incluso si está guardando (para poder cerrar después de un guardado exitoso)
     this.editModalOpen = false;
     this.editingId = null;
     this.editBuffer = { nombre: '', descripcion: '', peso: 1 };
+    // Resetear el estado de guardado si aún está activo
+    this.saving = false;
   }
 
   guardarEdicion(): void {
@@ -383,6 +385,8 @@ export class PillarsComponent implements OnInit {
         this.pilares.set(
           this.pilares().map((p) => (p.id === updated.id ? updated : p))
         );
+        // Resetear el estado de guardado antes de cerrar el modal
+        this.saving = false;
         this.cerrarModalEdicion();
       },
       error: (err) => {

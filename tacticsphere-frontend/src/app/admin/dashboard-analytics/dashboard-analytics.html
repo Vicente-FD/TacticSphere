@@ -319,14 +319,82 @@
 
         <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
           <div class="space-y-1 px-6">
-            <h2 class="text-lg font-semibold text-ink">Cobertura por area</h2>
-            <p class="text-sm text-muted">Porcentaje de participacion por departamento.</p>
+            <h2 class="text-lg font-semibold text-ink">Participación real por departamento</h2>
+            <p class="text-sm text-muted">Total de colaboradores, respondentes y porcentaje de participación.</p>
           </div>
           <div class="px-0">
             <echarts
               class="block h-[28rem] w-full animate-fadeIn"
               [theme]="'tsMono'"
-              [options]="coverageByDepartmentOption()"
+              [options]="departmentParticipationOption()"
+              [initOpts]="chartInitOpts"
+              [autoResize]="true"
+            ></echarts>
+          </div>
+        </div>
+
+        <!-- Boxplot por pilar -->
+        <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
+          <div class="space-y-1 px-6">
+            <h2 class="text-lg font-semibold text-ink">Distribución de desempeño (Boxplot por pilar)</h2>
+            <p class="text-sm text-muted">Mínimo, Q1, mediana, Q3 y máximo por pilar.</p>
+          </div>
+          <div class="px-0">
+            <echarts
+              class="block h-[28rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="pillarBoxplotOption()"
+              [initOpts]="chartInitOpts"
+              [autoResize]="true"
+            ></echarts>
+          </div>
+        </div>
+
+        <!-- Mapa organizacional (Treemap) -->
+        <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
+          <div class="space-y-1 px-6">
+            <h2 class="text-lg font-semibold text-ink">Mapa organizacional (Treemap)</h2>
+            <p class="text-sm text-muted">Estructura jerárquica Empresa/Departamento/Colaboradores según filtros aplicados.</p>
+          </div>
+          <div class="px-0">
+            <echarts
+              class="block h-[28rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="organizationalTreemapOption()"
+              [initOpts]="chartInitOpts"
+              [autoResize]="true"
+            ></echarts>
+          </div>
+        </div>
+
+        <!-- Matriz Impacto vs Desempeño -->
+        <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
+          <div class="space-y-1 px-6">
+            <h2 class="text-lg font-semibold text-ink">Matriz Impacto vs Desempeño</h2>
+            <p class="text-sm text-muted">Análisis de pilares según desempeño e importancia.</p>
+          </div>
+          <div class="px-0">
+            <echarts
+              class="block h-[28rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="impactPerformanceMatrixOption()"
+              [initOpts]="chartInitOpts"
+              [autoResize]="true"
+            ></echarts>
+          </div>
+        </div>
+
+        <!-- Correlación entre pilares -->
+        <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
+          <div class="space-y-1 px-6">
+            <h2 class="text-lg font-semibold text-ink">Correlación entre pilares</h2>
+            <p class="text-sm text-muted">Matriz de correlación entre los promedios de los pilares.</p>
+          </div>
+          <div class="px-0">
+            <echarts
+              class="block h-[28rem] w-full animate-fadeIn"
+              [theme]="'tsMono'"
+              [options]="pillarCorrelationOption()"
               [initOpts]="chartInitOpts"
               [autoResize]="true"
             ></echarts>

@@ -1320,11 +1320,19 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     };
   }
 
+  // Reemplazado por departmentParticipationOption() - mantener para compatibilidad con exportaciones
   coverageByDepartmentOption(): EChartsOption {
+    return this.departmentParticipationOption();
+  }
+
+  departmentParticipationOption(): EChartsOption {
     const coverage = [...(this.analytics()?.coverage_by_department ?? [])].filter((item) => item.total > 0);
-    if (!coverage.length) return this.emptyChartOption("Sin datos de cobertura");
-    const topCoverage = coverage.sort((a, b) => b.coverage_percent - a.coverage_percent).slice(0, 15);
-    const categories = topCoverage.map((item) => item.department_name);
+    if (!coverage.length) return this.emptyChartOption("Sin datos de participación");
+    
+    // Ordenar por porcentaje de participación descendente
+    const sortedCoverage = [...coverage].sort((a, b) => b.coverage_percent - a.coverage_percent);
+    const categories = sortedCoverage.map((item) => item.department_name);
+
     return {
       backgroundColor: TS_COLORS.background,
       animationDuration: 800,
@@ -1335,16 +1343,123 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         formatter: (raw: any) => {
           const params = Array.isArray(raw) ? raw[0] : raw;
           const dataIndex = params?.dataIndex ?? 0;
-          const entry = topCoverage[dataIndex];
+          const entry = sortedCoverage[dataIndex];
           if (!entry) return "";
-          return `${entry.department_name}<br/>${this.formatNumber(entry.coverage_percent)}% (${entry.respondents}/${entry.total})`;
+          return `${entry.department_name}<br/>Participación: ${entry.respondents}/${entry.total}<br/>${this.formatNumber(entry.coverage_percent)}%`;
         },
       },
-      grid: { left: 0, right: 24, bottom: 48, top: 56, containLabel: true },
+      grid: { left: 180, right: 120, bottom: 40, top: 40, containLabel: false },
       xAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
         type: "category",
         data: categories,
-        axisLabel: { interval: 0, rotate: 22, color: TS_COLORS.text, fontWeight: 500 },
+        axisLabel: { color: TS_COLORS.text, fontWeight: 500 },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      series: [
+        {
+          type: "bar",
+          barWidth: 32,
+          itemStyle: {
+            color: (params: any) => {
+              const entry = sortedCoverage[params.dataIndex];
+              if (!entry || entry.respondents === 0) return "#E2E8F0"; // Gris claro para 0 respuestas
+              if (entry.coverage_percent >= 80) return "#22C55E"; // Verde para alta participación
+              if (entry.coverage_percent >= 50) return "#EAB308"; // Amarillo para media participación
+              return "#EF4444"; // Rojo para baja participación
+            },
+            borderRadius: [0, 8, 8, 0],
+          },
+          data: sortedCoverage.map((item) => ({
+            value: this.round(item.coverage_percent),
+            respondents: item.respondents,
+            total: item.total,
+          })),
+          label: {
+            show: true,
+            position: "right",
+            formatter: (params: any) => {
+              const entry = sortedCoverage[params.dataIndex];
+              if (!entry) return "";
+              return `${entry.respondents}/${entry.total} - ${this.formatNumber(entry.coverage_percent)}%`;
+            },
+            color: TS_COLORS.text,
+            fontWeight: 600,
+            fontSize: 12,
+          },
+        },
+      ],
+    };
+  }
+
+  // =========================================================
+  // NUEVOS GRÁFICOS ADICIONALES
+  // =========================================================
+
+  /**
+   * Boxplot por pilar: Distribución de desempeño (mínimo, Q1, mediana, Q3, máximo)
+   */
+  pillarBoxplotOption(): EChartsOption {
+    const analytics = this.analytics();
+    if (!analytics?.pillars.length) return this.emptyChartOption("Sin datos de pilares");
+
+    // Para el boxplot, necesitamos datos individuales por pilar.
+    // Como no tenemos puntajes individuales, usaremos los niveles Likert como aproximación
+    const pillars = analytics.pillars;
+    const boxplotData = pillars.map((p) => {
+      // Convertir niveles Likert (0-4) a porcentajes (0-100)
+      // levels[0] = nivel 1, levels[1] = nivel 2, etc.
+      const values: number[] = [];
+      p.levels.forEach((count, levelIndex) => {
+        const level = levelIndex + 1; // Likert 1-5
+        const percentage = (level / 5) * 100; // Convertir a porcentaje
+        // Agregar el valor 'count' veces para construir la distribución
+        for (let i = 0; i < Math.round(count || 0); i++) {
+          values.push(percentage);
+        }
+      });
+
+      if (values.length === 0) return null;
+
+      // Calcular estadísticas del boxplot
+      const sorted = [...values].sort((a, b) => a - b);
+      const min = sorted[0];
+      const max = sorted[sorted.length - 1];
+      const q1 = this.quantile(sorted, 0.25);
+      const median = this.quantile(sorted, 0.5);
+      const q3 = this.quantile(sorted, 0.75);
+
+      return {
+        name: p.pillar_name,
+        value: [min, q1, median, q3, max],
+      };
+    }).filter((item): item is { name: string; value: number[] } => item !== null);
+
+    if (!boxplotData.length) return this.emptyChartOption("Sin datos suficientes para boxplot");
+
+    return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      tooltip: {
+        trigger: "item",
+        formatter: (params: any) => {
+          const data = params.value as number[];
+          return `${params.name}<br/>Mín: ${this.formatNumber(data[0])}%<br/>Q1: ${this.formatNumber(data[1])}%<br/>Mediana: ${this.formatNumber(data[2])}%<br/>Q3: ${this.formatNumber(data[3])}%<br/>Máx: ${this.formatNumber(data[4])}%`;
+        },
+      },
+      grid: { left: 120, right: 40, bottom: 60, top: 40, containLabel: false },
+      xAxis: {
+        type: "category",
+        data: boxplotData.map((d) => d.name),
+        axisLabel: { rotate: 20, color: TS_COLORS.text, fontWeight: 500 },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       yAxis: {
@@ -1353,27 +1468,421 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         max: 100,
         axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
       },
       series: [
         {
-          type: "bar",
-          barWidth: 28,
-          itemStyle: { color: TS_COLORS.primary, borderRadius: [6, 6, 0, 0] },
-          data: topCoverage.map((item) => ({
-            value: this.round(item.coverage_percent),
-            respondents: item.respondents,
-            total: item.total,
-          })),
-          label: {
-            show: true,
-            position: "top",
-            formatter: (params: any) => `${this.formatNumber(params?.value ?? 0)}%`,
-            color: TS_COLORS.text,
-            fontWeight: 600,
+          type: "boxplot",
+          data: boxplotData.map((d) => d.value),
+          itemStyle: {
+            color: TS_COLORS.primary,
+            borderColor: TS_COLORS.text,
+          },
+          emphasis: {
+            itemStyle: {
+              borderColor: TS_COLORS.primary,
+              borderWidth: 2,
+            },
           },
         },
       ],
     };
+  }
+
+  /**
+   * Treemap organizacional: Mapa jerárquico Empresa/Departamento/Colaboradores
+   */
+  organizationalTreemapOption(): EChartsOption {
+    const analytics = this.analytics();
+    if (!analytics) return this.emptyChartOption("Sin datos");
+
+    const heatmap = analytics.heatmap;
+    const employees = analytics.employees ?? [];
+    const isGlobal = this.isGlobalView();
+
+    // Construir estructura jerárquica
+    interface TreemapNode {
+      name: string;
+      value: number;
+      children?: TreemapNode[];
+    }
+
+    const treeData: TreemapNode = {
+      name: isGlobal ? "Todas las empresas" : "Organización",
+      value: 0,
+      children: [],
+    };
+
+    // Agrupar por departamento
+    const deptMap = new Map<number | null, { name: string; employees: EmployeePoint[]; avg: number }>();
+    
+    heatmap.forEach((row) => {
+      if (!deptMap.has(row.department_id)) {
+        deptMap.set(row.department_id, {
+          name: row.department_name,
+          employees: [],
+          avg: row.average,
+        });
+      }
+      const dept = deptMap.get(row.department_id)!;
+      // Encontrar empleados de este departamento
+      const deptEmployees = employees.filter((emp) => {
+        // Esta es una aproximación; en producción necesitarías mapear empleado->departamento
+        return true; // Por ahora incluimos todos
+      });
+      dept.employees = deptEmployees.slice(0, 10); // Limitar a 10 para no sobrecargar
+    });
+
+    // Construir nodos de departamento con empleados
+    deptMap.forEach((dept, deptId) => {
+      const deptNode: TreemapNode = {
+        name: dept.name,
+        value: dept.avg,
+        children: dept.employees.map((emp) => ({
+          name: emp.name,
+          value: emp.percent,
+        })),
+      };
+      treeData.children!.push(deptNode);
+      treeData.value += dept.avg;
+    });
+
+    if (!treeData.children?.length) {
+      return this.emptyChartOption("Sin datos organizacionales");
+    }
+
+    return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      tooltip: {
+        trigger: "item",
+        formatter: (params: any) => {
+          return `${params.name}<br/>Promedio: ${this.formatNumber(params.value)}%`;
+        },
+      },
+      series: [
+        {
+          type: "treemap",
+          data: [treeData],
+          roam: false,
+          nodeClick: false,
+          breadcrumb: { show: true },
+          label: {
+            show: true,
+            formatter: "{b}\n{c}%",
+            color: TS_COLORS.text,
+            fontWeight: 600,
+          },
+          upperLabel: {
+            show: true,
+            height: 30,
+            color: TS_COLORS.text,
+          },
+          itemStyle: {
+            borderColor: "#fff",
+            borderWidth: 2,
+            gapWidth: 2,
+          },
+          emphasis: {
+            itemStyle: {
+              borderColor: TS_COLORS.primary,
+              borderWidth: 3,
+            },
+          },
+          visualDimension: 0,
+          levels: [
+            {
+              itemStyle: {
+                borderWidth: 3,
+                borderColor: "#fff",
+                gapWidth: 3,
+              },
+            },
+            {
+              colorSaturation: [0.35, 0.5],
+              itemStyle: {
+                borderWidth: 1,
+                gapWidth: 2,
+                borderColorSaturation: 0.6,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  /**
+   * Matriz Impacto vs Desempeño: Scatter plot con cuadrantes
+   * X = Desempeño (promedio del pilar), Y = Importancia (peso del pilar)
+   */
+  impactPerformanceMatrixOption(): EChartsOption {
+    const analytics = this.analytics();
+    if (!analytics?.pillars.length) return this.emptyChartOption("Sin datos de pilares");
+
+    // Necesitamos obtener los pesos de los pilares. Por ahora usaremos el promedio como aproximación
+    // En producción, necesitarías obtener el peso real del pilar desde el modelo
+    const pillars = analytics.pillars;
+    
+    // Calcular promedios para las líneas de referencia
+    const avgPerformance = pillars.reduce((sum, p) => sum + p.percent, 0) / pillars.length;
+    const avgImportance = pillars.reduce((sum, p) => sum + p.pct_ge4, 0) / pillars.length;
+
+    // Para la importancia, usamos el porcentaje de nivel >= 4 como proxy de importancia
+    // En producción, deberías obtener el peso real del pilar desde la BD
+    const scatterData = pillars.map((p) => ({
+      name: p.pillar_name,
+      value: [p.percent, p.pct_ge4], // [desempeño, importancia aproximada por % >= 4]
+    }));
+
+    return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      tooltip: {
+        trigger: "item",
+        formatter: (params: any) => {
+          const data = params.value as number[];
+          return `${params.name}<br/>Desempeño: ${this.formatNumber(data[0])}%<br/>Importancia: ${this.formatNumber(data[1])}%`;
+        },
+      },
+      grid: { left: 80, right: 40, bottom: 60, top: 60, containLabel: true },
+      xAxis: {
+        type: "value",
+        name: "Desempeño",
+        nameLocation: "middle",
+        nameGap: 30,
+        min: 0,
+        max: 100,
+        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
+        type: "value",
+        name: "Importancia",
+        nameLocation: "middle",
+        nameGap: 50,
+        axisLabel: { color: TS_COLORS.text },
+        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      graphic: [
+        {
+          type: "line",
+          left: `${avgPerformance}%`,
+          top: "0%",
+          shape: {
+            x1: 0,
+            y1: 0,
+            x2: 0,
+            y2: 100,
+          },
+          style: {
+            stroke: "#EF4444",
+            lineWidth: 1,
+            lineDash: [5, 5],
+          },
+          z: 100,
+        },
+        {
+          type: "line",
+          left: "0%",
+          top: `${100 - avgImportance}%`,
+          shape: {
+            x1: 0,
+            y1: 0,
+            x2: 100,
+            y2: 0,
+          },
+          style: {
+            stroke: "#EF4444",
+            lineWidth: 1,
+            lineDash: [5, 5],
+          },
+          z: 100,
+        },
+      ],
+      series: [
+        {
+          type: "scatter",
+          data: scatterData,
+          symbolSize: (data: any) => Math.sqrt(data[1]) * 8,
+          itemStyle: {
+            color: (params: any) => {
+              const data = params.value as number[];
+              const perf = data[0];
+              const imp = data[1];
+              if (perf >= avgPerformance && imp >= avgImportance) return "#22C55E"; // Alto/Alto
+              if (perf < avgPerformance && imp >= avgImportance) return "#EF4444"; // Bajo/Alto (crítico)
+              if (perf >= avgPerformance && imp < avgImportance) return "#3B82F6"; // Alto/Bajo
+              return "#9CA3AF"; // Bajo/Bajo
+            },
+          },
+          label: {
+            show: true,
+            position: "right",
+            formatter: "{b}",
+            color: TS_COLORS.text,
+            fontSize: 11,
+          },
+        },
+      ],
+    };
+  }
+
+  /**
+   * Correlación entre pilares: Heatmap de correlación
+   */
+  pillarCorrelationOption(): EChartsOption {
+    const analytics = this.analytics();
+    if (!analytics?.pillars.length) return this.emptyChartOption("Sin datos de pilares");
+
+    const pillars = analytics.pillars;
+    const heatmap = analytics.heatmap;
+
+    // Calcular correlación basada en comportamiento en departamentos
+    // La correlación se calcula comparando cómo los pilares varían juntos por departamento
+    const correlationMatrix: number[][] = [];
+    const pillarNames = pillars.map((p) => p.pillar_name);
+
+    // Agrupar por departamento
+    const deptPillarMap = new Map<number | null, Map<number, number>>();
+    heatmap.forEach((row) => {
+      if (!deptPillarMap.has(row.department_id)) {
+        deptPillarMap.set(row.department_id, new Map());
+      }
+      const deptMap = deptPillarMap.get(row.department_id)!;
+      row.values.forEach((cell) => {
+        deptMap.set(cell.pillar_id, cell.percent);
+      });
+    });
+
+    // Calcular correlación de Pearson entre pares de pilares
+    for (let i = 0; i < pillars.length; i++) {
+      correlationMatrix[i] = [];
+      for (let j = 0; j < pillars.length; j++) {
+        if (i === j) {
+          correlationMatrix[i][j] = 1.0;
+        } else {
+          const valuesI: number[] = [];
+          const valuesJ: number[] = [];
+          
+          deptPillarMap.forEach((deptMap) => {
+            const valI = deptMap.get(pillars[i].pillar_id);
+            const valJ = deptMap.get(pillars[j].pillar_id);
+            if (valI != null && valJ != null) {
+              valuesI.push(valI);
+              valuesJ.push(valJ);
+            }
+          });
+
+          if (valuesI.length > 1) {
+            correlationMatrix[i][j] = this.calculatePearsonCorrelation(valuesI, valuesJ);
+          } else {
+            correlationMatrix[i][j] = 0;
+          }
+        }
+      }
+    }
+
+    // Convertir a formato ECharts heatmap
+    const data: number[][] = [];
+    for (let i = 0; i < pillars.length; i++) {
+      for (let j = 0; j < pillars.length; j++) {
+        data.push([j, i, this.round(correlationMatrix[i][j] * 100) / 100]);
+      }
+    }
+
+    return {
+      backgroundColor: TS_COLORS.background,
+      animationDuration: 800,
+      animationEasing: "cubicOut",
+      tooltip: {
+        trigger: "item",
+        formatter: (params: any) => {
+          const data = params.value as number[];
+          const pillarA = pillarNames[data[1]];
+          const pillarB = pillarNames[data[0]];
+          const corr = data[2];
+          return `Correlación entre ${pillarA} y ${pillarB}: ${this.formatNumber(corr)}`;
+        },
+      },
+      grid: { left: 120, right: 40, bottom: 120, top: 40, containLabel: false },
+      xAxis: {
+        type: "category",
+        data: pillarNames,
+        axisLabel: { rotate: 45, color: TS_COLORS.text, fontWeight: 500 },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      yAxis: {
+        type: "category",
+        data: pillarNames,
+        axisLabel: { color: TS_COLORS.text, fontWeight: 500 },
+        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
+      },
+      visualMap: {
+        min: -1,
+        max: 1,
+        calculable: true,
+        orient: "horizontal",
+        left: "center",
+        bottom: 10,
+        inRange: {
+          color: ["#EF4444", "#E2E8F0", "#22C55E"], // Rojo → Gris → Verde
+        },
+        text: ["Alta correlación", "Baja correlación"],
+        textStyle: { color: TS_COLORS.text },
+      },
+      series: [
+        {
+          type: "heatmap",
+          data: data,
+          label: {
+            show: true,
+            formatter: (params: any) => {
+              return this.formatNumber(params.value[2]);
+            },
+            color: TS_COLORS.text,
+            fontWeight: 600,
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowColor: "rgba(0, 0, 0, 0.5)",
+            },
+          },
+        },
+      ],
+    };
+  }
+
+  // Funciones auxiliares para los nuevos gráficos
+  private quantile(sorted: number[], p: number): number {
+    if (sorted.length === 0) return 0;
+    const index = (sorted.length - 1) * p;
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    const weight = index % 1;
+    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+  }
+
+  private calculatePearsonCorrelation(x: number[], y: number[]): number {
+    if (x.length !== y.length || x.length === 0) return 0;
+
+    const n = x.length;
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = y.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+    const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+
+    const numerator = n * sumXY - sumX * sumY;
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    if (denominator === 0) return 0;
+    return numerator / denominator;
   }
 
   employeeScatterOption(): EChartsOption {

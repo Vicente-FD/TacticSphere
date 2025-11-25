@@ -12,7 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi.responses import StreamingResponse
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
 
 from app.database import get_db
 
@@ -479,7 +480,6 @@ def update_company(
     current: Usuario = Depends(require_roles(RolEnum.ADMIN_SISTEMA)),
 ):
     # Cargar empresa con sus departamentos para asegurar que tenemos todos los datos
-    from sqlalchemy.orm import joinedload
     stmt = select(Empresa).options(joinedload(Empresa.departamentos)).where(Empresa.id == empresa_id)
     empresa = db.scalar(stmt)
     if not empresa:
