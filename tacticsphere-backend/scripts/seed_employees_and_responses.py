@@ -29,19 +29,35 @@ from app.models import (
 # Importar respuestas esperadas del script seed_madurez
 from scripts.seed_madurez import RESPUESTAS_ESPERADAS
 
-# Nombres y apellidos para generar empleados
+# Nombres y apellidos para generar empleados (listas ampliadas para mayor variedad)
 NOMBRES = [
     "Juan", "María", "Carlos", "Ana", "Luis", "Laura", "Pedro", "Carmen",
     "Diego", "Patricia", "Roberto", "Claudia", "Fernando", "Marcela", "Miguel",
     "Sofía", "Ricardo", "Valentina", "Andrés", "Camila", "Francisco", "Isabella",
-    "Sebastián", "Javiera", "Nicolás", "Catalina", "Matías", "Francisca", "Javier", "Daniela"
+    "Sebastián", "Javiera", "Nicolás", "Catalina", "Matías", "Francisca", "Javier", "Daniela",
+    "Alejandro", "Gabriela", "Manuel", "Andrea", "José", "Paula", "David", "María José",
+    "Cristian", "Constanza", "Felipe", "Macarena", "Rodrigo", "Antonia", "Gonzalo", "Josefa",
+    "Tomás", "Amanda", "Ignacio", "Trinidad", "Benjamín", "Agustina", "Maximiliano", "Rafaela",
+    "Martín", "Emilia", "Vicente", "Rosario", "Emilio", "Paz", "Álvaro", "Esperanza",
+    "Eduardo", "Dominga", "Hernán", "Magdalena", "Pablo", "Soledad", "Raúl", "Mercedes",
+    "Sergio", "Dolores", "Óscar", "Amparo", "Mario", "Consuelo", "Alberto", "Milagros",
+    "Enrique", "Pilar", "Jorge", "Inés", "Rafael", "Teresa", "Antonio", "Carmen",
+    "Ángel", "Dolores", "Ramón", "María", "Víctor", "Lucía", "Adrián", "Elena"
 ]
 
 APELLIDOS = [
     "González", "Rodríguez", "Martínez", "López", "Sánchez", "Ramírez", "Torres",
     "Flores", "Rivera", "Morales", "Ortiz", "Gutiérrez", "Castillo", "Díaz", "Vargas",
     "Castro", "Romero", "Soto", "Navarro", "Cruz", "Medina", "Herrera", "Jiménez",
-    "Moreno", "Álvarez", "Mendoza", "Silva", "Rojas", "Pérez", "Fernández"
+    "Moreno", "Álvarez", "Mendoza", "Silva", "Rojas", "Pérez", "Fernández",
+    "Muñoz", "Contreras", "Sepúlveda", "Araya", "Espinoza", "Fuentes", "Valdés", "Carrasco",
+    "Cáceres", "Pizarro", "Salazar", "Vera", "Aguilera", "Bustos", "Cortés", "Donoso",
+    "Escobar", "Figueroa", "Gallardo", "Hidalgo", "Ibáñez", "Jara", "Klein", "Lagos",
+    "Molina", "Núñez", "Ortega", "Palma", "Quiroz", "Reyes", "Salinas", "Tapia",
+    "Urrutia", "Vásquez", "Yáñez", "Zúñiga", "Acuña", "Barrera", "Cárcamo", "Delgado",
+    "Espinoza", "Fierro", "García", "Hernández", "Inostroza", "Jofré", "Krause", "Lira",
+    "Maldonado", "Naranjo", "Orellana", "Parra", "Quiroga", "Riquelme", "Sáez", "Toro",
+    "Ulloa", "Villalobos", "Wagner", "Zamora", "Acevedo", "Benítez", "Cárcamo", "Durán"
 ]
 
 CARGOS = [
@@ -124,7 +140,7 @@ def actualizar_respuestas_esperadas(db):
     return actualizadas
 
 def crear_empleados_para_empresa(db, empresa: Empresa, num_empleados: int = 20):
-    """Crea empleados para una empresa."""
+    """Crea empleados para una empresa con nombres variados y sin duplicados."""
     # Obtener departamentos de la empresa
     departamentos = db.scalars(
         select(Departamento).where(Departamento.empresa_id == empresa.id)
@@ -137,14 +153,43 @@ def crear_empleados_para_empresa(db, empresa: Empresa, num_empleados: int = 20):
     empleados = []
     rut_base = 15000000 + empresa.id * 1000
     
+    # Usar combinaciones aleatorias para evitar repeticiones
+    combinaciones_usadas = set()
+    
     for i in range(num_empleados):
-        nombre = NOMBRES[i % len(NOMBRES)]
-        apellido1 = APELLIDOS[i % len(APELLIDOS)]
-        apellido2 = APELLIDOS[(i * 2 + 1) % len(APELLIDOS)]
+        # Generar combinación única de nombre y apellidos
+        intentos = 0
+        while intentos < 100:  # Máximo 100 intentos para evitar bucle infinito
+            nombre = random.choice(NOMBRES)
+            apellido1 = random.choice(APELLIDOS)
+            apellido2 = random.choice(APELLIDOS)
+            
+            # Evitar que los dos apellidos sean iguales
+            if apellido1 == apellido2:
+                continue
+            
+            combinacion = (nombre, apellido1, apellido2)
+            if combinacion not in combinaciones_usadas:
+                combinaciones_usadas.add(combinacion)
+                break
+            intentos += 1
+        
+        # Si no se encontró combinación única después de 100 intentos, usar índice
+        if intentos >= 100:
+            nombre = NOMBRES[i % len(NOMBRES)]
+            apellido1 = APELLIDOS[i % len(APELLIDOS)]
+            apellido2 = APELLIDOS[(i + 1) % len(APELLIDOS)]
+            if apellido1 == apellido2:
+                apellido2 = APELLIDOS[(i + 2) % len(APELLIDOS)]
+        
+        # Distribuir empleados entre departamentos de forma equilibrada
         departamento = departamentos[i % len(departamentos)]
-        cargo = CARGOS[i % len(CARGOS)]
+        cargo = random.choice(CARGOS)
         rut = generar_rut_chileno(rut_base + i)
-        email = f"{nombre.lower()}.{apellido1.lower()}.{i+1}@{empresa.nombre.lower().replace(' ', '').replace('.', '')}.com"
+        
+        # Generar email único
+        email_base = f"{nombre.lower().replace(' ', '')}.{apellido1.lower().replace(' ', '')}"
+        email = f"{email_base}.{i+1}@{empresa.nombre.lower().replace(' ', '').replace('.', '')}.com"
         
         empleado = Empleado(
             nombre=nombre,
