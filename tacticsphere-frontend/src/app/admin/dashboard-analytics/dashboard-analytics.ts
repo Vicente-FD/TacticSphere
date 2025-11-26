@@ -3625,22 +3625,61 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private async exportExcel(): Promise<void> {
-    // Dynamic import for exceljs (supports native charts)
+    // Dynamic import for exceljs - exceljs is CommonJS, so handle it accordingly
     let ExcelJS: any;
     try {
+      // Import the CommonJS module
       const exceljsModule = await import("exceljs");
-      // Handle different export formats (default export or named export)
-      ExcelJS = exceljsModule.default || exceljsModule;
-      // If Workbook is not available, try accessing it directly
-      if (!ExcelJS.Workbook && exceljsModule.Workbook) {
-        ExcelJS = exceljsModule;
+      
+      // CommonJS modules: the entire module is the default export
+      // exceljs exports Workbook as a property of the module
+      // Try different access patterns for CommonJS
+      if (exceljsModule.default) {
+        // If there's a default export, it might be the module itself
+        const defaultExport = exceljsModule.default;
+        if (defaultExport.Workbook && typeof defaultExport.Workbook === 'function') {
+          ExcelJS = defaultExport;
+        } else if (typeof defaultExport === 'object' && defaultExport !== null) {
+          // The default might be the module with Workbook on it
+          ExcelJS = defaultExport;
+        }
       }
-      // Verify Workbook is available
+      
+      // Also check if Workbook is directly on the module (named export)
+      if (!ExcelJS || !ExcelJS.Workbook) {
+        if (exceljsModule.Workbook && typeof exceljsModule.Workbook === 'function') {
+          ExcelJS = exceljsModule;
+        } else {
+          // Last resort: the module itself might be structured differently
+          // In some CommonJS builds, the module is the namespace
+          ExcelJS = exceljsModule;
+        }
+      }
+      
+      // Final check - if still no Workbook, try accessing it directly
+      if (!ExcelJS.Workbook) {
+        const WorkbookClass = (exceljsModule as any).Workbook || 
+                             (exceljsModule as any).default?.Workbook ||
+                             ((exceljsModule as any).default as any)?.Workbook;
+        if (WorkbookClass && typeof WorkbookClass === 'function') {
+          ExcelJS = { Workbook: WorkbookClass };
+        } else {
+          console.error("ExcelJS module structure:", {
+            keys: Object.keys(exceljsModule),
+            hasDefault: !!exceljsModule.default,
+            defaultKeys: exceljsModule.default ? Object.keys(exceljsModule.default) : []
+          });
+          throw new Error("No se pudo encontrar Workbook. El módulo exceljs puede no estar cargado correctamente.");
+        }
+      }
+      
+      // Verify Workbook is available and is a constructor
       if (!ExcelJS || typeof ExcelJS.Workbook !== 'function') {
-        throw new Error("Workbook constructor no está disponible en exceljs");
+        throw new Error("Workbook no es un constructor válido");
       }
     } catch (error) {
-      throw new Error(`La librería Excel no está disponible: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      console.error("Error importing exceljs:", error);
+      throw new Error(`Error al cargar exceljs: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     const filter = this.filterSignal();
@@ -3677,16 +3716,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           data.push(...filteredData);
         }
 
-        // Create workbook - handle different export formats
-        let WorkbookClass: any;
-        if (typeof ExcelJS.Workbook === 'function') {
-          WorkbookClass = ExcelJS.Workbook;
-        } else if ((ExcelJS as any).default && typeof (ExcelJS as any).default.Workbook === 'function') {
-          WorkbookClass = (ExcelJS as any).default.Workbook;
-        } else {
-          throw new Error("No se pudo encontrar el constructor Workbook en exceljs");
-        }
-        const workbook = new WorkbookClass();
+        // Create workbook - ExcelJS should already have Workbook available
+        const workbook = new ExcelJS.Workbook();
         workbook.creator = "TacticSphere";
         workbook.created = new Date();
 
@@ -4406,21 +4437,61 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private async generateExcelBlob(): Promise<{ blob: Blob; filename: string }> {
+    // Dynamic import for exceljs - exceljs is CommonJS, so handle it accordingly
     let ExcelJS: any;
     try {
+      // Import the CommonJS module
       const exceljsModule = await import("exceljs");
-      // Handle different export formats (default export or named export)
-      ExcelJS = exceljsModule.default || exceljsModule;
-      // If Workbook is not available, try accessing it directly
-      if (!ExcelJS.Workbook && exceljsModule.Workbook) {
-        ExcelJS = exceljsModule;
+      
+      // CommonJS modules: the entire module is the default export
+      // exceljs exports Workbook as a property of the module
+      // Try different access patterns for CommonJS
+      if (exceljsModule.default) {
+        // If there's a default export, it might be the module itself
+        const defaultExport = exceljsModule.default;
+        if (defaultExport.Workbook && typeof defaultExport.Workbook === 'function') {
+          ExcelJS = defaultExport;
+        } else if (typeof defaultExport === 'object' && defaultExport !== null) {
+          // The default might be the module with Workbook on it
+          ExcelJS = defaultExport;
+        }
       }
-      // Verify Workbook is available
+      
+      // Also check if Workbook is directly on the module (named export)
+      if (!ExcelJS || !ExcelJS.Workbook) {
+        if (exceljsModule.Workbook && typeof exceljsModule.Workbook === 'function') {
+          ExcelJS = exceljsModule;
+        } else {
+          // Last resort: the module itself might be structured differently
+          // In some CommonJS builds, the module is the namespace
+          ExcelJS = exceljsModule;
+        }
+      }
+      
+      // Final check - if still no Workbook, try accessing it directly
+      if (!ExcelJS.Workbook) {
+        const WorkbookClass = (exceljsModule as any).Workbook || 
+                             (exceljsModule as any).default?.Workbook ||
+                             ((exceljsModule as any).default as any)?.Workbook;
+        if (WorkbookClass && typeof WorkbookClass === 'function') {
+          ExcelJS = { Workbook: WorkbookClass };
+        } else {
+          console.error("ExcelJS module structure:", {
+            keys: Object.keys(exceljsModule),
+            hasDefault: !!exceljsModule.default,
+            defaultKeys: exceljsModule.default ? Object.keys(exceljsModule.default) : []
+          });
+          throw new Error("No se pudo encontrar Workbook. El módulo exceljs puede no estar cargado correctamente.");
+        }
+      }
+      
+      // Verify Workbook is available and is a constructor
       if (!ExcelJS || typeof ExcelJS.Workbook !== 'function') {
-        throw new Error("Workbook constructor no está disponible en exceljs");
+        throw new Error("Workbook no es un constructor válido");
       }
     } catch (error) {
-      throw new Error(`La librería Excel no está disponible: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      console.error("Error importing exceljs:", error);
+      throw new Error(`Error al cargar exceljs: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     const filter = this.filterSignal();
@@ -4456,16 +4527,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       data.push(...filteredData);
     }
 
-    // Create workbook - handle different export formats
-    let WorkbookClass: any;
-    if (typeof ExcelJS.Workbook === 'function') {
-      WorkbookClass = ExcelJS.Workbook;
-    } else if ((ExcelJS as any).default && typeof (ExcelJS as any).default.Workbook === 'function') {
-      WorkbookClass = (ExcelJS as any).default.Workbook;
-    } else {
-      throw new Error("No se pudo encontrar el constructor Workbook en exceljs");
-    }
-    const workbook = new WorkbookClass();
+    // Create workbook - ExcelJS should already have Workbook available
+    const workbook = new ExcelJS.Workbook();
     workbook.creator = "TacticSphere";
     workbook.created = new Date();
 
