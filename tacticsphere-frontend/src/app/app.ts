@@ -5,6 +5,7 @@ import { filter, Subscription } from 'rxjs';
 import { InactivityService } from './inactivity.service';
 import { AuthService } from './auth.service';
 import { SessionExpiryModalComponent } from './session-expiry-modal.component';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
@@ -24,7 +25,7 @@ export class App implements OnInit, OnDestroy {
   private routerSubscription?: Subscription;
 
   constructor() {
-    this.http.get<{ message: string }>('http://localhost:8000/ping').subscribe({
+    this.http.get<{ message: string }>(`${environment.apiUrl}/ping`).subscribe({
       next: (res) => this.pong.set(res.message),
       error: (err) => {
         console.error('Ping error', err);

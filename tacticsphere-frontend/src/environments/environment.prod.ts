@@ -1,5 +1,11 @@
 export const environment = {
-    apiUrl: 'http://127.0.0.1:8000',
+    // ⚠️ IMPORTANTE: Reemplaza esta URL con la URL real de tu backend en producción
+    // Ejemplos:
+    // - Si está en Render: 'https://tacticsphere-backend.onrender.com'
+    // - Si está en Railway: 'https://tacticsphere-backend.railway.app'
+    // - Si está en Heroku: 'https://tacticsphere-backend.herokuapp.com'
+    // - Si está en un servidor propio: 'https://api.tacticsphere.com'
+    apiUrl: 'https://TU-BACKEND-URL-AQUI.com',
     firebaseConfig : {
       apiKey: "AIzaSyBt1BIg0s8AbCXGrZPkFVIUK0VBQqeIsvs",
       authDomain: "tacticsphere-prod.firebaseapp.com",

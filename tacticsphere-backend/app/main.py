@@ -117,11 +117,19 @@ app = FastAPI(title="TacticSphere API")
 
 # ---------------- CORS ----------------
 
+# Permitir orígenes para desarrollo y producción
+allowed_origins = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "https://tacticsphere-prod.web.app",
+    "https://tacticsphere-prod.firebaseapp.com",
+]
+
 app.add_middleware(
 
     CORSMiddleware,
 
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_origins=allowed_origins,
 
     allow_credentials=True,
 
