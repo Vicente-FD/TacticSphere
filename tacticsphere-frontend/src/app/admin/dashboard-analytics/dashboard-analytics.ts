@@ -80,6 +80,17 @@ const TS_COLORS = {
 const AREA_FILL = "rgba(59,130,246,0.15)";
 const PARTICIPATION_TARGET = 80; // Meta de participación por departamento (%)
 
+// Paleta de colores compartida para niveles Likert
+// Nivel 1 (Inicial) → Rojo, Nivel 2 (Básico) → Amarillo, Nivel 3 (Intermedio) → Azul,
+// Nivel 4 (Avanzado) → Verde, Nivel 5 (Innovador) → Morado
+const LIKERT_LEVEL_COLORS = [
+  '#EF4444', // Nivel 1 - Inicial - Rojo
+  '#FACC15', // Nivel 2 - Básico - Amarillo
+  '#3B82F6', // Nivel 3 - Intermedio - Azul
+  '#22C55E', // Nivel 4 - Avanzado - Verde
+  '#A855F7', // Nivel 5 - Innovador - Morado
+];
+
 interface KpiCard {
   label: string;
   value: string;
@@ -322,6 +333,29 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       return '#A855F7'; // Innovador - morado
     }
     return '#64748B'; // Default gris
+  }
+
+  /**
+   * Mapea un porcentaje de desempeño (0-100) a un nivel Likert (1-5)
+   * 0-20% → Nivel 1 (Inicial)
+   * 20-40% → Nivel 2 (Básico)
+   * 40-60% → Nivel 3 (Intermedio)
+   * 60-80% → Nivel 4 (Avanzado)
+   * 80-100% → Nivel 5 (Innovador)
+   */
+  private getLikertLevelFromPercent(percent: number): number {
+    if (percent >= 0 && percent < 20) {
+      return 1; // Inicial
+    } else if (percent >= 20 && percent < 40) {
+      return 2; // Básico
+    } else if (percent >= 40 && percent < 60) {
+      return 3; // Intermedio
+    } else if (percent >= 60 && percent < 80) {
+      return 4; // Avanzado
+    } else if (percent >= 80 && percent <= 100) {
+      return 5; // Innovador
+    }
+    return 1; // Default al nivel más bajo
   }
 
   private getTextColorForContrast(backgroundColor: string): string {
@@ -1261,14 +1295,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     );
     if (!distributions.length) return this.emptyChartOption("Sin datos de distribucion");
     const categories = distributions.map((item) => item.pillar_name);
-    // Usar la misma paleta de colores que los estadios
-    const levelColors = [
-      '#EF4444', // Inicial (0-20%) - rojo
-      '#FACC15', // Básico (21-40%) - amarillo
-      '#3B82F6', // Intermedio (41-60%) - azul
-      '#22C55E', // Avanzado (61-80%) - verde
-      '#A855F7', // Innovador (81-100%) - morado
-    ];
+    // Usar la paleta compartida de colores Likert
+    const levelColors = LIKERT_LEVEL_COLORS;
     const series = [1, 2, 3, 4, 5].map((level, idx) => {
       const levelIndex = level - 1;
       const isTopLevel = level === 5;
@@ -1591,6 +1619,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       name: string;
       value: [number, number]; // [tamaño, desempeño]
       children?: TreemapNode[];
+      itemStyle?: { color: string };
     };
 
     if (!coverage.length || !heatmapRows.length) {
@@ -1613,15 +1642,26 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       const approxEmployees = employees.slice(index * 5, index * 5 + 5);
       approxEmployees.forEach((emp) => performanceSamples.push(emp.percent));
 
-      const children: TreemapNode[] = approxEmployees.map((emp) => ({
-        name: emp.name.length > 20 ? `${emp.name.substring(0, 20)}…` : emp.name,
-        value: [1, Math.max(0, Math.min(100, emp.percent ?? avgPerformance))],
-      }));
+      const children: TreemapNode[] = approxEmployees.map((emp) => {
+        const empPerformance = Math.max(0, Math.min(100, emp.percent ?? avgPerformance));
+        const empLevel = this.getLikertLevelFromPercent(empPerformance);
+        return {
+          name: emp.name.length > 20 ? `${emp.name.substring(0, 20)}…` : emp.name,
+          value: [1, empPerformance],
+          itemStyle: {
+            color: LIKERT_LEVEL_COLORS[empLevel - 1] ?? LIKERT_LEVEL_COLORS[0],
+          },
+        };
+      });
 
+      const deptLevel = this.getLikertLevelFromPercent(avgPerformance);
       deptNodes.push({
         name: dept.department_name,
         value: [dept.total || children.length || 1, avgPerformance],
         children,
+        itemStyle: {
+          color: LIKERT_LEVEL_COLORS[deptLevel - 1] ?? LIKERT_LEVEL_COLORS[0],
+        },
       });
     });
 
@@ -1636,14 +1676,15 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         ? performanceSamples.reduce((sum, val) => sum + (val ?? 0), 0) / performanceSamples.length
         : 0;
 
+    const rootLevel = this.getLikertLevelFromPercent(totalPerformance);
     const rootNode: TreemapNode = {
       name: isGlobal ? "Todas las empresas" : "Organización",
       value: [Math.max(totalEmployees, 1), totalPerformance],
       children: deptNodes,
+      itemStyle: {
+        color: LIKERT_LEVEL_COLORS[rootLevel - 1] ?? LIKERT_LEVEL_COLORS[0],
+      },
     };
-
-    const minPerformance = Math.min(...performanceSamples, 0);
-    const maxPerformance = Math.max(...performanceSamples, 100);
 
     console.log("Treemap data", rootNode);
 
@@ -1674,17 +1715,43 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       },
       visualMap: {
         type: "continuous",
-        min: minPerformance,
-        max: maxPerformance,
-        left: "right",
-        top: "center",
-        orient: "vertical",
+        min: 0,
+        max: 100,
         calculable: true,
-        inRange: {
-          color: ["#EF4444", "#F59E0B", "#22C55E"],
-        },
+        inRange: { color: LIKERT_LEVEL_COLORS }, // Usar la misma paleta Likert: Rojo → Amarillo → Azul → Verde → Morado
+        right: 10,
+        top: "middle",
+        orient: "vertical",
         text: ["Alto desempeño", "Bajo desempeño"],
         textStyle: { color: TS_COLORS.text },
+        // El visualMap se muestra como referencia visual, pero los itemStyle.color de los nodos tienen prioridad
+      },
+      legend: {
+        data: [1, 2, 3, 4, 5].map((level) => this.formatLikertLabel(level)),
+        top: 0,
+        type: "scroll",
+        left: 16,
+        right: 16,
+        orient: "horizontal",
+        textStyle: { 
+          color: TS_COLORS.text,
+          rich: {
+            color1: { color: LIKERT_LEVEL_COLORS[0], fontSize: 14, padding: [0, 4, 0, 0] },
+            color2: { color: LIKERT_LEVEL_COLORS[1], fontSize: 14, padding: [0, 4, 0, 0] },
+            color3: { color: LIKERT_LEVEL_COLORS[2], fontSize: 14, padding: [0, 4, 0, 0] },
+            color4: { color: LIKERT_LEVEL_COLORS[3], fontSize: 14, padding: [0, 4, 0, 0] },
+            color5: { color: LIKERT_LEVEL_COLORS[4], fontSize: 14, padding: [0, 4, 0, 0] },
+          },
+        },
+        formatter: (name: string) => {
+          // Extraer el número del nivel desde el formato "1 - Inicial"
+          const levelMatch = name.match(/^(\d+)\s*-/);
+          if (levelMatch) {
+            const level = parseInt(levelMatch[1], 10);
+            return `{color${level}|●} ${name}`;
+          }
+          return name;
+        },
       },
       series: [
         {
@@ -1723,7 +1790,7 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
               borderWidth: 3,
             },
           },
-          visualDimension: 1,
+          // No usar visualDimension para que los itemStyle.color tengan prioridad
           levels: [
             {
               itemStyle: {
@@ -2701,13 +2768,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     try {
       const chart = echarts.init(container, TS_MONO_THEME);
       
-      const levelColors = [
-        TS_COLORS.danger,
-        TS_COLORS.warning,
-        '#FACC15',
-        TS_COLORS.positive,
-        TS_COLORS.primary,
-      ];
+      // Usar la paleta compartida de colores Likert
+      const levelColors = LIKERT_LEVEL_COLORS;
 
       const chartOption: EChartsOption = {
         title: {
