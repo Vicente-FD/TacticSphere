@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "public": "tacticsphere-frontend/dist/tacticsphere-frontend/browser",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
+

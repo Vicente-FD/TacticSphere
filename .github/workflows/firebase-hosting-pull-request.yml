@@ -21,4 +21,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TACTICSPHERE_PROD }}
           projectId: tacticsphere-prod
-          firebaseJsonPath: ./tacticsphere-frontend/firebase.json
+          entryPoint: ./tacticsphere-frontend
