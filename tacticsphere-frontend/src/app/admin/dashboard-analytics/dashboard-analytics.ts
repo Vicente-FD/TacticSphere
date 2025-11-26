@@ -91,6 +91,23 @@ const LIKERT_LEVEL_COLORS = [
   '#A855F7', // Nivel 5 - Innovador - Morado
 ];
 
+// Paleta de colores para pilares (colores únicos y consistentes)
+// Usada en: Desempeño por pilar, Radar organizacional, Heatmap Pilar × Departamento, Matriz Impacto vs Desempeño
+const PILLAR_COLORS = [
+  '#3B82F6', // Azul
+  '#22C55E', // Verde
+  '#F59E0B', // Naranja
+  '#EF4444', // Rojo
+  '#8B5CF6', // Púrpura
+  '#06B6D4', // Cyan
+  '#F97316', // Naranja oscuro
+  '#10B981', // Verde esmeralda
+  '#6366F1', // Índigo
+  '#EC4899', // Rosa
+  '#14B8A6', // Turquesa
+  '#F43F5E', // Rosa rojizo
+];
+
 interface KpiCard {
   label: string;
   value: string;
@@ -1827,25 +1844,44 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const analytics = this.analytics();
     if (!analytics?.pillars.length) return this.emptyChartOption("Sin datos de pilares");
 
-    // Necesitamos obtener los pesos de los pilares. Por ahora usaremos el promedio como aproximación
-    // En producción, necesitarías obtener el peso real del pilar desde el modelo
     const pillars = analytics.pillars;
     
     // Calcular promedios para las líneas de referencia
     const avgPerformance = pillars.reduce((sum, p) => sum + p.percent, 0) / pillars.length;
     const avgImportance = pillars.reduce((sum, p) => sum + p.pct_ge4, 0) / pillars.length;
 
-    // Para la importancia, usamos el porcentaje de nivel >= 4 como proxy de importancia
-    // En producción, deberías obtener el peso real del pilar desde la BD
     // Calcular número de respuestas por pilar (suma de todos los niveles) para tamaño de burbuja
-    const scatterData = pillars.map((p) => {
+    const scatterData = pillars.map((p, index) => {
       const totalResponses = p.levels.reduce((sum, count) => sum + (count || 0), 0);
+      // Aplicar jitter muy suave para evitar superposición (máximo 2% de desviación)
+      const jitterX = (Math.random() - 0.5) * 2; // -1 a +1
+      const jitterY = (Math.random() - 0.5) * 2; // -1 a +1
       return {
         name: p.pillar_name,
-        value: [p.percent, p.pct_ge4], // [desempeño, importancia aproximada por % >= 4]
-        responseCount: totalResponses, // Número de respuestas para tamaño de burbuja
+        pillarId: p.pillar_id,
+        value: [
+          Math.max(0, Math.min(100, p.percent + jitterX)), // Desempeño con jitter
+          Math.max(0, Math.min(100, p.pct_ge4 + jitterY)), // Importancia con jitter
+        ],
+        originalValue: [p.percent, p.pct_ge4], // Valores originales para tooltip
+        responseCount: totalResponses,
+        pillarIndex: index,
+        avgPerformance: p.percent, // Promedio del pilar para tooltip
       };
     });
+
+    // Calcular límites de ejes basados en los datos (con margen del 10%)
+    const performances = scatterData.map(d => d.originalValue[0]);
+    const importances = scatterData.map(d => d.originalValue[1]);
+    const minPerf = Math.max(0, Math.min(...performances) - 5);
+    const maxPerf = Math.min(100, Math.max(...performances) + 5);
+    const minImp = Math.max(0, Math.min(...importances) - 5);
+    const maxImp = Math.min(100, Math.max(...importances) + 5);
+
+    // Calcular tamaño máximo de burbuja
+    const maxResponses = Math.max(...scatterData.map(d => d.responseCount), 1);
+    const minSize = 30;
+    const maxSize = 80;
 
     return {
       backgroundColor: TS_COLORS.background,
@@ -1853,13 +1889,21 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       animationEasing: "cubicOut",
       tooltip: {
         trigger: "item",
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
+        borderColor: TS_COLORS.gridLine,
+        borderWidth: 1,
+        textStyle: { color: TS_COLORS.text },
         formatter: (params: any) => {
           const data = params.value as number[];
+          const originalData = (params.data as any)?.originalValue || data;
           const responseCount = (params.data as any)?.responseCount || 0;
-          return `<strong>${params.name}</strong><br/>` +
-            `Desempeño: ${this.formatNumber(data[0])}%<br/>` +
-            `Importancia/Impacto: ${this.formatNumber(data[1])}%<br/>` +
-            `Número de respuestas: ${responseCount}`;
+          const avgPerf = (params.data as any)?.avgPerformance || originalData[0];
+          return `<div style="padding: 4px 0;">
+            <strong style="font-size: 13px; color: ${TS_COLORS.text};">${params.name}</strong><br/>
+            <span style="color: ${TS_COLORS.text};">Desempeño: <strong>${this.formatNumber(originalData[0])}%</strong></span><br/>
+            <span style="color: ${TS_COLORS.text};">Importancia: <strong>${this.formatNumber(originalData[1])}%</strong></span><br/>
+            <span style="color: ${TS_COLORS.text};">Promedio del pilar: <strong>${this.formatNumber(avgPerf)}%</strong></span>
+          </div>`;
         },
       },
       grid: { left: 80, right: 40, bottom: 60, top: 60, containLabel: true },
@@ -1868,8 +1912,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         name: "Desempeño",
         nameLocation: "middle",
         nameGap: 30,
-        min: 0,
-        max: 100,
+        min: minPerf,
+        max: maxPerf,
         axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
@@ -1879,6 +1923,8 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         name: "Importancia",
         nameLocation: "middle",
         nameGap: 50,
+        min: minImp,
+        max: maxImp,
         axisLabel: { color: TS_COLORS.text },
         splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
         axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
@@ -1886,64 +1932,66 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       series: [
         {
           type: "scatter",
-          data: scatterData.map((d) => ({
-            name: d.name,
-            value: d.value,
-            responseCount: d.responseCount,
-          })),
-          // Tamaño de burbuja según número de respuestas (suma de niveles Likert = total respuestas por pilar)
+          data: scatterData.map((d) => {
+            const color = PILLAR_COLORS[d.pillarIndex % PILLAR_COLORS.length];
+            return {
+              name: d.name,
+              value: d.value,
+              originalValue: d.originalValue,
+              responseCount: d.responseCount,
+              pillarIndex: d.pillarIndex,
+              avgPerformance: d.avgPerformance,
+              itemStyle: {
+                color: color,
+                opacity: 0.75, // Reducir transparencia para ver burbujas detrás
+                borderColor: color,
+                borderWidth: 2,
+              },
+            };
+          }),
+          // Tamaño de burbuja según número de respuestas
           symbolSize: (data: any, params: any) => {
             const responseCount = params?.data?.responseCount || data?.responseCount || 1;
-            // Escalar el tamaño basado en número de respuestas (mín 25, máx 100)
-            const minSize = 25;
-            const maxSize = 100;
-            const maxResponses = Math.max(...scatterData.map(d => d.responseCount), 1);
             if (maxResponses === 0) return minSize;
             const scale = (responseCount / maxResponses) * (maxSize - minSize) + minSize;
             return Math.max(minSize, Math.min(maxSize, scale));
           },
-          // Líneas de referencia: vertical (promedio desempeño) y horizontal (promedio importancia)
-          markLine: {
-            silent: true,
-            symbol: "none",
-            lineStyle: {
-              color: "#EF4444",
-              type: "dashed",
-              width: 1.5,
-            },
-            label: {
-              show: false, // Opcional: mostrar etiquetas de cuadrantes
-            },
-            data: [
-              // Línea vertical en promedio de desempeño
-              {
-                xAxis: avgPerformance,
-                name: `Promedio desempeño: ${this.formatNumber(avgPerformance)}%`,
-              },
-              // Línea horizontal en promedio de importancia
-              {
-                yAxis: avgImportance,
-                name: `Promedio importancia: ${this.formatNumber(avgImportance)}%`,
-              },
-            ],
-          },
-          itemStyle: {
-            color: (params: any) => {
-              const data = params.value as number[];
-              const perf = data[0];
-              const imp = data[1];
-              if (perf >= avgPerformance && imp >= avgImportance) return "#22C55E"; // Alto/Alto
-              if (perf < avgPerformance && imp >= avgImportance) return "#EF4444"; // Bajo/Alto (crítico)
-              if (perf >= avgPerformance && imp < avgImportance) return "#3B82F6"; // Alto/Bajo
-              return "#9CA3AF"; // Bajo/Bajo
-            },
-          },
+          // Etiquetas con fondo semitransparente
           label: {
             show: true,
             position: "right",
             formatter: "{b}",
             color: TS_COLORS.text,
             fontSize: 11,
+            fontWeight: 600,
+            backgroundColor: "rgba(255, 255, 255, 0.85)",
+            borderColor: TS_COLORS.gridLine,
+            borderWidth: 1,
+            borderRadius: 4,
+            padding: [4, 6],
+          },
+          // Líneas de referencia suavizadas
+          markLine: {
+            silent: true,
+            symbol: "none",
+            lineStyle: {
+              color: "rgba(200, 0, 0, 0.4)",
+              type: "dashed",
+              width: 1,
+            },
+            label: {
+              show: false,
+            },
+            data: [
+              {
+                xAxis: avgPerformance,
+                name: `Promedio desempeño: ${this.formatNumber(avgPerformance)}%`,
+              },
+              {
+                yAxis: avgImportance,
+                name: `Promedio importancia: ${this.formatNumber(avgImportance)}%`,
+              },
+            ],
           },
         },
       ],
