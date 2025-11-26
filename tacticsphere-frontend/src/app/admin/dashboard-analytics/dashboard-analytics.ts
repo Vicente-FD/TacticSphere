@@ -3626,9 +3626,21 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
   private async exportExcel(): Promise<void> {
     // Dynamic import for exceljs (supports native charts)
-    const ExcelJS = await import("exceljs").catch(() => null);
-    if (!ExcelJS) {
-      throw new Error("La librería Excel no está disponible. Por favor, instala 'exceljs'.");
+    let ExcelJS: any;
+    try {
+      const exceljsModule = await import("exceljs");
+      // Handle different export formats (default export or named export)
+      ExcelJS = exceljsModule.default || exceljsModule;
+      // If Workbook is not available, try accessing it directly
+      if (!ExcelJS.Workbook && exceljsModule.Workbook) {
+        ExcelJS = exceljsModule;
+      }
+      // Verify Workbook is available
+      if (!ExcelJS || typeof ExcelJS.Workbook !== 'function') {
+        throw new Error("Workbook constructor no está disponible en exceljs");
+      }
+    } catch (error) {
+      throw new Error(`La librería Excel no está disponible: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
 
     const filter = this.filterSignal();
@@ -3665,8 +3677,16 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           data.push(...filteredData);
         }
 
-        // Create workbook
-        const workbook = new ExcelJS.Workbook();
+        // Create workbook - handle different export formats
+        let WorkbookClass: any;
+        if (typeof ExcelJS.Workbook === 'function') {
+          WorkbookClass = ExcelJS.Workbook;
+        } else if ((ExcelJS as any).default && typeof (ExcelJS as any).default.Workbook === 'function') {
+          WorkbookClass = (ExcelJS as any).default.Workbook;
+        } else {
+          throw new Error("No se pudo encontrar el constructor Workbook en exceljs");
+        }
+        const workbook = new WorkbookClass();
         workbook.creator = "TacticSphere";
         workbook.created = new Date();
 
@@ -4386,9 +4406,21 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   private async generateExcelBlob(): Promise<{ blob: Blob; filename: string }> {
-    const ExcelJS = await import("exceljs").catch(() => null);
-    if (!ExcelJS) {
-      throw new Error("La librería Excel no está disponible.");
+    let ExcelJS: any;
+    try {
+      const exceljsModule = await import("exceljs");
+      // Handle different export formats (default export or named export)
+      ExcelJS = exceljsModule.default || exceljsModule;
+      // If Workbook is not available, try accessing it directly
+      if (!ExcelJS.Workbook && exceljsModule.Workbook) {
+        ExcelJS = exceljsModule;
+      }
+      // Verify Workbook is available
+      if (!ExcelJS || typeof ExcelJS.Workbook !== 'function') {
+        throw new Error("Workbook constructor no está disponible en exceljs");
+      }
+    } catch (error) {
+      throw new Error(`La librería Excel no está disponible: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
 
     const filter = this.filterSignal();
@@ -4424,7 +4456,16 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       data.push(...filteredData);
     }
 
-    const workbook = new ExcelJS.Workbook();
+    // Create workbook - handle different export formats
+    let WorkbookClass: any;
+    if (typeof ExcelJS.Workbook === 'function') {
+      WorkbookClass = ExcelJS.Workbook;
+    } else if ((ExcelJS as any).default && typeof (ExcelJS as any).default.Workbook === 'function') {
+      WorkbookClass = (ExcelJS as any).default.Workbook;
+    } else {
+      throw new Error("No se pudo encontrar el constructor Workbook en exceljs");
+    }
+    const workbook = new WorkbookClass();
     workbook.creator = "TacticSphere";
     workbook.created = new Date();
 
