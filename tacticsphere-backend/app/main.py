@@ -123,6 +123,8 @@ allowed_origins = [
     "http://127.0.0.1:4200",
     "https://tacticsphere-prod.web.app",
     "https://tacticsphere-prod.firebaseapp.com",
+    "https://tacticsphere.cl",
+    "https://www.tacticsphere.cl",
 ]
 
 app.add_middleware(
