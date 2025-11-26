@@ -89,3 +89,4 @@ Si Python 3.12 no funciona, podemos cambiar a `psycopg` (psycopg3) que es más m
 
 Por ahora, Python 3.12 debería funcionar perfectamente.
 
+

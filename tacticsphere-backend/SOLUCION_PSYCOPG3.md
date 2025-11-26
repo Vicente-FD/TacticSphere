@@ -82,3 +82,4 @@ Si después de estos cambios sigue fallando:
 3. **Fuerza un rebuild limpio:**
    - En Render: "Manual Deploy" → "Clear build cache & deploy"
 
+
