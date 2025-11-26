@@ -2877,6 +2877,61 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     }
   }
 
+  private async generateChartFromOption(option: EChartsOption, title?: string): Promise<ArrayBuffer> {
+    const echartsModule = await import('echarts');
+    const echarts = echartsModule as unknown as {
+      init: (dom: HTMLElement, theme?: string) => {
+        setOption: (option: EChartsOption) => void;
+        getDataURL: (opts: { type: string; pixelRatio: number; backgroundColor: string }) => string;
+        dispose: () => void;
+      };
+    };
+    
+    // Create a temporary container
+    const container = document.createElement('div');
+    container.style.width = '900px';
+    container.style.height = '600px';
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+
+    try {
+      const chart = echarts.init(container, TS_MONO_THEME);
+      
+      // Add title if provided and not already in option
+      const chartOption: EChartsOption = {
+        ...option,
+        title: option.title || (title ? {
+          text: title,
+          left: 'center',
+          textStyle: { fontSize: 16, fontWeight: 600, color: TS_COLORS.text },
+        } : undefined),
+      };
+
+      chart.setOption(chartOption);
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Wait for chart to render
+
+      // Get chart as data URL and convert to buffer
+      const dataUrl = chart.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+      
+      // Convert data URL to ArrayBuffer
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      chart.dispose();
+      document.body.removeChild(container);
+
+      return await blob.arrayBuffer();
+    } catch (error) {
+      document.body.removeChild(container);
+      throw error;
+    }
+  }
+
   private async generateScatterChartFromData(options: {
     title: string;
     data: Array<{ name: string; value: number; level: number }>;
@@ -3932,6 +3987,83 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
                 kpi.suffix || "",
               ]);
             });
+          }
+
+          // 10. Mapa Organizacional (Treemap)
+          if (analytics.coverage_by_department?.length > 0 && analytics.heatmap?.length > 0) {
+            const treemapSheet = workbook.addWorksheet("Mapa Organizacional");
+            const coverage = analytics.coverage_by_department.filter((dept) => (dept.total ?? 0) > 0);
+            const heatmapRows = analytics.heatmap;
+            
+            const heatmapByDept = new Map<number | null, number>();
+            heatmapRows.forEach((row) => {
+              heatmapByDept.set(row.department_id, row.average ?? 0);
+            });
+
+            treemapSheet.addRow(["Departamento", "Colaboradores", "Desempeño Promedio (%)"]);
+            coverage.forEach((dept) => {
+              const avgPerformance = heatmapByDept.get(dept.department_id) ?? 0;
+              treemapSheet.addRow([
+                dept.department_name,
+                dept.total || 0,
+                this.formatNumber(avgPerformance),
+              ]);
+            });
+
+            // Generate treemap chart from option and add as image
+            try {
+              const treemapOption = this.organizationalTreemapOption();
+              const chartCanvas = await this.generateChartFromOption(treemapOption, 'Mapa Organizacional');
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              treemapSheet.addImage(imageId, {
+                tl: { col: 3, row: 0 },
+                ext: { width: 700, height: 500 },
+              });
+            } catch (chartError) {
+              console.warn("Treemap chart generation failed, data is available in sheet:", chartError);
+            }
+          }
+
+          // 11. Matriz Impacto vs Desempeño
+          if (analytics.pillars.length > 0) {
+            const impactSheet = workbook.addWorksheet("Matriz Impacto vs Desempeño");
+            impactSheet.addRow(["Pilar", "Desempeño (%)", "Importancia (%)", "Promedio del Pilar (%)"]);
+            
+            const avgPerformance = analytics.pillars.reduce((sum, p) => sum + p.percent, 0) / analytics.pillars.length;
+            const avgImportance = analytics.pillars.reduce((sum, p) => sum + p.pct_ge4, 0) / analytics.pillars.length;
+            
+            analytics.pillars.forEach((p) => {
+              impactSheet.addRow([
+                p.pillar_name,
+                this.formatNumber(p.percent),
+                this.formatNumber(p.pct_ge4),
+                this.formatNumber(p.percent),
+              ]);
+            });
+
+            // Add quadrant information
+            impactSheet.addRow([]);
+            impactSheet.addRow(["Promedio Desempeño:", this.formatNumber(avgPerformance) + "%"]);
+            impactSheet.addRow(["Promedio Importancia:", this.formatNumber(avgImportance) + "%"]);
+
+            // Generate impact-performance matrix chart from option and add as image
+            try {
+              const impactOption = this.impactPerformanceMatrixOption();
+              const chartCanvas = await this.generateChartFromOption(impactOption, 'Matriz Impacto vs Desempeño');
+              const imageId = workbook.addImage({
+                buffer: chartCanvas,
+                extension: 'png',
+              });
+              impactSheet.addImage(imageId, {
+                tl: { col: 4, row: 0 },
+                ext: { width: 700, height: 500 },
+              });
+            } catch (chartError) {
+              console.warn("Impact-Performance matrix chart generation failed, data is available in sheet:", chartError);
+            }
           }
         }
 
