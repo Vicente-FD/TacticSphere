@@ -147,10 +147,12 @@ Base.metadata.create_all(bind=engine)
 
 
 
+@app.get("/")
+def root():
+    return {"message": "TacticSphere API", "version": "1.0", "status": "running"}
+
 @app.get("/ping")
-
 def ping():
-
     return {"message": "pong"}
 
 
