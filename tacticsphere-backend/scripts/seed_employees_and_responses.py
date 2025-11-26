@@ -29,8 +29,9 @@ from app.models import (
 # Importar respuestas esperadas del script seed_madurez
 from scripts.seed_madurez import RESPUESTAS_ESPERADAS
 
-# Nombres y apellidos para generar empleados (listas ampliadas para mayor variedad)
+# Nombres y apellidos para generar empleados (listas muy ampliadas para máxima variedad)
 NOMBRES = [
+    # Nombres comunes chilenos
     "Juan", "María", "Carlos", "Ana", "Luis", "Laura", "Pedro", "Carmen",
     "Diego", "Patricia", "Roberto", "Claudia", "Fernando", "Marcela", "Miguel",
     "Sofía", "Ricardo", "Valentina", "Andrés", "Camila", "Francisco", "Isabella",
@@ -41,11 +42,23 @@ NOMBRES = [
     "Martín", "Emilia", "Vicente", "Rosario", "Emilio", "Paz", "Álvaro", "Esperanza",
     "Eduardo", "Dominga", "Hernán", "Magdalena", "Pablo", "Soledad", "Raúl", "Mercedes",
     "Sergio", "Dolores", "Óscar", "Amparo", "Mario", "Consuelo", "Alberto", "Milagros",
-    "Enrique", "Pilar", "Jorge", "Inés", "Rafael", "Teresa", "Antonio", "Carmen",
-    "Ángel", "Dolores", "Ramón", "María", "Víctor", "Lucía", "Adrián", "Elena"
+    "Enrique", "Pilar", "Jorge", "Inés", "Rafael", "Teresa", "Antonio", "Ángel",
+    "Ramón", "Víctor", "Lucía", "Adrián", "Elena", "César", "Beatriz", "Hugo",
+    "Esteban", "Renata", "Bruno", "Florencia", "Leonardo", "Martina", "Simón", "Emma",
+    "Lucas", "Olivia", "Mateo", "Sara", "Samuel", "Julia", "Isaac", "Victoria",
+    "Daniel", "Mía", "Ángel", "Luna", "Noah", "Sofía", "Elías", "Isabella",
+    "Adrián", "Valentina", "Joaquín", "Amanda", "Dante", "Antonia", "Thiago", "Catalina",
+    "Liam", "Josefa", "Milo", "Trinidad", "Axel", "Emilia", "Ian", "Rafaela",
+    "Dylan", "Agustina", "Oliver", "Francisca", "Theo", "Constanza", "Luka", "Macarena",
+    "Enzo", "Javiera", "Bautista", "Isidora", "Vicente", "Amparo", "Gaspar", "Rosario",
+    "Alonso", "Esperanza", "Julián", "Paz", "Emiliano", "Soledad", "Diego", "Dominga",
+    "Matías", "Consuelo", "Nicolás", "Mercedes", "Sebastián", "Milagros", "Cristóbal", "Dolores",
+    "Felipe", "Teresa", "Tomás", "Inés", "Benjamín", "Pilar", "Maximiliano", "Amparo",
+    "Ignacio", "Esperanza", "Gonzalo", "Rosario", "Rodrigo", "Paz", "Francisco", "Soledad"
 ]
 
 APELLIDOS = [
+    # Apellidos comunes chilenos
     "González", "Rodríguez", "Martínez", "López", "Sánchez", "Ramírez", "Torres",
     "Flores", "Rivera", "Morales", "Ortiz", "Gutiérrez", "Castillo", "Díaz", "Vargas",
     "Castro", "Romero", "Soto", "Navarro", "Cruz", "Medina", "Herrera", "Jiménez",
@@ -55,9 +68,26 @@ APELLIDOS = [
     "Escobar", "Figueroa", "Gallardo", "Hidalgo", "Ibáñez", "Jara", "Klein", "Lagos",
     "Molina", "Núñez", "Ortega", "Palma", "Quiroz", "Reyes", "Salinas", "Tapia",
     "Urrutia", "Vásquez", "Yáñez", "Zúñiga", "Acuña", "Barrera", "Cárcamo", "Delgado",
-    "Espinoza", "Fierro", "García", "Hernández", "Inostroza", "Jofré", "Krause", "Lira",
-    "Maldonado", "Naranjo", "Orellana", "Parra", "Quiroga", "Riquelme", "Sáez", "Toro",
-    "Ulloa", "Villalobos", "Wagner", "Zamora", "Acevedo", "Benítez", "Cárcamo", "Durán"
+    "Fierro", "García", "Hernández", "Inostroza", "Jofré", "Krause", "Lira", "Maldonado",
+    "Naranjo", "Orellana", "Parra", "Quiroga", "Riquelme", "Sáez", "Toro", "Ulloa",
+    "Villalobos", "Wagner", "Zamora", "Acevedo", "Benítez", "Durán", "Bravo", "Cáceres",
+    "Carvajal", "Cid", "Cisternas", "Correa", "Cuevas", "Dávila", "Espinoza", "Farias",
+    "Garcés", "Guerrero", "Henríquez", "Lara", "Leiva", "Méndez", "Montero", "Navarrete",
+    "Olivares", "Peña", "Poblete", "Ramos", "Rivas", "Salgado", "Sandoval", "Toledo",
+    "Valenzuela", "Vega", "Vergara", "Vidal", "Villarroel", "Zapata", "Aguilar", "Baeza",
+    "Barrios", "Bustamante", "Cáceres", "Cárcamo", "Carrillo", "Carvajal", "Cid", "Cisternas",
+    "Cornejo", "Cortés", "Cuevas", "Dávila", "Delgado", "Díaz", "Espinoza", "Farias",
+    "Fierro", "Flores", "Fuentes", "Garcés", "García", "González", "Guerrero", "Henríquez",
+    "Hernández", "Herrera", "Hidalgo", "Ibáñez", "Inostroza", "Jara", "Jiménez", "Jofré",
+    "Klein", "Krause", "Lagos", "Lara", "Leiva", "Lira", "López", "Maldonado",
+    "Martínez", "Méndez", "Medina", "Mendoza", "Molina", "Montero", "Morales", "Moreno",
+    "Muñoz", "Naranjo", "Navarro", "Navarrete", "Núñez", "Olivares", "Orellana", "Ortega",
+    "Ortiz", "Palma", "Parra", "Peña", "Pérez", "Pizarro", "Poblete", "Quiroga",
+    "Quiroz", "Ramírez", "Ramos", "Reyes", "Riquelme", "Rivas", "Rivera", "Rojas",
+    "Romero", "Sáez", "Salazar", "Salgado", "Salinas", "Sánchez", "Sandoval", "Sepúlveda",
+    "Silva", "Soto", "Tapia", "Toledo", "Torres", "Ulloa", "Urrutia", "Valdés",
+    "Valenzuela", "Vargas", "Vásquez", "Vega", "Vera", "Vergara", "Vidal", "Villalobos",
+    "Villarroel", "Wagner", "Yáñez", "Zamora", "Zapata", "Zúñiga"
 ]
 
 CARGOS = [
@@ -153,34 +183,60 @@ def crear_empleados_para_empresa(db, empresa: Empresa, num_empleados: int = 20):
     empleados = []
     rut_base = 15000000 + empresa.id * 1000
     
-    # Usar combinaciones aleatorias para evitar repeticiones
+    # Usar random.sample() para garantizar nombres únicos cuando sea posible
+    # Si necesitamos más empleados que nombres disponibles, mezclamos y repetimos
+    nombres_disponibles = NOMBRES.copy()
+    apellidos_disponibles = APELLIDOS.copy()
+    random.shuffle(nombres_disponibles)
+    random.shuffle(apellidos_disponibles)
+    
     combinaciones_usadas = set()
+    nombre_idx = 0
+    apellido1_idx = 0
+    apellido2_idx = 0
     
     for i in range(num_empleados):
-        # Generar combinación única de nombre y apellidos
+        # Seleccionar nombre (rotar si es necesario)
+        if nombre_idx >= len(nombres_disponibles):
+            random.shuffle(nombres_disponibles)
+            nombre_idx = 0
+        nombre = nombres_disponibles[nombre_idx]
+        nombre_idx += 1
+        
+        # Seleccionar apellidos únicos
         intentos = 0
-        while intentos < 100:  # Máximo 100 intentos para evitar bucle infinito
-            nombre = random.choice(NOMBRES)
-            apellido1 = random.choice(APELLIDOS)
-            apellido2 = random.choice(APELLIDOS)
+        while intentos < 50:
+            if apellido1_idx >= len(apellidos_disponibles):
+                random.shuffle(apellidos_disponibles)
+                apellido1_idx = 0
+                apellido2_idx = 1
+            
+            apellido1 = apellidos_disponibles[apellido1_idx]
+            apellido2_idx = (apellido2_idx + 1) % len(apellidos_disponibles)
+            if apellido2_idx == apellido1_idx:
+                apellido2_idx = (apellido2_idx + 1) % len(apellidos_disponibles)
+            apellido2 = apellidos_disponibles[apellido2_idx]
             
             # Evitar que los dos apellidos sean iguales
             if apellido1 == apellido2:
-                continue
+                apellido2_idx = (apellido2_idx + 1) % len(apellidos_disponibles)
+                apellido2 = apellidos_disponibles[apellido2_idx]
             
             combinacion = (nombre, apellido1, apellido2)
             if combinacion not in combinaciones_usadas:
                 combinaciones_usadas.add(combinacion)
+                apellido1_idx = (apellido1_idx + 1) % len(apellidos_disponibles)
+                apellido2_idx = (apellido2_idx + 1) % len(apellidos_disponibles)
                 break
             intentos += 1
+            apellido1_idx = (apellido1_idx + 1) % len(apellidos_disponibles)
         
-        # Si no se encontró combinación única después de 100 intentos, usar índice
-        if intentos >= 100:
-            nombre = NOMBRES[i % len(NOMBRES)]
-            apellido1 = APELLIDOS[i % len(APELLIDOS)]
-            apellido2 = APELLIDOS[(i + 1) % len(APELLIDOS)]
-            if apellido1 == apellido2:
-                apellido2 = APELLIDOS[(i + 2) % len(APELLIDOS)]
+        # Si después de 50 intentos no encontramos combinación única, usar aleatorio
+        if intentos >= 50:
+            apellido1 = random.choice(APELLIDOS)
+            apellido2 = random.choice(APELLIDOS)
+            while apellido1 == apellido2:
+                apellido2 = random.choice(APELLIDOS)
         
         # Distribuir empleados entre departamentos de forma equilibrada
         departamento = departamentos[i % len(departamentos)]
@@ -188,7 +244,7 @@ def crear_empleados_para_empresa(db, empresa: Empresa, num_empleados: int = 20):
         rut = generar_rut_chileno(rut_base + i)
         
         # Generar email único
-        email_base = f"{nombre.lower().replace(' ', '')}.{apellido1.lower().replace(' ', '')}"
+        email_base = f"{nombre.lower().replace(' ', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')}.{apellido1.lower().replace(' ', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')}"
         email = f"{email_base}.{i+1}@{empresa.nombre.lower().replace(' ', '').replace('.', '')}.com"
         
         empleado = Empleado(
