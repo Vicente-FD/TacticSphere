@@ -1071,6 +1071,7 @@ export class UsersComponent implements OnInit, OnDestroy {
       value: '',
     };
     this.passwordDialogMessage = '';
+    this.cdr.markForCheck();
   }
 
   confirmPasswordDialog(): void {
@@ -1091,14 +1092,17 @@ export class UsersComponent implements OnInit, OnDestroy {
               this.resettingId = null;
             }
             this.passwordDialogBusy = false;
+            this.cdr.markForCheck();
           })
         )
         .subscribe({
           next: () => {
             this.closePasswordDialog(true);
+            this.cdr.markForCheck();
           },
           error: (error) => {
             console.error('Error reseteando contraseña', error);
+            this.cdr.markForCheck();
           },
         });
       return;
@@ -1116,6 +1120,7 @@ export class UsersComponent implements OnInit, OnDestroy {
               this.resolvingRequestId = null;
             }
             this.passwordDialogBusy = false;
+            this.cdr.markForCheck();
           })
         )
         .subscribe({
@@ -1125,9 +1130,11 @@ export class UsersComponent implements OnInit, OnDestroy {
             this.loadPasswordRequests();
             // Refrescar notificaciones para actualizar contador
             this.notificationCenter.refresh(this.isAdminSistema);
+            this.cdr.markForCheck();
           },
           error: (error) => {
             console.error('Error completando solicitud de contraseña', error);
+            this.cdr.markForCheck();
           },
         });
       return;
