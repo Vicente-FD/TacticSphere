@@ -76,8 +76,11 @@ const TS_COLORS = {
   text: "#1E293B",
   background: "#F8FAFC",
   gridLine: "rgba(148,163,184,0.3)",
+  // Colores para comparación
+  comparison: "#64748B", // Gris para serie comparativa
 };
 const AREA_FILL = "rgba(59,130,246,0.15)";
+const AREA_FILL_COMPARISON = "rgba(100,116,139,0.15)"; // Gris para área comparativa
 const PARTICIPATION_TARGET = 80; // Meta de participación por departamento (%)
 
 // Paleta de colores compartida para niveles Likert
@@ -970,8 +973,12 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const data = pillars.map((item) => ({ value: this.round(item.percent), pillarId: item.pillar_id }));
     const selected = this.selectedPillar;
     
+    const mainSeriesName = this.getMainFilterName();
+    const comparisonSeriesName = this.getComparisonFilterName();
+    
     const mainSeries = {
       type: "bar" as const,
+      name: mainSeriesName,
       data: data.map((item) => {
         const barColor = this.getStageColorByPercent(item.value);
         const textColor = this.getTextColorForContrast(barColor);
@@ -1000,34 +1007,41 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
 
     const series: any[] = [mainSeries];
 
-    // Agregar capa de comparación con opacidad reducida
+    // Agregar serie de comparación con color distinto (gris)
     if (hasComparison && comparisonMap) {
       const comparisonData = pillars.map((item) => {
         const compareValue = comparisonMap.get(item.pillar_id) ?? 0;
-        const barColor = this.getStageColorByPercent(compareValue);
         return {
           value: this.round(compareValue),
           pillarId: item.pillar_id,
           itemStyle: {
-            color: barColor,
-            opacity: 0.3, // Opacidad reducida (30%)
-            borderColor: barColor,
+            color: TS_COLORS.comparison, // Color gris para comparación
+            opacity: 1, // Color sólido
+            borderColor: TS_COLORS.comparison,
             borderWidth: 1,
           },
           label: {
-            show: false, // No mostrar etiquetas en la comparación
+            show: true, // Mostrar etiquetas en la comparación
+            position: "right" as const,
+            formatter: "{c}%",
+            fontWeight: 600,
+            color: TS_COLORS.comparison,
           },
         };
       });
       
       series.push({
         type: "bar" as const,
+        name: comparisonSeriesName,
         data: comparisonData,
         barWidth: 24,
-        silent: true, // No interactivo
         z: 0, // Detrás de la capa principal
       });
     }
+
+    const legendData = hasComparison 
+      ? [mainSeriesName, comparisonSeriesName]
+      : [mainSeriesName];
 
     return {
       backgroundColor: TS_COLORS.background,
@@ -1037,17 +1051,25 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         trigger: "axis" as const,
         axisPointer: { type: "shadow" as const },
         formatter: (params: any) => {
-          // Solo mostrar tooltip para la serie principal
-          const mainParam = Array.isArray(params) 
-            ? params.find((p: any) => p.seriesIndex === 0)
-            : params.seriesIndex === 0 ? params : null;
-          
-          if (!mainParam) return "";
-          
-          return `${mainParam.name}: ${this.formatNumber(mainParam.value)}%`;
+          if (Array.isArray(params)) {
+            return params.map((p: any) => 
+              `<strong>${p.seriesName}</strong><br/>${p.name}: ${this.formatNumber(p.value)}%`
+            ).join("<br/><br/>");
+          }
+          return `${params.seriesName}<br/>${params.name}: ${this.formatNumber(params.value)}%`;
         },
       },
-      grid: { left: 0, right: 16, bottom: 32, top: 24, containLabel: true },
+      legend: {
+        data: legendData,
+        top: 0,
+        left: "center",
+        icon: "rect",
+        textStyle: { color: TS_COLORS.text, fontWeight: 600 },
+        selectedMode: true, // Permitir mostrar/ocultar series
+        itemGap: 20,
+        // ECharts automáticamente usará los colores de las series para los iconos
+      },
+      grid: { left: 0, right: 16, bottom: 32, top: hasComparison ? 50 : 24, containLabel: true },
       xAxis: {
         type: "value" as const,
         max: 100,
@@ -1142,17 +1164,20 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
       return value.length > 22 ? `${value.slice(0, 22)}…` : value;
     };
     
+    const mainSeriesName = this.getMainFilterName();
+    const comparisonSeriesName = this.getComparisonFilterName();
+    
     const seriesData: any[] = [
       {
         value: pillars.map((pillar) => this.round(pillar.percent)),
-        name: "Promedio",
+        name: mainSeriesName,
         areaStyle: { color: AREA_FILL },
         lineStyle: { color: TS_COLORS.primary, width: 2 },
         itemStyle: { color: TS_COLORS.primary },
       },
     ];
 
-    // Agregar capa de comparación con opacidad reducida
+    // Agregar serie de comparación con color distinto (gris)
     if (hasComparison) {
       const comparisonMap = new Map(comparisonPillars.map((p) => [p.pillar_id, p.percent]));
       seriesData.push({
@@ -1160,24 +1185,24 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
           const compareValue = comparisonMap.get(pillar.pillar_id) ?? 0;
           return this.round(compareValue);
         }),
-        name: "Comparación",
+        name: comparisonSeriesName,
         areaStyle: { 
-          color: "rgba(59,130,246,0.15)", // Opacidad reducida (30%)
-          opacity: 0.3,
+          color: AREA_FILL_COMPARISON, // Color gris para área comparativa
         },
         lineStyle: { 
-          color: TS_COLORS.primary, 
-          width: 1.5,
-          opacity: 0.3,
+          color: TS_COLORS.comparison, // Color gris para línea comparativa
+          width: 2,
         },
         itemStyle: { 
-          color: TS_COLORS.primary,
-          opacity: 0.3,
+          color: TS_COLORS.comparison, // Color gris para puntos comparativos
         },
-        silent: true, // No interactivo
         z: 0, // Detrás de la capa principal
       });
     }
+
+    const legendData = hasComparison 
+      ? [mainSeriesName, comparisonSeriesName]
+      : [mainSeriesName];
 
     return {
       backgroundColor: TS_COLORS.background,
@@ -1187,21 +1212,24 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
         trigger: "item",
         textStyle: { color: "#FFFFFF", fontWeight: 500 },
         formatter: (params: any) => {
-          // Solo mostrar tooltip para la serie principal
-          if (params.seriesName === "Comparación") return "";
           const values = Array.isArray(params.value) ? params.value : [];
-          return values
-            .map((value: number, idx: number) => `${pillars[idx].pillar_name}: ${this.formatNumber(value)}%`)
-            .join("<br/>");
+          const seriesName = params.seriesName || "";
+          return `<strong>${seriesName}</strong><br/>` +
+            values
+              .map((value: number, idx: number) => `${pillars[idx].pillar_name}: ${this.formatNumber(value)}%`)
+              .join("<br/>");
         },
       },
       legend: {
-        data: ["Promedio"],
+        data: legendData,
         top: 0,
         left: "center",
         icon: "circle",
         textStyle: { color: TS_COLORS.text, fontWeight: 600 },
-        formatter: formatLabel,
+        formatter: (name: string) => formatLabel(name),
+        selectedMode: true, // Permitir mostrar/ocultar series
+        itemGap: 20,
+        // ECharts automáticamente usará los colores de las series para los iconos
       },
       radar: {
         indicator: pillars.map((pillar) => ({ name: pillar.pillar_name, max: 100 })),
@@ -2453,6 +2481,52 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     const employee = this.employeesSignal().find((item) => item.id === id);
     return employee ? employee.nombre : `Empleado #${id}`;
   }
+
+  // =========================================================
+  // Funciones helper para comparación
+  // =========================================================
+
+  /**
+   * Obtiene el nombre del filtro comparativo actual
+   */
+  getComparisonFilterName(): string {
+    if (!this.hasComparison()) return "";
+    
+    if (this.compareType === "DEPARTMENT" && this.compareDepartmentId != null) {
+      return this.resolveDepartmentName(this.compareDepartmentId);
+    }
+    
+    if (this.compareType === "EMPLOYEE" && this.compareEmployeeId != null) {
+      return this.resolveEmployeeName(this.compareEmployeeId);
+    }
+    
+    return "Comparación";
+  }
+
+  /**
+   * Obtiene el nombre del filtro principal actual
+   */
+  getMainFilterName(): string {
+    const departmentId = this.selectedDepartmentIdSignal();
+    const employeeId = this.selectedEmployeeIdSignal();
+    
+    if (employeeId != null) {
+      return this.resolveEmployeeName(employeeId);
+    }
+    
+    if (departmentId != null) {
+      return this.resolveDepartmentName(departmentId);
+    }
+    
+    const selectedCompanyId = this.selectedCompanyIdSignal();
+    if (selectedCompanyId === 'GLOBAL') {
+      return 'Global (todas las empresas)';
+    }
+    
+    const companyId = selectedCompanyId ?? this.empresaId;
+    return this.resolveCompanyName(companyId);
+  }
+
 
   private ensureLogo(): Promise<void> {
     if (this.logoDataUrl) return Promise.resolve();
@@ -4477,3 +4551,4 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     URL.revokeObjectURL(url);
   }
 }
+

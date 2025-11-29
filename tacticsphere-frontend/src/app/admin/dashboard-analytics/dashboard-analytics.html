@@ -250,8 +250,24 @@
         <div class="grid gap-6 xl:grid-cols-12">
           <div class="ts-card ts-card--flush space-y-4 xl:col-span-7 min-w-0 animate-subtleUp">
             <div class="space-y-1 px-6">
-              <h2 class="text-lg font-semibold text-ink">Desempeno por pilar</h2>
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg font-semibold text-ink">Desempeno por pilar</h2>
+                <span *ngIf="hasComparison()" class="ts-chip border-primary/30 bg-primary/10 text-primary text-xs px-2 py-0.5">
+                  Comparación activa
+                </span>
+              </div>
               <p class="text-sm text-muted">Promedio ponderado por pregunta. Clic para filtrar.</p>
+              <p *ngIf="hasComparison()" class="text-sm text-muted mt-1">
+                <span class="inline-flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full" [style.background-color]="'#3B82F6'"></span>
+                  <strong>{{ getMainFilterName() }}</strong>
+                </span>
+                <span class="mx-2">vs</span>
+                <span class="inline-flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full" [style.background-color]="'#64748B'"></span>
+                  <strong>{{ getComparisonFilterName() }}</strong>
+                </span>
+              </p>
             </div>
             <div class="px-0">
               <echarts
@@ -267,8 +283,24 @@
 
           <div class="ts-card ts-card--flush space-y-4 xl:col-span-5 min-w-0 animate-subtleUp">
             <div class="space-y-1 px-6">
-              <h2 class="text-lg font-semibold text-ink">Equilibrio organizacional</h2>
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg font-semibold text-ink">Equilibrio organizacional</h2>
+                <span *ngIf="hasComparison()" class="ts-chip border-primary/30 bg-primary/10 text-primary text-xs px-2 py-0.5">
+                  Comparación activa
+                </span>
+              </div>
               <p class="text-sm text-muted">Comparativa radial de los pilares.</p>
+              <p *ngIf="hasComparison()" class="text-sm text-muted mt-1">
+                <span class="inline-flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full" [style.background-color]="'#3B82F6'"></span>
+                  <strong>{{ getMainFilterName() }}</strong>
+                </span>
+                <span class="mx-2">vs</span>
+                <span class="inline-flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full" [style.background-color]="'#64748B'"></span>
+                  <strong>{{ getComparisonFilterName() }}</strong>
+                </span>
+              </p>
             </div>
             <div class="px-0">
               <echarts
