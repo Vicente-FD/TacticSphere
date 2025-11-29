@@ -827,17 +827,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
     this.updateFilter();
   }
 
-  /**
-   * Maneja clicks en el boxplot para filtrar por pilar (reutiliza la misma lógica que onPillarBarClick)
-   */
-  onBoxplotClick(event: any): void {
-    const pillarId = event?.data?.pillarId as number | undefined;
-    if (pillarId == null) return;
-    const currentPillar = this.selectedPillarSignal();
-    this.selectedPillarSignal.set(currentPillar === pillarId ? "ALL" : pillarId);
-    this.updateFilter();
-  }
-
   onHeatmapClick(event: any): void {
     const pillarId = event?.data?.pillarId as number | undefined;
     const departmentId = event?.data?.departmentId as number | undefined;
@@ -1521,104 +1510,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   // =========================================================
 
   /**
-   * Boxplot por pilar: Distribución de desempeño (mínimo, Q1, mediana, Q3, máximo)
-   */
-  pillarBoxplotOption(): EChartsOption {
-    const analytics = this.analytics();
-    if (!analytics?.pillars.length) return this.emptyChartOption("Sin datos de pilares");
-
-    // Para el boxplot, necesitamos datos individuales por pilar.
-    // Como no tenemos puntajes individuales, usaremos los niveles Likert como aproximación
-    const pillars = analytics.pillars;
-    const boxplotData = pillars.map((p) => {
-      // Convertir niveles Likert (0-4) a porcentajes (0-100)
-      // levels[0] = nivel 1, levels[1] = nivel 2, etc.
-      const values: number[] = [];
-      p.levels.forEach((count, levelIndex) => {
-        const level = levelIndex + 1; // Likert 1-5
-        const percentage = (level / 5) * 100; // Convertir a porcentaje
-        // Agregar el valor 'count' veces para construir la distribución
-        for (let i = 0; i < Math.round(count || 0); i++) {
-          values.push(percentage);
-        }
-      });
-
-      if (values.length === 0) return null;
-
-      // Calcular estadísticas del boxplot
-      const sorted = [...values].sort((a, b) => a - b);
-      const min = sorted[0];
-      const max = sorted[sorted.length - 1];
-      const q1 = this.quantile(sorted, 0.25);
-      const median = this.quantile(sorted, 0.5);
-      const q3 = this.quantile(sorted, 0.75);
-
-      return {
-        name: p.pillar_name,
-        value: [min, q1, median, q3, max],
-        pillarId: p.pillar_id,
-      };
-    }).filter((item): item is { name: string; value: number[]; pillarId: number } => item !== null);
-
-    if (!boxplotData.length) return this.emptyChartOption("Sin datos suficientes para boxplot");
-
-    return {
-      backgroundColor: TS_COLORS.background,
-      animationDuration: 800,
-      animationEasing: "cubicOut",
-      tooltip: {
-        trigger: "item",
-        formatter: (params: any) => {
-          const data = params.value as number[];
-          return `<strong>${params.name}</strong><br/>` +
-            `Mínimo: ${this.formatNumber(data[0])}%<br/>` +
-            `Q1: ${this.formatNumber(data[1])}%<br/>` +
-            `Mediana: ${this.formatNumber(data[2])}%<br/>` +
-            `Q3: ${this.formatNumber(data[3])}%<br/>` +
-            `Máximo: ${this.formatNumber(data[4])}%`;
-        },
-      },
-      grid: { left: 120, right: 40, bottom: 60, top: 40, containLabel: false },
-      xAxis: {
-        type: "category",
-        data: boxplotData.map((d) => d.name),
-        axisLabel: { rotate: 20, color: TS_COLORS.text, fontWeight: 500 },
-        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
-      },
-      yAxis: {
-        type: "value",
-        min: 0,
-        max: 100,
-        axisLabel: { formatter: "{value}%", color: TS_COLORS.text },
-        splitLine: { lineStyle: { color: TS_COLORS.gridLine } },
-        axisLine: { lineStyle: { color: TS_COLORS.gridLine } },
-      },
-      series: [
-        {
-          type: "boxplot",
-          data: boxplotData.map((d) => ({
-            value: d.value,
-            pillarId: d.pillarId,
-          })),
-          itemStyle: {
-            color: TS_COLORS.primary,
-            borderColor: TS_COLORS.text,
-          },
-          // Activar visualización de outliers
-          boxWidth: ['20%', '40%'],
-          emphasis: {
-            itemStyle: {
-              borderColor: TS_COLORS.primary,
-              borderWidth: 2,
-            },
-            focus: 'series',
-          },
-        },
-      ],
-    };
-  }
-
-  /**
    * Treemap organizacional: Empresa → Departamento → Colaborador.
    * - value[0] = tamaño (colaboradores)
    * - value[1] = desempeño (para visualMap)
@@ -2169,15 +2060,6 @@ export class DashboardAnalyticsComponent implements OnInit, OnDestroy, AfterView
   }
 
   // Funciones auxiliares para los nuevos gráficos
-  private quantile(sorted: number[], p: number): number {
-    if (sorted.length === 0) return 0;
-    const index = (sorted.length - 1) * p;
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    const weight = index % 1;
-    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
-  }
-
   private calculatePearsonCorrelation(x: number[], y: number[]): number {
     if (x.length !== y.length || x.length === 0) return 0;
 

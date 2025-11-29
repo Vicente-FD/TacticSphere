@@ -336,24 +336,6 @@
           </div>
         </div>
 
-        <!-- Boxplot por pilar -->
-        <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
-          <div class="space-y-1 px-6">
-            <h2 class="text-lg font-semibold text-ink">Distribución de desempeño (Boxplot por pilar)</h2>
-            <p class="text-sm text-muted">Mínimo, Q1, mediana, Q3 y máximo por pilar.</p>
-          </div>
-          <div class="px-0">
-            <echarts
-              class="block h-[28rem] w-full animate-fadeIn"
-              [theme]="'tsMono'"
-              [options]="pillarBoxplotOption()"
-              [initOpts]="chartInitOpts"
-              [autoResize]="true"
-              (chartClick)="onBoxplotClick($event)"
-            ></echarts>
-          </div>
-        </div>
-
         <!-- Mapa organizacional (Treemap) -->
         <div class="ts-card ts-card--flush space-y-4 min-w-0 animate-subtleUp">
           <div class="space-y-1 px-6">
