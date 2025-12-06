@@ -5,7 +5,8 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { PilarService } from '../../pillar.service';
-import { Pilar } from '../../types';
+import { SubpilarService } from '../../subpilar.service';
+import { Pilar, Subpilar } from '../../types';
 
 @Component({
   standalone: true,
@@ -167,45 +168,107 @@ import { Pilar } from '../../types';
 
       <!-- Modal de edición -->
       <ts-modal title="Editar pilar" [open]="editModalOpen" (close)="cerrarModalEdicion()">
-        <div class="space-y-4">
-          <label class="block space-y-2">
-            <span class="ts-label">Nombre</span>
-            <input
-              class="ts-input"
-              [(ngModel)]="editBuffer.nombre"
-              name="editNombre"
-              placeholder="Estrategia, Talento, Cultura..."
-            />
-          </label>
+        <div class="space-y-6">
+          <!-- Campos del pilar -->
+          <div class="space-y-4">
+            <label class="block space-y-2">
+              <span class="ts-label">Nombre</span>
+              <input
+                class="ts-input"
+                [(ngModel)]="editBuffer.nombre"
+                name="editNombre"
+                placeholder="Estrategia, Talento, Cultura..."
+              />
+            </label>
 
-          <label class="block space-y-2">
-            <span class="ts-label">Descripción (opcional)</span>
-            <textarea
-              class="ts-input min-h-[96px] resize-y"
-              [(ngModel)]="editBuffer.descripcion"
-              name="editDescripcion"
-              placeholder="Detalles que ayuden a entender el alcance del pilar"
-            ></textarea>
-          </label>
+            <label class="block space-y-2">
+              <span class="ts-label">Descripción (opcional)</span>
+              <textarea
+                class="ts-input min-h-[96px] resize-y"
+                [(ngModel)]="editBuffer.descripcion"
+                name="editDescripcion"
+                placeholder="Detalles que ayuden a entender el alcance del pilar"
+              ></textarea>
+            </label>
 
-          <label class="block space-y-2">
-            <span class="ts-label">Peso relativo</span>
-            <input
-              class="ts-input"
-              type="number"
-              min="1"
-              step="1"
-              [(ngModel)]="editBuffer.peso"
-              name="editPeso"
-            />
-          </label>
+            <label class="block space-y-2">
+              <span class="ts-label">Peso relativo</span>
+              <input
+                class="ts-input"
+                type="number"
+                min="1"
+                step="1"
+                [(ngModel)]="editBuffer.peso"
+                name="editPeso"
+              />
+            </label>
+          </div>
+
+          <!-- Sección de Subpilares -->
+          <div class="space-y-4 pt-4 border-t border-border">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-base font-semibold text-ink">Subpilares (opcional)</h3>
+                <p class="text-xs text-neutral-500">
+                  Organiza las preguntas del pilar en subpilares opcionales.
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-3 max-h-64 overflow-y-auto">
+              <div
+                *ngFor="let subpilar of subpilaresBuffer; trackBy: trackBySubpilarIndex"
+                class="flex gap-2 items-start rounded-lg border border-neutral-200 p-3 bg-white"
+              >
+                <div class="flex-1 space-y-2">
+                  <input
+                    class="ts-input"
+                    type="text"
+                    [(ngModel)]="subpilar.nombre"
+                    [name]="'subpilar_nombre_' + subpilar._index"
+                    placeholder="Nombre del subpilar"
+                    (blur)="markSubpilarDirty(subpilar)"
+                  />
+                  <textarea
+                    class="ts-input min-h-[60px] resize-y text-sm"
+                    [(ngModel)]="subpilar.descripcion"
+                    [name]="'subpilar_desc_' + subpilar._index"
+                    placeholder="Descripción (opcional)"
+                    (blur)="markSubpilarDirty(subpilar)"
+                  ></textarea>
+                </div>
+                <button
+                  type="button"
+                  class="ts-btn ts-btn--danger mt-1"
+                  (click)="marcarSubpilarParaEliminar(subpilar)"
+                  [disabled]="savingSubpilares"
+                >
+                  <app-icon name="trash2" size="sm"></app-icon>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="w-full ts-btn ts-btn--ghost border border-neutral-200 text-neutral-600"
+                (click)="agregarSubpilarNuevo()"
+                [disabled]="savingSubpilares"
+              >
+                <app-icon name="plus" size="sm" class="mr-2"></app-icon>
+                Agregar subpilar
+              </button>
+
+              <div *ngIf="loadingSubpilares" class="text-center text-sm text-neutral-500 py-2">
+                Cargando subpilares...
+              </div>
+            </div>
+          </div>
 
           <div class="flex justify-end gap-3 pt-4 border-t border-border">
             <button
               type="button"
               class="ts-btn ts-btn--secondary"
               (click)="cerrarModalEdicion()"
-              [disabled]="saving"
+              [disabled]="saving || savingSubpilares"
             >
               Cancelar
             </button>
@@ -213,9 +276,9 @@ import { Pilar } from '../../types';
               type="button"
               class="ts-btn ts-btn--positive"
               (click)="guardarEdicion()"
-              [disabled]="saving || !editBuffer.nombre.trim()"
+              [disabled]="saving || savingSubpilares || !editBuffer.nombre.trim()"
             >
-              {{ saving ? 'Guardando...' : 'Guardar' }}
+              {{ saving || savingSubpilares ? 'Guardando...' : 'Guardar' }}
             </button>
           </div>
         </div>
@@ -268,6 +331,7 @@ import { Pilar } from '../../types';
 })
 export class PillarsComponent implements OnInit {
   private pillarsSrv = inject(PilarService);
+  private subpilaresSrv = inject(SubpilarService);
 
   pilares: WritableSignal<Pilar[]> = signal<Pilar[]>([]);
 
@@ -289,6 +353,11 @@ export class PillarsComponent implements OnInit {
     descripcion: '',
     peso: 1,
   };
+
+  // Gestión de subpilares
+  subpilaresBuffer: Array<Subpilar & { _index: number; _dirty?: boolean; _deleted?: boolean }> = [];
+  loadingSubpilares = false;
+  savingSubpilares = false;
 
   message = '';
   error = '';
@@ -348,6 +417,7 @@ export class PillarsComponent implements OnInit {
       peso: pilar.peso,
     };
     this.editModalOpen = true;
+    this.cargarSubpilares(pilar.id);
   }
 
   cerrarModalEdicion(): void {
@@ -355,12 +425,84 @@ export class PillarsComponent implements OnInit {
     this.editModalOpen = false;
     this.editingId = null;
     this.editBuffer = { nombre: '', descripcion: '', peso: 1 };
+    this.subpilaresBuffer = [];
     // Resetear el estado de guardado si aún está activo
     this.saving = false;
+    this.savingSubpilares = false;
+  }
+
+  /**
+   * Carga los subpilares del pilar actual
+   */
+  private cargarSubpilares(pilarId: number): void {
+    this.loadingSubpilares = true;
+    this.subpilaresBuffer = [];
+    this.subpilaresSrv.getSubpilares(pilarId).subscribe({
+      next: (subpilares) => {
+        // Agregar índices y flags para tracking
+        this.subpilaresBuffer = subpilares.map((sp, index) => ({
+          ...sp,
+          _index: index,
+          _dirty: false,
+          _deleted: false,
+          descripcion: sp.descripcion ?? '',
+        }));
+      },
+      error: (err) => {
+        console.error('Error cargando subpilares', err);
+        this.error = 'No se pudieron cargar los subpilares';
+      },
+      complete: () => {
+        this.loadingSubpilares = false;
+      },
+    });
+  }
+
+  /**
+   * Agrega un nuevo subpilar al buffer (aún no guardado)
+   */
+  agregarSubpilarNuevo(): void {
+    const nuevoIndex = this.subpilaresBuffer.length;
+    this.subpilaresBuffer.push({
+      id: -1, // ID temporal para nuevos
+      pilar_id: this.editingId!,
+      nombre: '',
+      descripcion: '',
+      orden: null,
+      _index: nuevoIndex,
+      _dirty: true,
+      _deleted: false,
+    });
+  }
+
+  /**
+   * Marca un subpilar como modificado
+   */
+  markSubpilarDirty(subpilar: Subpilar & { _dirty?: boolean }): void {
+    if (subpilar.id > 0) {
+      subpilar._dirty = true;
+    }
+  }
+
+  /**
+   * Marca un subpilar para eliminación
+   */
+  marcarSubpilarParaEliminar(subpilar: Subpilar & { _deleted?: boolean; _index: number }): void {
+    if (!confirm(`¿Eliminar el subpilar "${subpilar.nombre || 'sin nombre'}"?`)) {
+      return;
+    }
+    subpilar._deleted = true;
+  }
+
+  /**
+   * TrackBy para ngFor de subpilares
+   */
+  trackBySubpilarIndex(_index: number, item: Subpilar & { _index: number }): number {
+    return item._index;
   }
 
   guardarEdicion(): void {
-    if (!this.editingId || this.saving) return;
+    if (!this.editingId || this.saving || this.savingSubpilares) return;
 
     const body = {
       nombre: this.editBuffer.nombre.trim(),
@@ -378,6 +520,7 @@ export class PillarsComponent implements OnInit {
     this.saving = true;
     this.clearFeedback();
 
+    // Primero guardar el pilar
     this.pillarsSrv.update(this.editingId, body).subscribe({
       next: (updated) => {
         this.message = `Pilar "${updated.nombre}" actualizado correctamente.`;
@@ -385,9 +528,8 @@ export class PillarsComponent implements OnInit {
         this.pilares.set(
           this.pilares().map((p) => (p.id === updated.id ? updated : p))
         );
-        // Resetear el estado de guardado antes de cerrar el modal
-        this.saving = false;
-        this.cerrarModalEdicion();
+        // Luego sincronizar subpilares
+        this.sincronizarSubpilares();
       },
       error: (err) => {
         console.error('Error actualizando pilar', err);
@@ -395,13 +537,102 @@ export class PillarsComponent implements OnInit {
         this.error = errorMsg;
         this.saving = false;
       },
-      complete: () => {
-        // Asegurar que el estado se resetee incluso si hay error
-        if (this.saving) {
-          this.saving = false;
-        }
-      },
     });
+  }
+
+  /**
+   * Sincroniza los subpilares: crea nuevos, actualiza modificados y elimina marcados
+   */
+  private sincronizarSubpilares(): void {
+    if (!this.editingId) {
+      this.saving = false;
+      this.cerrarModalEdicion();
+      return;
+    }
+
+    this.savingSubpilares = true;
+
+    // Filtrar subpilares válidos (no eliminados y con nombre)
+    const subpilaresValidos = this.subpilaresBuffer.filter(
+      (sp) => !sp._deleted && sp.nombre.trim()
+    );
+
+    const operaciones: Array<Promise<void>> = [];
+
+    // 1. Eliminar los marcados para borrar
+    const paraEliminar = this.subpilaresBuffer.filter(
+      (sp) => sp._deleted && sp.id > 0
+    );
+    paraEliminar.forEach((sp) => {
+      operaciones.push(
+        this.subpilaresSrv.deleteSubpilar(sp.id).toPromise().then(() => {
+          // Éxito silencioso
+        }).catch((err) => {
+          console.error(`Error eliminando subpilar ${sp.id}`, err);
+          throw err;
+        }) as Promise<void>
+      );
+    });
+
+    // 2. Crear los nuevos (id < 0)
+    const paraCrear = subpilaresValidos.filter((sp) => sp.id < 0);
+    paraCrear.forEach((sp) => {
+      operaciones.push(
+        this.subpilaresSrv
+          .createSubpilar(this.editingId!, {
+            pilar_id: this.editingId!,
+            nombre: sp.nombre.trim(),
+            descripcion: sp.descripcion?.trim() || null,
+            orden: sp.orden ?? null,
+          })
+          .toPromise()
+          .then(() => {
+            // Éxito silencioso
+          })
+          .catch((err) => {
+            console.error('Error creando subpilar', err);
+            throw err;
+          }) as Promise<void>
+      );
+    });
+
+    // 3. Actualizar los modificados (id > 0 y _dirty)
+    const paraActualizar = subpilaresValidos.filter(
+      (sp) => sp.id > 0 && sp._dirty
+    );
+    paraActualizar.forEach((sp) => {
+      operaciones.push(
+        this.subpilaresSrv
+          .updateSubpilar(sp.id, {
+            nombre: sp.nombre.trim(),
+            descripcion: sp.descripcion?.trim() || null,
+            orden: sp.orden ?? null,
+          })
+          .toPromise()
+          .then(() => {
+            // Éxito silencioso
+          })
+          .catch((err) => {
+            console.error(`Error actualizando subpilar ${sp.id}`, err);
+            throw err;
+          }) as Promise<void>
+      );
+    });
+
+    // Ejecutar todas las operaciones
+    Promise.all(operaciones)
+      .then(() => {
+        this.message = this.message || 'Subpilares sincronizados correctamente.';
+        this.savingSubpilares = false;
+        this.saving = false;
+        this.cerrarModalEdicion();
+      })
+      .catch((err) => {
+        console.error('Error sincronizando subpilares', err);
+        this.error = 'Error al guardar algunos subpilares. Revisa la consola.';
+        this.savingSubpilares = false;
+        this.saving = false;
+      });
   }
 
   // Modal de confirmación para eliminar pilar

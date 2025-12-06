@@ -160,6 +160,7 @@ class PilarUpdate(BaseModel):
 
 class PreguntaCreate(BaseModel):
     pilar_id: int
+    subpilar_id: Optional[int] = None
     enunciado: str
     tipo: TipoPreguntaEnum
     es_obligatoria: bool = True
@@ -172,18 +173,43 @@ class PreguntaUpdate(BaseModel):
     tipo: Optional[TipoPreguntaEnum] = None
     es_obligatoria: Optional[bool] = None
     peso: Optional[int] = None
+    subpilar_id: Optional[int] = None
     respuesta_esperada: Optional[str] = Field(default=None, max_length=500)
 
 
 class PreguntaRead(BaseModel):
     id: int
     pilar_id: int
+    subpilar_id: Optional[int] = None
     enunciado: str
     tipo: TipoPreguntaEnum
     es_obligatoria: bool
     peso: int
     respuesta_esperada: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+# ======================================================
+# SUBPILARES
+# ======================================================
+
+class SubpilarCreate(BaseModel):
+    pilar_id: int
+    nombre: str
+    descripcion: Optional[str] = None
+    orden: Optional[int] = None
+
+class SubpilarRead(BaseModel):
+    id: int
+    pilar_id: int
+    nombre: str
+    descripcion: Optional[str] = None
+    orden: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class SubpilarUpdate(BaseModel):
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    orden: Optional[int] = None
 
 # ======================================================
 # LEADS / CONSULTING REQUESTS

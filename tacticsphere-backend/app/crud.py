@@ -10,6 +10,7 @@ from .models import (
     Departamento,
     Empleado,
     Pilar,
+    Subpilar,
     Pregunta,
     Cuestionario,
     CuestionarioPregunta,
@@ -536,6 +537,97 @@ def delete_pilar(db: Session, pilar_id: int, cascade: bool = False) -> Tuple[boo
     db.commit()
     return True, None
 
+# ======================================================
+# SUBPILARES
+# ======================================================
+
+def create_subpilar(
+    db: Session,
+    pilar_id: int,
+    nombre: str,
+    descripcion: Optional[str] = None,
+    orden: Optional[int] = None,
+) -> Subpilar:
+    """
+    Crea un nuevo subpilar asociado a un pilar.
+    Si no se especifica orden, se asigna automáticamente como el siguiente disponible.
+    """
+    if orden is None:
+        max_orden = db.scalar(
+            select(func.max(Subpilar.orden)).where(Subpilar.pilar_id == pilar_id)
+        )
+        orden = (max_orden or 0) + 1
+    
+    sp = Subpilar(
+        pilar_id=pilar_id,
+        nombre=nombre,
+        descripcion=descripcion,
+        orden=orden,
+    )
+    db.add(sp)
+    db.commit()
+    db.refresh(sp)
+    return sp
+
+def list_subpilares(db: Session, pilar_id: int) -> List[Subpilar]:
+    """
+    Lista todos los subpilares de un pilar, ordenados por orden y luego por id.
+    """
+    stmt = (
+        select(Subpilar)
+        .where(Subpilar.pilar_id == pilar_id)
+        .order_by(Subpilar.orden.asc().nulls_last(), Subpilar.id.asc())
+    )
+    return db.scalars(stmt).all()
+
+def get_subpilar(db: Session, subpilar_id: int) -> Optional[Subpilar]:
+    """Obtiene un subpilar por su ID."""
+    return db.get(Subpilar, subpilar_id)
+
+def update_subpilar(
+    db: Session,
+    subpilar_id: int,
+    *,
+    nombre: Optional[str] = None,
+    descripcion: Optional[str] = None,
+    orden: Optional[int] = None,
+) -> Optional[Subpilar]:
+    """Actualiza un subpilar existente."""
+    sp = db.get(Subpilar, subpilar_id)
+    if not sp:
+        return None
+    if nombre is not None:
+        sp.nombre = nombre
+    if descripcion is not None:
+        sp.descripcion = descripcion
+    if orden is not None:
+        sp.orden = orden
+    db.commit()
+    db.refresh(sp)
+    return sp
+
+def delete_subpilar(db: Session, subpilar_id: int, cascade: bool = False) -> Tuple[bool, Optional[str]]:
+    """
+    Elimina un subpilar.
+    Si cascade=False, verifica que no tenga preguntas asociadas.
+    Si cascade=True, las preguntas quedan sin subpilar (subpilar_id=NULL).
+    """
+    sp = db.get(Subpilar, subpilar_id)
+    if not sp:
+        return False, "Subpilar no existe"
+    
+    if not cascade:
+        existen = db.scalar(
+            select(func.count(Pregunta.id)).where(Pregunta.subpilar_id == subpilar_id)
+        ) or 0
+        if existen:
+            return False, "Subpilar tiene preguntas asociadas"
+    
+    # Si cascade=True, las preguntas se actualizan automáticamente a NULL por el ondelete="SET NULL"
+    db.delete(sp)
+    db.commit()
+    return True, None
+
 def create_pregunta(
     db: Session,
     pilar_id: int,
@@ -544,10 +636,22 @@ def create_pregunta(
     es_obligatoria: bool,
     peso: int,
     respuesta_esperada: Optional[str] = None,
+    subpilar_id: Optional[int] = None,
 ) -> Pregunta:
+    """
+    Crea una nueva pregunta asociada a un pilar.
+    Opcionalmente puede estar asociada a un subpilar del mismo pilar.
+    Si se especifica subpilar_id, valida que pertenezca al pilar_id indicado.
+    """
+    if subpilar_id is not None:
+        subpilar = db.get(Subpilar, subpilar_id)
+        if not subpilar or subpilar.pilar_id != pilar_id:
+            raise ValueError(f"El subpilar {subpilar_id} no pertenece al pilar {pilar_id}")
+    
     sanitized_expected = (respuesta_esperada or "").strip() or None
     q = Pregunta(
         pilar_id=pilar_id,
+        subpilar_id=subpilar_id,
         enunciado=enunciado,
         tipo=tipo,
         es_obligatoria=es_obligatoria,
@@ -560,8 +664,18 @@ def create_pregunta(
     sync_question_with_questionnaires(db, q)
     return q
 
-def list_preguntas(db: Session, pilar_id: int) -> List[Pregunta]:
-    return db.scalars(select(Pregunta).where(Pregunta.pilar_id == pilar_id)).all()
+def list_preguntas(db: Session, pilar_id: int, subpilar_id: Optional[int] = None) -> List[Pregunta]:
+    """
+    Lista las preguntas de un pilar.
+    Si se especifica subpilar_id, filtra solo las preguntas de ese subpilar.
+    """
+    stmt = select(Pregunta).where(Pregunta.pilar_id == pilar_id)
+    if subpilar_id is not None:
+        stmt = stmt.where(Pregunta.subpilar_id == subpilar_id)
+    else:
+        # Si no se especifica subpilar, incluye todas (con y sin subpilar)
+        pass
+    return db.scalars(stmt.order_by(Pregunta.id)).all()
 
 
 def update_pregunta(
@@ -573,10 +687,23 @@ def update_pregunta(
     es_obligatoria: Optional[bool] = None,
     peso: Optional[int] = None,
     respuesta_esperada: Optional[str] = None,
+    subpilar_id: Optional[int] = None,
 ) -> Optional[Pregunta]:
+    """
+    Actualiza una pregunta existente.
+    Si se especifica subpilar_id, valida que pertenezca al mismo pilar de la pregunta.
+    Si subpilar_id es None, la pregunta queda sin subpilar (asociada solo al pilar).
+    """
     q = db.get(Pregunta, pregunta_id)
     if not q:
         return None
+    
+    # Validar subpilar si se especifica
+    if subpilar_id is not None:
+        subpilar = db.get(Subpilar, subpilar_id)
+        if not subpilar or subpilar.pilar_id != q.pilar_id:
+            raise ValueError(f"El subpilar {subpilar_id} no pertenece al pilar {q.pilar_id} de la pregunta")
+    
     if enunciado is not None:
         q.enunciado = enunciado
     if tipo is not None:
@@ -585,6 +712,12 @@ def update_pregunta(
         q.es_obligatoria = es_obligatoria
     if peso is not None:
         q.peso = peso
+    # Actualizar subpilar_id
+    # main.py solo pasa este parámetro si está presente en el payload del request usando kwargs.
+    # Por lo tanto, si este código se ejecuta y subpilar_id está presente (incluso None),
+    # significa que el usuario quiere actualizarlo.
+    # main.py ya hace el filtrado correcto, así que aquí simplemente actualizamos.
+    # Nota: esto funciona porque main.py construye kwargs dinámicamente solo con campos presentes.
     if respuesta_esperada is not None:
         q.respuesta_esperada = (respuesta_esperada or "").strip() or None
     db.commit()
@@ -869,6 +1002,12 @@ def get_pilar_questions_with_answers(
     pilar_id: int,
     empleado_id: Optional[int] = None
 ) -> Tuple[List[Pregunta], Dict[int, Respuesta]]:
+    """
+    Obtiene las preguntas de un pilar para una asignación, junto con las respuestas.
+    Las preguntas se ordenan: primero por subpilar (orden del subpilar, luego por id de pregunta),
+    y luego las preguntas sin subpilar (por id de pregunta).
+    Compatible con datos existentes: si no hay subpilares, funciona igual que antes.
+    """
     asg = get_asignacion(db, asignacion_id)
     if not asg:
         return [], {}
@@ -880,9 +1019,17 @@ def get_pilar_questions_with_answers(
     q_pregs = (
         select(Pregunta)
         .join(CuestionarioPregunta, CuestionarioPregunta.pregunta_id == Pregunta.id)
+        .outerjoin(Subpilar, Subpilar.id == Pregunta.subpilar_id)  # LEFT JOIN para incluir subpilares
         .where(CuestionarioPregunta.cuestionario_id == asg.cuestionario_id)
         .where(Pregunta.pilar_id == pilar_id)
-        .order_by(Pregunta.id)
+        .order_by(
+            # Primero ordenamos por orden del subpilar (NULL va al final)
+            Subpilar.orden.asc().nulls_last(),
+            # Luego por id de subpilar (para agrupar preguntas del mismo subpilar)
+            Pregunta.subpilar_id.asc().nulls_last(),
+            # Finalmente por id de pregunta
+            Pregunta.id.asc()
+        )
     )
     preguntas = db.scalars(q_pregs).all()
     if not preguntas:

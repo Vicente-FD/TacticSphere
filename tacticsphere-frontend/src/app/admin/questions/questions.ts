@@ -7,8 +7,9 @@ import { ModalComponent } from '../../shared/ui/modal/modal.component';
 
 import { PilarService } from '../../pillar.service';
 import { QuestionService } from '../../question.service';
+import { SubpilarService } from '../../subpilar.service';
 
-import { Pilar, Pregunta, TipoPreguntaEnum } from '../../types';
+import { Pilar, Pregunta, Subpilar, TipoPreguntaEnum } from '../../types';
 
 interface QuestionView {
   id: number;
@@ -111,6 +112,19 @@ interface QuestionView {
                   </label>
                 </div>
 
+
+                <label class="block space-y-2">
+                  <span class="ts-label">Subpilar (opcional)</span>
+                  <select class="ts-select" [(ngModel)]="form.subpilar_id">
+                    <option [ngValue]="null">Sin subpilar</option>
+                    <option *ngFor="let sp of subpilares()" [ngValue]="sp.id">
+                      {{ sp.nombre }}
+                    </option>
+                  </select>
+                  <p class="text-xs text-neutral-500">
+                    Opcionalmente, asigna esta pregunta a un subpilar del pilar seleccionado.
+                  </p>
+                </label>
 
                 <label class="block space-y-2">
                   <span class="ts-label">Respuesta esperada (opcional)</span>
@@ -276,6 +290,19 @@ interface QuestionView {
           </div>
 
           <label class="block space-y-2">
+            <span class="ts-label">Subpilar (opcional)</span>
+            <select class="ts-select" [(ngModel)]="editForm.subpilar_id" name="editSubpilarId">
+              <option [ngValue]="null">Sin subpilar</option>
+              <option *ngFor="let sp of subpilares()" [ngValue]="sp.id">
+                {{ sp.nombre }}
+              </option>
+            </select>
+            <p class="text-xs text-neutral-500">
+              Opcionalmente, asigna esta pregunta a un subpilar del pilar seleccionado.
+            </p>
+          </label>
+
+          <label class="block space-y-2">
             <span class="ts-label">Respuesta esperada (opcional)</span>
             <input
               class="ts-input"
@@ -370,8 +397,10 @@ interface QuestionView {
 export class QuestionsComponent implements OnInit {
   private pillarsSrv = inject(PilarService);
   private questionsSrv = inject(QuestionService);
+  private subpilaresSrv = inject(SubpilarService);
 
   pilares: WritableSignal<Pilar[]> = signal<Pilar[]>([]);
+  subpilares: WritableSignal<Subpilar[]> = signal<Subpilar[]>([]);
   preguntas: WritableSignal<Pregunta[]> = signal<Pregunta[]>([]);
   readonly preguntasView = computed<QuestionView[]>(() =>
     (this.preguntas() ?? []).map((question, index) => {
@@ -416,12 +445,14 @@ export class QuestionsComponent implements OnInit {
     es_obligatoria: boolean;
     peso: number;
     respuesta_esperada: string;
+    subpilar_id: number | null;
   } = {
     enunciado: '',
     tipo: 'LIKERT',
     es_obligatoria: true,
     peso: 1,
     respuesta_esperada: '',
+    subpilar_id: null,
   };
   editingQuestionId: number | null = null;
   editModalOpen = false;
@@ -432,12 +463,14 @@ export class QuestionsComponent implements OnInit {
     es_obligatoria: boolean;
     peso: number;
     respuesta_esperada: string;
+    subpilar_id: number | null;
   } = {
     enunciado: '',
     tipo: 'LIKERT',
     es_obligatoria: true,
     peso: 1,
     respuesta_esperada: '',
+    subpilar_id: null,
   };
 
   ngOnInit(): void {
@@ -474,8 +507,27 @@ export class QuestionsComponent implements OnInit {
   loadPreguntas(): void {
     this.preguntas.set([]);
     this.resetEditingState();
-    if (!this.selectedPilarId) return;
+    if (!this.selectedPilarId) {
+      this.subpilares.set([]);
+      return;
+    }
+    this.cargarSubpilares(this.selectedPilarId);
     this.cargarPreguntas(this.selectedPilarId);
+  }
+
+  /**
+   * Carga los subpilares del pilar seleccionado
+   */
+  private cargarSubpilares(pilarId: number): void {
+    this.subpilaresSrv.getSubpilares(pilarId).subscribe({
+      next: (subpilares) => {
+        this.subpilares.set(subpilares ?? []);
+      },
+      error: (err) => {
+        console.error('Error cargando subpilares', err);
+        this.subpilares.set([]);
+      },
+    });
   }
 
   crearPregunta(): void {
@@ -483,6 +535,7 @@ export class QuestionsComponent implements OnInit {
 
     const payload: {
       pilar_id: number;
+      subpilar_id?: number | null;
       enunciado: string;
       tipo: TipoPreguntaEnum;
       es_obligatoria: boolean;
@@ -496,6 +549,11 @@ export class QuestionsComponent implements OnInit {
       peso: this.form.peso || 1,
       respuesta_esperada: this.form.respuesta_esperada?.trim() || undefined,
     };
+
+    // Incluir subpilar_id solo si está seleccionado
+    if (this.form.subpilar_id) {
+      payload.subpilar_id = this.form.subpilar_id;
+    }
 
     if (!payload.enunciado) return;
     if (!payload.respuesta_esperada) {
@@ -511,6 +569,7 @@ export class QuestionsComponent implements OnInit {
         this.form.es_obligatoria = true;
         this.form.peso = 1;
         this.form.respuesta_esperada = '';
+        this.form.subpilar_id = null;
         this.cargarPreguntas(this.selectedPilarId!);
       },
       error: (error) => {
@@ -597,6 +656,7 @@ export class QuestionsComponent implements OnInit {
       es_obligatoria: question.es_obligatoria,
       peso: question.peso,
       respuesta_esperada: question.respuesta_esperada ?? '',
+      subpilar_id: question.subpilar_id ?? null,
     };
     this.editModalOpen = true;
   }
@@ -622,6 +682,7 @@ export class QuestionsComponent implements OnInit {
       tipo: TipoPreguntaEnum;
       es_obligatoria: boolean;
       peso: number;
+      subpilar_id?: number | null;
       respuesta_esperada?: string;
     } = {
       enunciado: trimmedEnunciado,
@@ -630,6 +691,12 @@ export class QuestionsComponent implements OnInit {
       peso: this.editForm.peso || 1,
       respuesta_esperada: this.editForm.respuesta_esperada?.trim() ?? '',
     };
+
+    // Incluir subpilar_id solo si está presente (puede ser null para remover)
+    if (this.editForm.subpilar_id !== undefined) {
+      payload.subpilar_id = this.editForm.subpilar_id;
+    }
+
     if (!payload.respuesta_esperada) {
       delete payload.respuesta_esperada;
     }
@@ -671,6 +738,7 @@ export class QuestionsComponent implements OnInit {
       es_obligatoria: true,
       peso: 1,
       respuesta_esperada: '',
+      subpilar_id: null,
     };
   }
 

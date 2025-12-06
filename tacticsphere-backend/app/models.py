@@ -175,8 +175,32 @@ class Pilar(Base):
         "Recomendacion", back_populates="pilar", cascade="all, delete-orphan", passive_deletes=True
     )
 
+    subpilares: Mapped[List["Subpilar"]] = relationship(
+        "Subpilar", back_populates="pilar", cascade="all, delete-orphan", passive_deletes=True, order_by="Subpilar.orden"
+    )
+
     __table_args__ = (
         UniqueConstraint("nombre", name="uq_pilar_nombre"),
+    )
+
+class Subpilar(Base):
+    __tablename__ = "subpilares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    pilar_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pilares.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    orden: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    pilar: Mapped["Pilar"] = relationship("Pilar", back_populates="subpilares")
+    preguntas: Mapped[List["Pregunta"]] = relationship(
+        "Pregunta", back_populates="subpilar", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("pilar_id", "nombre", name="uq_subpilar_pilar_nombre"),
     )
 
 class Pregunta(Base):
@@ -186,6 +210,9 @@ class Pregunta(Base):
     pilar_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("pilares.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    subpilar_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("subpilares.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     enunciado: Mapped[str] = mapped_column(Text, nullable=False)
     tipo: Mapped[TipoPreguntaEnum] = mapped_column(SAEnum(TipoPreguntaEnum, name="tipo_pregunta_enum"), nullable=False)
     es_obligatoria: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -193,6 +220,7 @@ class Pregunta(Base):
     respuesta_esperada: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     pilar: Mapped["Pilar"] = relationship("Pilar", back_populates="preguntas")
+    subpilar: Mapped[Optional["Subpilar"]] = relationship("Subpilar", back_populates="preguntas")
 
     respuestas: Mapped[List["Respuesta"]] = relationship(
         "Respuesta", back_populates="pregunta", cascade="all, delete-orphan", passive_deletes=True

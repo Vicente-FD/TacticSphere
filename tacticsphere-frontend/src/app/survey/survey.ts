@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Observable, of } from 'rxjs';
+import { Observable, of, forkJoin } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 import {
@@ -26,6 +26,8 @@ import { CompanyService } from '../company.service';
 import { EmployeeService } from '../employee.service';
 import { AssignmentsService } from '../assignments.service';
 import { AuthService } from '../auth.service';
+import { SubpilarService } from '../subpilar.service';
+import { Subpilar } from '../types';
 
 @Component({
   standalone: true,
@@ -463,9 +465,20 @@ import { AuthService } from '../auth.service';
               </div>
 
               <div class="space-y-4">
-                <h3 class="text-xl font-semibold text-ink">
-                  {{ questions?.pilar_nombre || 'Selecciona un pilar' }}
-                </h3>
+                <div>
+                  <h3 class="text-xl font-semibold text-ink">
+                    {{ questions?.pilar_nombre || 'Selecciona un pilar' }}
+                  </h3>
+                  <!-- Subtítulo con subpilares si existen -->
+                  <p *ngIf="hasSubpilaresEnPreguntas()" class="mt-1 text-base font-medium text-neutral-600">
+                    <ng-container *ngIf="getSubpilaresNombres().length > 0; else loadingSubpilares">
+                      Subpilares: {{ getSubpilaresNombres().join(', ') }}
+                    </ng-container>
+                    <ng-template #loadingSubpilares>
+                      <span>Subpilares: (cargando...)</span>
+                    </ng-template>
+                  </p>
+                </div>
                 <div *ngIf="likertLevels.length" class="rounded-xl border border-neutral-200 bg-neutral-50 p-4 space-y-3">
                   <div class="flex items-center justify-between gap-3">
                     <div>
@@ -500,13 +513,27 @@ import { AuthService } from '../auth.service';
                 </div>
 
                 <ng-container *ngIf="hasQuestions; else noPreguntas">
-                  <div
-                    *ngFor="let q of questions?.preguntas ?? []"
-                    class="rounded-xl border border-neutral-200 p-4 space-y-3 transition-all duration-200"
-                    [id]="'pregunta-' + q.id"
-                    [class.question-incomplete]="isQuestionIncomplete(q)"
-                    [class.question-error]="highlightedQuestionId === q.id"
-                  >
+                  <!-- Si hay subpilares, agrupar preguntas -->
+                  <ng-container *ngIf="hasGroupedQuestions(); else preguntasSinAgrupar">
+                    <div *ngFor="let grupo of getGroupedQuestions()" class="space-y-4 mb-6">
+                      <!-- Título del grupo (subpilar o "Preguntas generales") -->
+                      <div class="border-b border-neutral-200 pb-2">
+                        <h4 class="text-lg font-semibold text-ink">
+                          {{ grupo.subpilar_nombre || 'Preguntas generales del pilar' }}
+                        </h4>
+                        <p class="text-xs text-neutral-500" *ngIf="grupo.subpilar_id && subpilaresMap[grupo.subpilar_id]?.descripcion">
+                          {{ subpilaresMap[grupo.subpilar_id].descripcion }}
+                        </p>
+                      </div>
+
+                      <!-- Preguntas del grupo -->
+                      <div
+                        *ngFor="let q of grupo.preguntas"
+                        class="rounded-xl border border-neutral-200 p-4 space-y-3 transition-all duration-200"
+                        [id]="'pregunta-' + q.id"
+                        [class.question-incomplete]="isQuestionIncomplete(q)"
+                        [class.question-error]="highlightedQuestionId === q.id"
+                      >
                     <div class="font-medium text-ink">{{ q.enunciado }}</div>
                     
                     <!-- =========================================================
@@ -599,7 +626,113 @@ import { AuthService } from '../auth.service';
                     <div class="text-xs text-neutral-400">
                       Tipo: {{ q.tipo }} - Obligatoria: {{ q.es_obligatoria ? 'Si' : 'No' }}
                     </div>
-                  </div>
+                      </div>
+                    </div>
+                  </ng-container>
+
+                  <!-- Si NO hay subpilares, mostrar preguntas como antes -->
+                  <ng-template #preguntasSinAgrupar>
+                    <div
+                      *ngFor="let q of questions?.preguntas ?? []"
+                      class="rounded-xl border border-neutral-200 p-4 space-y-3 transition-all duration-200"
+                      [id]="'pregunta-' + q.id"
+                      [class.question-incomplete]="isQuestionIncomplete(q)"
+                      [class.question-error]="highlightedQuestionId === q.id"
+                    >
+                      <div class="font-medium text-ink">{{ q.enunciado }}</div>
+                      
+                      <!-- =========================================================
+                           ACORDEÓN "RESPUESTA ESPERADA" EN CADA PREGUNTA
+                           ========================================================= -->
+                      <div *ngIf="canViewExpectedAnswer && q.respuesta_esperada" class="respuesta-esperada-container">
+                        <button
+                          type="button"
+                          class="respuesta-esperada-header"
+                          (click)="toggleExpectedAnswer(q.id)"
+                        >
+                          <span class="text-xs font-medium text-neutral-600">
+                            Respuesta esperada
+                          </span>
+                          <span class="toggle-icon toggle-icon-small">
+                            {{ expandedExpectedAnswers[q.id] ? '−' : '+' }}
+                          </span>
+                        </button>
+                        <div
+                          class="respuesta-esperada-body"
+                          [class.respuesta-esperada-expanded]="expandedExpectedAnswers[q.id]"
+                        >
+                          <p class="text-xs text-accent">{{ q.respuesta_esperada }}</p>
+                        </div>
+                      </div>
+                      <ng-container [ngSwitch]="q.tipo">
+                        <div *ngSwitchCase="'LIKERT'" class="flex flex-wrap gap-3">
+                          <label
+                            *ngFor="let v of likert"
+                            class="inline-flex items-start gap-3 rounded-md border border-neutral-200 px-3 py-2 text-left text-sm text-neutral-600 transition hover:border-accent/40"
+                          >
+                            <input
+                              type="radio"
+                              class="h-4 w-4 text-accent focus:ring-accent/30"
+                              [name]="'q' + q.id"
+                              [value]="v"
+                              [(ngModel)]="answers[q.id]"
+                              (change)="onAnswerChange(q.id)"
+                              required
+                            />
+                            <span>
+                              <span class="font-semibold text-ink">{{ formatLikertLabel(v) }}</span>
+                              <span class="block text-xs text-neutral-500" *ngIf="formatLikertSubtitle(v)">
+                                {{ formatLikertSubtitle(v) }}
+                              </span>
+                            </span>
+                          </label>
+                        </div>
+                        <div *ngSwitchCase="'SI_NO'" class="flex flex-wrap gap-3">
+                          <label
+                            class="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:border-accent/40"
+                          >
+                            <input
+                              type="radio"
+                              class="h-4 w-4 text-accent focus:ring-accent/30"
+                              [name]="'q' + q.id"
+                              value="SI"
+                              [(ngModel)]="answers[q.id]"
+                              (change)="onAnswerChange(q.id)"
+                              required
+                            />
+                            SI
+                          </label>
+                          <label
+                            class="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition hover:border-accent/40"
+                          >
+                            <input
+                              type="radio"
+                              class="h-4 w-4 text-accent focus:ring-accent/30"
+                              [name]="'q' + q.id"
+                              value="NO"
+                              [(ngModel)]="answers[q.id]"
+                              (change)="onAnswerChange(q.id)"
+                              required
+                            />
+                            NO
+                          </label>
+                        </div>
+                        <div *ngSwitchCase="'ABIERTA'">
+                          <textarea
+                            class="ts-input min-h-[7rem]"
+                            rows="3"
+                            [(ngModel)]="answers[q.id]"
+                            [name]="'q' + q.id"
+                            (blur)="onAnswerChange(q.id)"
+                            [required]="q.es_obligatoria"
+                          ></textarea>
+                        </div>
+                      </ng-container>
+                      <div class="text-xs text-neutral-400">
+                        Tipo: {{ q.tipo }} - Obligatoria: {{ q.es_obligatoria ? 'Si' : 'No' }}
+                      </div>
+                    </div>
+                  </ng-template>
 
                   <div class="mt-6 flex flex-wrap gap-3">
                     <button
@@ -915,6 +1048,8 @@ export class SurveyComponent implements OnInit, OnDestroy {
   sidebarPillars: Pilar[] = [];
   currentPilar: PillarProgress | null = null;
   questions: PillarQuestionsResponse | null = null;
+  subpilares: Subpilar[] = [];
+  subpilaresMap: Record<number, Subpilar> = {}; // Mapa para acceso rápido por ID
   answers: Record<number, string | null> = {};
   likert: string[] = ['1', '2', '3', '4', '5'];
   likertLevels: LikertLevel[] = [];
@@ -970,7 +1105,8 @@ export class SurveyComponent implements OnInit, OnDestroy {
     private company: CompanyService,
     private employee: EmployeeService,
     private assignmentsSvc: AssignmentsService,
-    private auth: AuthService
+    private auth: AuthService,
+    private subpilarSrv: SubpilarService
   ) {
     this.canViewExpectedAnswer = this.auth.hasRole(['ADMIN_SISTEMA', 'ADMIN', 'ANALISTA']);
   }
@@ -1552,9 +1688,29 @@ export class SurveyComponent implements OnInit, OnDestroy {
     this.questions = null;
     this.answers = {};
     this.highlightedQuestionId = null;
+    this.subpilares = [];
+    this.subpilaresMap = {};
 
-    this.survey.getPillarQuestions(this.asignacionId, p.pilar_id, this.empleadoId).subscribe({
-      next: (pq) => {
+    // Cargar subpilares del pilar en paralelo con las preguntas
+    const subpilares$ = this.subpilarSrv.getSubpilares(p.pilar_id);
+
+    // Cargar preguntas del pilar
+    const questions$ = this.survey.getPillarQuestions(this.asignacionId, p.pilar_id, this.empleadoId);
+
+    // Ejecutar ambas cargas en paralelo usando forkJoin
+    forkJoin({
+      subpilares: subpilares$,
+      questions: questions$,
+    }).subscribe({
+      next: ({ subpilares, questions: pq }) => {
+        // Guardar subpilares y crear mapa para acceso rápido
+        this.subpilares = subpilares ?? [];
+        this.subpilaresMap = {};
+        this.subpilares.forEach((sp) => {
+          this.subpilaresMap[sp.id] = sp;
+        });
+
+        // Procesar preguntas
         this.questions = pq;
         this.setLikertLevels(pq.likert_levels);
         const mapAnswers: Record<number, string | null> = {};
@@ -1571,6 +1727,138 @@ export class SurveyComponent implements OnInit, OnDestroy {
         this.error = this.formatError(err, 'Error al cargar preguntas del pilar');
       },
     });
+  }
+
+  /**
+   * Agrupa las preguntas por subpilar.
+   * Retorna un array de objetos con:
+   * - subpilar_id: número o null (para preguntas sin subpilar)
+   * - subpilar_nombre: string o null
+   * - preguntas: array de preguntas
+   */
+  getGroupedQuestions(): Array<{
+    subpilar_id: number | null;
+    subpilar_nombre: string | null;
+    preguntas: SurveyQuestionRead[];
+  }> {
+    if (!this.questions?.preguntas) {
+      return [];
+    }
+
+    const grupos: Array<{
+      subpilar_id: number | null;
+      subpilar_nombre: string | null;
+      preguntas: SurveyQuestionRead[];
+    }> = [];
+
+    // Separar preguntas con y sin subpilar
+    const preguntasSinSubpilar: SurveyQuestionRead[] = [];
+    const preguntasPorSubpilar: Record<number, SurveyQuestionRead[]> = {};
+
+    this.questions.preguntas.forEach((q) => {
+      if (!q.subpilar_id) {
+        preguntasSinSubpilar.push(q);
+      } else {
+        if (!preguntasPorSubpilar[q.subpilar_id]) {
+          preguntasPorSubpilar[q.subpilar_id] = [];
+        }
+        preguntasPorSubpilar[q.subpilar_id].push(q);
+      }
+    });
+
+    // Agregar grupo de preguntas sin subpilar (si existen)
+    if (preguntasSinSubpilar.length > 0) {
+      grupos.push({
+        subpilar_id: null,
+        subpilar_nombre: null,
+        preguntas: preguntasSinSubpilar,
+      });
+    }
+
+    // Agregar grupos por subpilar (ordenados por orden del subpilar)
+    const subpilarIds = Object.keys(preguntasPorSubpilar)
+      .map((id) => Number(id))
+      .sort((a, b) => {
+        const subpA = this.subpilaresMap[a];
+        const subpB = this.subpilaresMap[b];
+        const ordenA = subpA?.orden ?? 999;
+        const ordenB = subpB?.orden ?? 999;
+        return ordenA - ordenB || a - b;
+      });
+
+    subpilarIds.forEach((subpilarId) => {
+      const subpilar = this.subpilaresMap[subpilarId];
+      grupos.push({
+        subpilar_id: subpilarId,
+        subpilar_nombre: subpilar?.nombre ?? `Subpilar #${subpilarId}`,
+        preguntas: preguntasPorSubpilar[subpilarId],
+      });
+    });
+
+    return grupos;
+  }
+
+  /**
+   * Verifica si hay preguntas agrupadas por subpilares
+   */
+  hasGroupedQuestions(): boolean {
+    const grupos = this.getGroupedQuestions();
+    return grupos.some((g) => g.subpilar_id !== null);
+  }
+
+  /**
+   * Verifica si hay preguntas con subpilar_id (más rápido que hasGroupedQuestions)
+   */
+  hasSubpilaresEnPreguntas(): boolean {
+    if (!this.questions?.preguntas) {
+      return false;
+    }
+    return this.questions.preguntas.some((q) => q.subpilar_id !== null && q.subpilar_id !== undefined);
+  }
+
+  /**
+   * Obtiene una lista de nombres de subpilares que tienen preguntas
+   * Retorna los nombres ordenados por el campo `orden` del subpilar
+   * Si los subpilares aún no están cargados en el mapa, intenta obtenerlos del array
+   */
+  getSubpilaresNombres(): string[] {
+    if (!this.questions?.preguntas) {
+      return [];
+    }
+
+    // Obtener IDs únicos de subpilares que tienen preguntas
+    const subpilarIds = new Set<number>();
+    this.questions.preguntas.forEach((q) => {
+      if (q.subpilar_id !== null && q.subpilar_id !== undefined) {
+        subpilarIds.add(q.subpilar_id);
+      }
+    });
+
+    if (subpilarIds.size === 0) {
+      return [];
+    }
+
+    // Intentar obtener subpilares del mapa primero, luego del array
+    const subpilaresEncontrados: Subpilar[] = [];
+    Array.from(subpilarIds).forEach((id) => {
+      let subpilar: Subpilar | undefined = this.subpilaresMap[id];
+      if (!subpilar) {
+        // Si no está en el mapa, buscar en el array
+        subpilar = this.subpilares.find((sp) => sp.id === id);
+      }
+      if (subpilar) {
+        subpilaresEncontrados.push(subpilar);
+      }
+    });
+
+    // Ordenar por el campo `orden` y retornar nombres
+    return subpilaresEncontrados
+      .sort((a, b) => {
+        const ordenA = a.orden ?? 999;
+        const ordenB = b.orden ?? 999;
+        return ordenA - ordenB || a.nombre.localeCompare(b.nombre);
+      })
+      .map((subpilar) => subpilar.nombre);
   }
 
   submitPilar(): void {

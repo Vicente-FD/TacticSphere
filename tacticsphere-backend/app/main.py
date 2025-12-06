@@ -33,7 +33,7 @@ from .models import (
 
     RolEnum, Usuario, TipoPreguntaEnum,
 
-    Empresa, Departamento, Pilar, Pregunta, Asignacion, Empleado,
+    Empresa, Departamento, Pilar, Subpilar, Pregunta, Asignacion, Empleado,
 
     Cuestionario, AuditActionEnum,
 
@@ -66,11 +66,13 @@ from .schemas import (
 
     EmpleadoCreate, EmpleadoRead, EmpleadoUpdate,
 
-    # Pilares / Preguntas
+    # Pilares / Preguntas / Subpilares
 
     PilarCreate, PilarRead, PilarUpdate,
 
     PreguntaCreate, PreguntaRead, PreguntaUpdate,
+    
+    SubpilarCreate, SubpilarRead, SubpilarUpdate,
 
     # Cuestionarios
 
@@ -1393,6 +1395,183 @@ def delete_pillar(
     return None
 
 
+# ======================================================
+# SUBPILARES
+# ======================================================
+
+@app.get("/pillars/{pilar_id}/subpilares", response_model=list[SubpilarRead])
+def list_subpilares(
+    pilar_id: int,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Lista todos los subpilares de un pilar."""
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    return crud.list_subpilares(db, pilar_id)
+
+
+@app.get("/subpilares/{subpilar_id}", response_model=SubpilarRead)
+def get_subpilar(
+    subpilar_id: int,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Obtiene un subpilar por su ID."""
+    sp = crud.get_subpilar(db, subpilar_id)
+    if not sp:
+        raise HTTPException(status_code=404, detail="Subpilar no existe")
+    
+    p = db.get(Pilar, sp.pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    return sp
+
+
+@app.post("/pillars/{pilar_id}/subpilares", response_model=SubpilarRead, status_code=201)
+def create_subpilar(
+    pilar_id: int,
+    data: SubpilarCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Crea un nuevo subpilar asociado a un pilar."""
+    p = db.get(Pilar, pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    # Validar que el pilar_id del body coincida con el de la URL
+    if data.pilar_id != pilar_id:
+        raise HTTPException(status_code=400, detail="El pilar_id del body no coincide con el de la URL")
+    
+    subpilar = crud.create_subpilar(
+        db,
+        pilar_id=data.pilar_id,
+        nombre=data.nombre,
+        descripcion=data.descripcion,
+        orden=data.orden,
+    )
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.PILLAR_UPDATE,  # Usamos PILLAR_UPDATE porque es una modificación del pilar
+        current_user=current,
+        empresa_id=p.empresa_id,
+        entity_type="Subpilar",
+        entity_id=subpilar.id,
+        notes=f"Creó subpilar {subpilar.nombre} en pilar {p.nombre}",
+        diff_after={"id": subpilar.id, "nombre": subpilar.nombre, "pilar_id": pilar_id},
+        request=request,
+    )
+    
+    return subpilar
+
+
+@app.patch("/subpilares/{subpilar_id}", response_model=SubpilarRead)
+def update_subpilar(
+    subpilar_id: int,
+    data: SubpilarUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Actualiza un subpilar existente."""
+    sp = crud.get_subpilar(db, subpilar_id)
+    if not sp:
+        raise HTTPException(status_code=404, detail="Subpilar no existe")
+    
+    p = db.get(Pilar, sp.pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    before = {
+        "id": sp.id,
+        "nombre": sp.nombre,
+        "descripcion": sp.descripcion,
+        "orden": sp.orden,
+    }
+    
+    payload = data.model_dump(exclude_unset=True)
+    if not payload:
+        return sp
+    
+    updated = crud.update_subpilar(
+        db,
+        subpilar_id,
+        nombre=payload.get("nombre"),
+        descripcion=payload.get("descripcion"),
+        orden=payload.get("orden"),
+    )
+    
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Subpilar no existe")
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.PILLAR_UPDATE,
+        current_user=current,
+        empresa_id=p.empresa_id,
+        entity_type="Subpilar",
+        entity_id=updated.id,
+        notes=f"Actualizó subpilar {updated.nombre}",
+        diff_before=before,
+        diff_after={"id": updated.id, "nombre": updated.nombre, "descripcion": updated.descripcion, "orden": updated.orden},
+        request=request,
+    )
+    
+    return updated
+
+
+@app.delete("/subpilares/{subpilar_id}", status_code=204)
+def delete_subpilar(
+    subpilar_id: int,
+    request: Request,
+    cascade: bool = Query(False),
+    db: Session = Depends(get_db),
+    current: Usuario = Depends(get_current_user),
+):
+    """Elimina un subpilar."""
+    sp = crud.get_subpilar(db, subpilar_id)
+    if not sp:
+        raise HTTPException(status_code=404, detail="Subpilar no existe")
+    
+    p = db.get(Pilar, sp.pilar_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Pilar no existe")
+    
+    _ensure_company_access(current, p.empresa_id)
+    
+    ok, reason = crud.delete_subpilar(db, subpilar_id, cascade=cascade)
+    
+    if not ok:
+        raise HTTPException(status_code=400, detail=reason or "No se pudo eliminar el subpilar")
+    
+    audit_log(
+        db,
+        action=AuditActionEnum.PILLAR_UPDATE,
+        current_user=current,
+        empresa_id=p.empresa_id,
+        entity_type="Subpilar",
+        entity_id=subpilar_id,
+        notes=f"Eliminó subpilar {sp.nombre}",
+        diff_before={"id": sp.id, "nombre": sp.nombre},
+        request=request,
+    )
+    
+    return None
+
 
 @app.get("/questions", response_model=list[PreguntaRead])
 
@@ -1472,15 +1651,19 @@ def create_question(
 
 
 
-    pregunta = crud.create_pregunta(
-        db,
-        data.pilar_id,
-        data.enunciado,
-        data.tipo,
-        data.es_obligatoria,
-        data.peso,
-        data.respuesta_esperada,
-    )
+    try:
+        pregunta = crud.create_pregunta(
+            db,
+            data.pilar_id,
+            data.enunciado,
+            data.tipo,
+            data.es_obligatoria,
+            data.peso,
+            data.respuesta_esperada,
+            data.subpilar_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     audit_log(
 
@@ -1529,15 +1712,29 @@ def update_question(
     if not payload:
         return pregunta
 
-    updated = crud.update_pregunta(
-        db,
-        pregunta_id,
-        enunciado=payload.get("enunciado"),
-        tipo=payload.get("tipo"),
-        es_obligatoria=payload.get("es_obligatoria"),
-        peso=payload.get("peso"),
-        respuesta_esperada=payload.get("respuesta_esperada"),
-    )
+    try:
+        # Construir kwargs solo con los campos presentes en el payload
+        update_kwargs = {}
+        if "enunciado" in payload:
+            update_kwargs["enunciado"] = payload["enunciado"]
+        if "tipo" in payload:
+            update_kwargs["tipo"] = payload["tipo"]
+        if "es_obligatoria" in payload:
+            update_kwargs["es_obligatoria"] = payload["es_obligatoria"]
+        if "peso" in payload:
+            update_kwargs["peso"] = payload["peso"]
+        if "respuesta_esperada" in payload:
+            update_kwargs["respuesta_esperada"] = payload["respuesta_esperada"]
+        if "subpilar_id" in payload:
+            update_kwargs["subpilar_id"] = payload["subpilar_id"]
+        
+        updated = crud.update_pregunta(
+            db,
+            pregunta_id,
+            **update_kwargs
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if updated is None:
         raise HTTPException(status_code=404, detail="Pregunta no existe")
 
@@ -2122,6 +2319,7 @@ def survey_pillar_questions(
         "peso": q.peso,
         "respuesta_actual": (rmap[q.id].valor if q.id in rmap else None),
         "respuesta_esperada": q.respuesta_esperada if include_expected else None,
+        "subpilar_id": q.subpilar_id,  # Incluir subpilar_id para agrupar preguntas por subpilar
     } for q in preguntas]
 
     return PillarQuestionsResponse(

@@ -140,9 +140,31 @@ export interface PilarUpdate {
   peso?: number;
 }
 
+export interface Subpilar {
+  id: number;
+  pilar_id: number;
+  nombre: string;
+  descripcion?: string | null;
+  orden?: number | null;
+}
+
+export interface SubpilarCreate {
+  pilar_id: number;
+  nombre: string;
+  descripcion?: string | null;
+  orden?: number | null;
+}
+
+export interface SubpilarUpdate {
+  nombre?: string;
+  descripcion?: string | null;
+  orden?: number | null;
+}
+
 export interface Pregunta {
   id: number;
   pilar_id: number;
+  subpilar_id?: number | null;
   enunciado: string;
   tipo: TipoPreguntaEnum;
   es_obligatoria: boolean;
@@ -152,6 +174,7 @@ export interface Pregunta {
 
 export interface PreguntaCreate {
   pilar_id: number;
+  subpilar_id?: number | null;
   enunciado: string;
   tipo: TipoPreguntaEnum;
   es_obligatoria: boolean;
@@ -221,6 +244,7 @@ export interface SurveyQuestionRead {
   tipo: TipoPreguntaEnum;
   es_obligatoria: boolean;
   peso: number;
+  subpilar_id?: number | null;
   respuesta_actual?: string | null;
   respuesta_esperada?: string | null;
 }

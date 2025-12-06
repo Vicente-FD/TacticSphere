@@ -30,6 +30,7 @@ export class QuestionService {
 
   create(input: {
     pilar_id: number;
+    subpilar_id?: number | null;
     enunciado: string;
     tipo: TipoPreguntaEnum; // 'LIKERT' | 'ABIERTA' | 'SI_NO'
     es_obligatoria: boolean;
@@ -46,10 +47,11 @@ export class QuestionService {
       tipo: TipoPreguntaEnum;
       es_obligatoria: boolean;
       peso: number;
+      subpilar_id?: number | null;
       respuesta_esperada?: string | null;
     }
   ): Observable<Pregunta> {
-    return this.http.put<Pregunta>(`${this.base}/questions/${id}`, input);
+    return this.http.patch<Pregunta>(`${this.base}/questions/${id}`, input);
   }
 
   delete(id: number): Observable<void> {
