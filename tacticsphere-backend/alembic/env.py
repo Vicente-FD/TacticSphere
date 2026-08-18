@@ -45,6 +45,12 @@ if not database_url:
 
 # Override sqlalchemy.url if we have a database URL from any source
 if database_url:
+    # Mismo ajuste que app/database.py: el proyecto instala psycopg3
+    # (psycopg[binary]), no psycopg2, que es el driver que SQLAlchemy elige por
+    # defecto para "postgresql://". Sin esto, cualquier migracion contra
+    # Postgres falla con ModuleNotFoundError: No module named 'psycopg2'.
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.

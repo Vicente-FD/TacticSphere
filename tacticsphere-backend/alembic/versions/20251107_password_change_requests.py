@@ -18,7 +18,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.drop_table("password_reset_tokens")
+    # Esta tabla la creaba Base.metadata.create_all(), no una migracion previa,
+    # asi que en una base nueva no existe y el DROP incondicional aborta la
+    # cadena completa. Se elimina solo si esta presente.
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table("password_reset_tokens"):
+        op.drop_table("password_reset_tokens")
 
     op.create_table(
         "password_change_requests",
