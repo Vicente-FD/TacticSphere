@@ -2,11 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Lead } from '../../types';
+import { Lead, LeadServiceKey } from '../../types';
 
-interface LeadPayload {
+export interface LeadPayload {
   company: string;
   email: string;
+  service?: LeadServiceKey | null;
+  message?: string | null;
 }
 
 const STORAGE_KEY = 'ts_consulting_leads';
@@ -21,6 +23,8 @@ export class LeadService {
     const normalized: LeadPayload = {
       company: payload.company.trim(),
       email: payload.email.trim().toLowerCase(),
+      service: payload.service ?? null,
+      message: payload.message?.trim() || null,
     };
     if (!this.apiBase) {
       return of(this.persistLocal(normalized));
@@ -96,6 +100,8 @@ export class LeadService {
       id: now.getTime(),
       company: payload.company,
       email: payload.email,
+      service: payload.service ?? null,
+      message: payload.message ?? null,
       created_at: now.toISOString(),
     };
     current.unshift(lead);

@@ -8,7 +8,7 @@ import { ModalComponent } from '../../shared/ui/modal/modal.component';
 import { CompanyService } from '../../company.service';
 import { LeadService } from '../../core/services/lead.service';
 import { NotificationCenterService } from '../../core/services/notification-center.service';
-import { Empresa, Lead } from '../../types';
+import { Empresa, LEAD_SERVICE_LABELS, Lead } from '../../types';
 
 @Component({
   standalone: true,
@@ -246,6 +246,7 @@ import { Empresa, Lead } from '../../types';
               <thead>
                 <tr>
                   <th class="whitespace-nowrap">Empresa</th>
+                  <th class="whitespace-nowrap">Servicio</th>
                   <th class="whitespace-nowrap">Correo</th>
                   <th class="whitespace-nowrap">Fecha</th>
                   <th class="whitespace-nowrap">Acciones</th>
@@ -253,7 +254,14 @@ import { Empresa, Lead } from '../../types';
               </thead>
               <tbody>
                 <tr *ngFor="let lead of leads(); trackBy: trackByLead">
-                  <td class="py-3 font-medium text-ink">{{ lead.company }}</td>
+                  <td class="py-3">
+                    <p class="font-medium text-ink">{{ lead.company }}</p>
+                    <p *ngIf="lead.message" class="mt-1 max-w-xs whitespace-pre-line text-xs text-muted">{{ lead.message }}</p>
+                  </td>
+                  <td class="py-3 text-sm">
+                    <span *ngIf="lead.service; else noService" class="ts-badge">{{ serviceLabels[lead.service] }}</span>
+                    <ng-template #noService><span class="text-muted">—</span></ng-template>
+                  </td>
                   <td class="py-3">
                     <a class="text-ink underline-offset-2 hover:underline" [href]="'mailto:' + lead.email">
                       {{ lead.email }}
@@ -530,6 +538,8 @@ export class CompaniesComponent implements OnInit {
   private api = inject(CompanyService);
   private leadsApi = inject(LeadService);
   private notificationCenter = inject(NotificationCenterService);
+
+  readonly serviceLabels = LEAD_SERVICE_LABELS;
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;

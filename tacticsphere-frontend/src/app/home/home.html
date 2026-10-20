@@ -1,47 +1,104 @@
-<div class="min-h-screen bg-bg text-ink">
-  <!-- Esfera 3D wireframe decorativa -->
+<div class="home-page min-h-screen bg-bg text-ink">
+  <!-- Navbar: transparente sobre el hero, se compacta al hacer scroll -->
+  <header class="home-nav" [class.is-compact]="navCompact()">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6">
+      <button type="button" class="home-nav__brand" (click)="scrollToTop()" aria-label="Volver al inicio">
+        <img src="assets/logo_ts.png" alt="" class="home-nav__logo" decoding="async" />
+        <span class="font-semibold tracking-tight">TacticSphere</span>
+      </button>
+
+      <nav class="hidden items-center gap-1 lg:flex" aria-label="Secciones">
+        <button
+          *ngFor="let link of navLinks"
+          type="button"
+          class="home-nav__link"
+          (click)="scrollTo(link.id)"
+        >
+          {{ link.label }}
+        </button>
+      </nav>
+
+      <a routerLink="/login" class="ts-btn ts-shine home-nav__cta" aria-label="Ir al login">
+        <span>Ingresar</span>
+        <app-icon name="log-in" size="sm"></app-icon>
+      </a>
+    </div>
+    <div class="home-nav__progress" [style.transform]="'scaleX(' + readProgress() + ')'"></div>
+  </header>
+
+  <!-- Esfera 3D wireframe decorativa: se carga cuando el navegador está libre para no retrasar la primera pintura -->
   <div class="sphere-wrapper">
-    <app-hero-sphere-3d></app-hero-sphere-3d>
+    @defer (on idle) {
+      <app-hero-sphere-3d class="sphere-fade-in"></app-hero-sphere-3d>
+    }
   </div>
 
   <section class="relative z-10">
-    <div class="mx-auto flex min-h-[80vh] max-w-6xl flex-col items-center justify-center gap-10 px-6 py-24 pb-32 lg:pb-40 text-center relative z-10">
-      <div class="ts-hero-logo rounded-full border border-border/60 bg-white/70 p-6" @fadeScaleIn>
-        <img src="assets/logo_ts.png" alt="TacticSphere" class="h-36 w-auto sm:h-40" decoding="async" />
-      </div>
+    <div class="mx-auto flex min-h-[90vh] max-w-6xl flex-col items-center justify-center gap-10 px-6 py-24 pb-32 lg:pb-40 text-center relative z-10">
+      <app-hero-logo @fadeScaleIn></app-hero-logo>
 
-      <div class="space-y-6" @fadeUp>
-        <h1 class="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
-          Diagnostica la madurez tecnológica de tu organización con claridad
+      <div class="space-y-6">
+        <h1 class="hero-headline text-4xl font-semibold leading-tight tracking-tight md:text-5xl" [attr.aria-label]="headlines[0].text">
+          <span
+            *ngFor="let phrase of headlines; let p = index"
+            class="hero-phrase"
+            [class.is-active]="activeHeadline() === p"
+            [class.is-leaving]="leavingHeadline() === p"
+            aria-hidden="true"
+          >
+            <ng-container *ngFor="let word of phrase.words; let i = index">
+              <span
+                class="hero-word"
+                [class.hero-highlight]="word.highlight"
+                [style.--d]="i"
+              >{{ word.text }}</span>{{ ' ' }}
+            </ng-container>
+          </span>
         </h1>
-        <p class="mx-auto max-w-3xl text-base text-muted md:text-lg">
-          TacticSphere combina consultoría especializada y una plataforma inteligente basada en ITIL&nbsp;4 para
-          revelar dónde está tu empresa hoy y qué pasos concretos debe seguir para acelerar su transformación digital.
+
+        <!-- Indicador del servicio que muestra el título; permite saltar a otro -->
+        <div class="hero-tabs" role="group" aria-label="Servicios destacados" [@fadeUp]="{ value: '', params: { delay: 600 } }">
+          <button
+            *ngFor="let phrase of headlines; let p = index"
+            type="button"
+            class="hero-tab"
+            [class.is-active]="activeHeadline() === p"
+            [style.--dwell]="phrase.dwell + 'ms'"
+            [attr.aria-pressed]="activeHeadline() === p"
+            [attr.aria-label]="phrase.label"
+            (click)="showHeadline(p)"
+          >
+            <span class="hero-tab__bar"><span class="hero-tab__fill"></span></span>
+            <span class="hero-tab__label">{{ phrase.label }}</span>
+          </button>
+        </div>
+        <p class="mx-auto max-w-3xl text-base text-muted md:text-lg" [@fadeUp]="{ value: '', params: { delay: 750 } }">
+          Consultoría tecnológica, desarrollo de software, ciencia de datos y agentes de IA. Revelamos dónde está tu
+          empresa hoy con una plataforma basada en ITIL&nbsp;4 y construimos las soluciones para acelerar su
+          transformación digital.
         </p>
       </div>
 
-      <div class="flex flex-wrap justify-center gap-4" @fadeUp>
-        <a
-          routerLink="/login"
-          class="ts-btn group inline-flex items-center gap-2 border border-ink px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
-          aria-label="Ir al login"
-        >
-          <span>Ir al login</span>
-          <app-icon name="log-in" size="sm" class="transition-transform group-hover:translate-x-1"></app-icon>
-        </a>
+      <div class="flex flex-wrap justify-center gap-4" [@fadeUp]="{ value: '', params: { delay: 950 } }">
         <button
           type="button"
-          class="ts-btn group inline-flex items-center gap-2 border border-ink px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
-          aria-label="Solicitar consultoría"
-          (click)="openModal()"
+          class="ts-btn ts-btn--solid ts-shine group inline-flex items-center gap-2 px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
+          (click)="openModal('consultoria')"
         >
           <span>Solicitar consultoría</span>
-          <app-icon name="sparkles" size="sm" class="transition-transform group-hover:rotate-3"></app-icon>
+          <app-icon name="sparkles" size="sm" class="transition-transform group-hover:rotate-12"></app-icon>
+        </button>
+        <button
+          type="button"
+          class="ts-btn ts-shine group inline-flex items-center gap-2 border border-ink px-6 py-3 text-base transition-transform duration-200 hover:-translate-y-0.5"
+          (click)="openModal('desarrollo')"
+        >
+          <span>Cotizar un desarrollo</span>
+          <app-icon name="code-xml" size="sm" class="transition-transform group-hover:translate-x-1"></app-icon>
         </button>
       </div>
 
-      <!-- Botón de scroll dentro de la sección hero -->
-      <!-- Solo visible cuando el usuario está en la parte superior de la página -->
+      <!-- Botón de scroll: solo visible mientras el usuario está en el hero -->
       <button
         type="button"
         class="home-scroll-indicator scroll-indicator absolute bottom-8 left-1/2 z-10 hidden -translate-x-1/2 items-center justify-center rounded-full border border-neutral-200 bg-white p-3 text-ink shadow-sm transition-all duration-300 ease-in-out hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md lg:flex"
@@ -51,107 +108,486 @@
         [class.pointer-events-auto]="showScrollIndicator()"
         aria-label="Ver más contenido"
         (click)="scrollToContent()"
-        @fadeUp
+        [@fadeUp]="{ value: '', params: { delay: 1200 } }"
       >
         <app-icon name="chevron-down" size="lg" class="text-ink"></app-icon>
       </button>
     </div>
   </section>
 
-  <section class="bg-white py-20 pt-24 lg:pt-32" id="content-section">
+  <section class="relative z-10 py-20 pt-24 lg:pt-32" id="content-section">
     <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6">
-      <article
-        *ngFor="let section of sections; trackBy: trackBySection"
-        #sectionBlock
-        class="ts-card min-w-0 overflow-hidden transition-all duration-500 ease-out"
-        [attr.data-section-id]="section.id"
-        [class.opacity-100]="sectionIsVisible(section.id)"
-        [class.translate-y-0]="sectionIsVisible(section.id)"
-        [class.opacity-0]="!sectionIsVisible(section.id)"
-        [class.translate-y-6]="!sectionIsVisible(section.id)"
-      >
-        <div class="flex items-start gap-4">
-          <div class="mt-1 hidden h-8 w-8 shrink-0 rounded-full border border-border bg-white sm:flex sm:items-center sm:justify-center">
-            <app-icon name="layers" size="sm" class="text-ink"></app-icon>
-          </div>
-          <div class="space-y-4">
-            <h2 class="ts-title">{{ section.title }}</h2>
-            <p *ngFor="let paragraph of section.description" class="text-base leading-relaxed text-muted">
-              {{ paragraph }}
-            </p>
-            <ul *ngIf="section.items?.length" class="space-y-3 text-sm text-muted">
-              <li *ngFor="let item of section.items" class="flex gap-3">
-                <span class="mt-1 h-1.5 w-1.5 rounded-full bg-ink"></span>
-                <span>{{ item }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </article>
+      <!-- 1. Manifiesto: el texto se ilumina palabra por palabra con el scroll -->
+      <section id="nosotros" class="manifesto" aria-label="Quiénes somos">
+        <p class="ts-label">Quiénes somos</p>
+        <p id="manifiesto-texto" class="manifesto__text" [attr.aria-label]="manifestoPlain">
+          <ng-container *ngFor="let word of manifesto; let i = index">
+            <span
+              class="manifesto__word"
+              [class.is-lit]="i < manifestoLit()"
+              [class.is-key]="word.highlight"
+              aria-hidden="true"
+            >{{ word.text }}</span>{{ ' ' }}
+          </ng-container>
+        </p>
+      </section>
 
-      <div
-        class="ts-card flex flex-col gap-4 overflow-hidden bg-white/80 text-center shadow-card md:flex-row md:items-center md:justify-between md:text-left"
-      >
-        <div class="space-y-2">
-          <h3 class="text-xl font-semibold text-ink">¿Listo para mapear tu ruta digital?</h3>
-          <p class="text-sm text-muted">
-            Solicita una consultoría y recibe un diagnóstico accionable para impulsar tus iniciativas tecnológicas.
+      <!-- 2. Servicios + tecnologías -->
+      <section id="services" class="space-y-6">
+        <div class="mx-auto max-w-2xl space-y-3 text-center" data-reveal="up">
+          <p class="ts-label">Servicios</p>
+          <h2 class="ts-title">Más que consultoría: diseñamos y construimos</h2>
+          <p class="text-base leading-relaxed text-muted">
+            Acompañamos a tu organización desde el diagnóstico hasta la solución en producción.
           </p>
         </div>
-        <div class="flex flex-wrap justify-center gap-3 md:justify-end">
-          <a
-            routerLink="/login"
-            class="ts-btn ts-btn--secondary cta-card-button group border border-border transition-transform duration-200 hover:-translate-y-0.5"
-            aria-label="Abrir login"
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div
+            *ngFor="let service of services; let i = index"
+            class="service-card ts-card"
+            data-reveal="up"
+            [style.--i]="i"
           >
-            Acceder al panel
-          </a>
-          <button
-            type="button"
-            class="ts-btn cta-card-button group transition-transform duration-200 hover:-translate-y-0.5"
-            aria-label="Abrir formulario de consultoría"
-            (click)="openModal()"
-          >
-            Solicitar consultoría
-          </button>
+            <span class="service-card__icon">
+              <app-icon [name]="service.icon" size="md"></app-icon>
+            </span>
+            <h3 class="text-lg font-semibold text-ink">{{ service.title }}</h3>
+            <p class="text-sm leading-relaxed text-muted">{{ service.text }}</p>
+            <ul class="flex flex-wrap gap-2 pt-1">
+              <li *ngFor="let tag of service.tags" class="ts-badge">{{ tag }}</li>
+            </ul>
+            <button type="button" class="service-card__cta" (click)="openModal(service.key)">
+              Conversemos
+              <app-icon name="arrow-right" size="sm"></app-icon>
+            </button>
+          </div>
         </div>
-      </div>
+
+        <div class="tech-marquee" data-reveal="up" aria-label="Tecnologías que usamos">
+          <div class="tech-marquee__track">
+            <ng-container *ngFor="let copy of [0, 1]">
+              <span
+                *ngFor="let tech of site.technologies"
+                class="tech-marquee__item"
+                [attr.aria-hidden]="copy === 1 ? 'true' : null"
+              >{{ tech }}</span>
+            </ng-container>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Plataforma: pilares + vista previa + proceso compacto -->
+      <section id="what" class="space-y-8 pt-8">
+        <div class="mx-auto max-w-2xl space-y-3 text-center" data-reveal="up">
+          <p class="ts-label">Plataforma</p>
+          <h2 class="ts-title">Tu madurez tecnológica, clara y accionable</h2>
+          <p class="text-base leading-relaxed text-muted">
+            Nuestra plataforma, basada en ITIL&nbsp;4, evalúa cuatro pilares en cinco niveles de madurez y convierte los
+            resultados en una hoja de ruta priorizada.
+          </p>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            *ngFor="let pillar of pillars; let i = index"
+            class="pillar-card"
+            data-reveal="up"
+            [style.--i]="i"
+          >
+            <span class="pillar-card__icon">
+              <app-icon [name]="pillar.icon" size="md"></app-icon>
+            </span>
+            <div>
+              <p class="text-sm font-semibold text-ink">{{ pillar.title }}</p>
+              <p class="text-sm text-muted">{{ pillar.text }}</p>
+            </div>
+          </div>
+        </div>
+
+        <app-platform-preview></app-platform-preview>
+
+        <ol class="process-line" aria-label="Cómo trabajamos">
+          <li *ngFor="let step of processSteps; let i = index" class="process-line__step" data-reveal="up" [style.--i]="i">
+            <span class="process-line__dot">
+              <app-icon [name]="step.icon" size="sm"></app-icon>
+            </span>
+            <span class="text-xs font-medium uppercase tracking-[0.08em] text-muted">Paso {{ i + 1 }}</span>
+            <span class="text-sm font-semibold text-ink">{{ step.title }}</span>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 4. Banda de IA: lleva al mini-diagnóstico -->
+      <section class="ai-band" data-reveal="up" aria-label="La IA ya está aquí">
+        <span class="ai-band__glow" aria-hidden="true"></span>
+        <div class="relative grid gap-8 md:grid-cols-[1.4fr_1fr] md:items-end">
+          <div class="space-y-4">
+            <p class="ai-band__label">Inteligencia artificial</p>
+            <h2 class="ai-band__title">La IA ya está cambiando tu industria. El mejor momento para empezar es hoy.</h2>
+            <p class="ai-band__text">
+              Las empresas que la adoptan ahora son las que marcarán el ritmo mañana. Te ayudamos a dar el primer
+              paso con claridad, priorizando donde la IA genera valor real para tu negocio.
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-3 md:justify-end">
+            <button type="button" class="ai-band__btn ai-band__btn--primary" (click)="scrollTo('diagnostico')">
+              Descubre tu punto de partida
+              <app-icon name="arrow-right" size="sm"></app-icon>
+            </button>
+            <button type="button" class="ai-band__btn" (click)="openModal('agentes_ia')">
+              Hablemos de IA
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Mini-diagnóstico -->
+      <section id="diagnostico" class="ts-card min-w-0" data-reveal="up">
+        <app-maturity-quiz (requestDiagnosis)="openModal('consultoria', $event)"></app-maturity-quiz>
+      </section>
+
+      <!-- Casos, logos y testimonio: ocultos hasta tener datos reales (SITE.showCases) -->
+      <section *ngIf="site.showCases" id="casos" class="space-y-6 pt-4">
+        <div class="mx-auto max-w-2xl space-y-3 text-center" data-reveal="up">
+          <p class="ts-label">Casos</p>
+          <h2 class="ts-title">Resultados que se pueden medir</h2>
+          <p class="text-base leading-relaxed text-muted">
+            Algunos proyectos en los que hemos acompañado a nuestros clientes.
+          </p>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3" data-counters="cases">
+          <article
+            *ngFor="let item of site.cases; let i = index"
+            class="case-card ts-card"
+            data-reveal="up"
+            [style.--i]="i"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="ts-badge">{{ item.sector }}</span>
+              <span *ngIf="item.placeholder" class="placeholder-tag">Ejemplo</span>
+            </div>
+            <p class="case-card__metric">
+              {{ item.metric.prefix }}<span class="tabular-nums">{{ caseValues()[i] }}</span>{{ item.metric.suffix }}
+            </p>
+            <p class="-mt-2 text-sm text-muted">{{ item.metric.label }}</p>
+            <h3 class="text-lg font-semibold text-ink">{{ item.title }}</h3>
+            <dl class="space-y-2 text-sm">
+              <div>
+                <dt class="font-medium text-ink">Desafío</dt>
+                <dd class="text-muted">{{ item.problem }}</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-ink">Solución</dt>
+                <dd class="text-muted">{{ item.solution }}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+
+        <div class="ts-card space-y-8" data-reveal="up">
+          <div class="space-y-4">
+            <p class="ts-label text-center">Confían en nosotros</p>
+            <div class="client-logos">
+              <ng-container *ngIf="site.clients.length; else logoPlaceholders">
+                <img
+                  *ngFor="let client of site.clients"
+                  [src]="client.src"
+                  [alt]="client.name"
+                  class="client-logos__img"
+                  loading="lazy"
+                />
+              </ng-container>
+              <ng-template #logoPlaceholders>
+                <span *ngFor="let n of [1, 2, 3, 4, 5]" class="client-logos__placeholder">Logo cliente</span>
+              </ng-template>
+            </div>
+          </div>
+
+          <figure class="testimonial">
+            <app-icon name="quote" size="lg" class="testimonial__icon"></app-icon>
+            <blockquote class="text-lg leading-relaxed text-ink md:text-xl">
+              “{{ site.testimonial.quote }}”
+            </blockquote>
+            <figcaption class="flex items-center justify-center gap-2 text-sm text-muted">
+              <span class="font-medium text-ink">{{ site.testimonial.author }}</span>
+              <span>· {{ site.testimonial.role }}</span>
+              <span *ngIf="site.testimonial.placeholder" class="placeholder-tag">Ejemplo</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- 6. Equipo + por qué elegirnos -->
+      <section id="team" class="ts-card min-w-0 space-y-8" data-reveal="up">
+        <div class="mx-auto max-w-2xl space-y-3 text-center">
+          <p class="ts-label">Equipo</p>
+          <h2 class="ts-title">La energía de una nueva generación, con el rigor de una consultora</h2>
+          <p class="text-base leading-relaxed text-muted">
+            Jóvenes, comprometidos y con experiencia construyendo soluciones reales.
+          </p>
+        </div>
+
+        <figure class="team-photo" data-reveal="photo">
+          <img
+            *ngIf="!teamPhotoFailed(); else photoPlaceholder"
+            [src]="teamPhoto"
+            alt="Equipo de TacticSphere"
+            class="team-photo__img"
+            loading="lazy"
+            decoding="async"
+            (error)="teamPhotoFailed.set(true)"
+          />
+          <ng-template #photoPlaceholder>
+            <div class="team-photo__placeholder">
+              <app-icon name="users" size="lg"></app-icon>
+              <span class="text-sm text-muted">Aquí irá la foto grupal del equipo</span>
+            </div>
+          </ng-template>
+        </figure>
+
+        <div class="flex flex-col items-center gap-5">
+          <p class="team-badge" data-reveal="up">
+            <app-icon name="brain-circuit" size="sm"></app-icon>
+            <span class="team-badge__text">
+              <span>Equipo de Ingenieros en Informática</span>
+              <span class="team-badge__sep" aria-hidden="true">·</span>
+              <span>Mención en Ciencias de Datos</span>
+            </span>
+          </p>
+
+          <ul class="grid w-full grid-cols-2 gap-4 md:grid-cols-4">
+            <li
+              *ngFor="let member of teamMembers; let i = index"
+              class="team-member"
+              data-reveal="up"
+              [style.--i]="i"
+            >
+              <span class="team-member__index">{{ (i + 1).toString().padStart(2, '0') }}</span>
+              <p class="font-semibold text-ink">{{ member.name }}</p>
+            </li>
+          </ul>
+        </div>
+
+        <ul class="trust-strip">
+          <li *ngFor="let reason of trustReasons; let i = index" class="trust-strip__item" data-reveal="up" [style.--i]="i">
+            <span class="trust-strip__icon"><app-icon [name]="reason.icon" size="sm"></app-icon></span>
+            <span>
+              <span class="block text-sm font-semibold text-ink">{{ reason.title }}</span>
+              <span class="block text-sm leading-relaxed text-muted">{{ reason.text }}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 7. Preguntas frecuentes -->
+      <section id="faq" class="ts-card min-w-0" data-reveal="up">
+        <div class="grid gap-8 md:grid-cols-[1fr_1.6fr]">
+          <div class="space-y-3">
+            <p class="ts-label">Preguntas frecuentes</p>
+            <h2 class="ts-title">Lo que suelen preguntarnos</h2>
+            <p class="text-base leading-relaxed text-muted">
+              ¿No encuentras tu respuesta? Escríbenos o pregúntale al asistente.
+            </p>
+          </div>
+
+          <div class="faq">
+            <div
+              *ngFor="let item of site.faq; let i = index"
+              class="faq__item"
+              [class.is-open]="openFaq() === i"
+            >
+              <button
+                type="button"
+                class="faq__question"
+                [attr.aria-expanded]="openFaq() === i"
+                [attr.aria-controls]="'faq-' + i"
+                (click)="toggleFaq(i)"
+              >
+                <span>{{ item.question }}</span>
+                <span class="faq__toggle" aria-hidden="true"></span>
+              </button>
+              <div class="faq__answer" [id]="'faq-' + i" role="region">
+                <div class="faq__answer-inner">
+                  <p>{{ item.answer }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. Contacto -->
+      <section id="contacto" class="contact ts-card min-w-0" data-reveal="up">
+        <div class="grid gap-8 md:items-center" [ngClass]="{ 'md:grid-cols-[1.2fr_1fr]': contactLinks.length }">
+          <div class="space-y-4">
+            <p class="ts-label">Contacto</p>
+            <h2 class="text-3xl font-semibold tracking-tight text-ink md:text-4xl">¿Listo para mapear tu ruta digital?</h2>
+            <p class="text-base leading-relaxed text-muted">
+              Cuéntanos qué necesitas: un diagnóstico, un desarrollo a medida, un modelo de datos o un agente de IA.
+              Te respondemos a la brevedad.
+            </p>
+            <div class="flex flex-wrap gap-3 pt-2">
+              <button type="button" class="ts-btn ts-btn--solid ts-shine group px-6 py-3" (click)="openModal(null)">
+                Escríbenos
+                <app-icon name="arrow-right" size="sm" class="transition-transform group-hover:translate-x-1"></app-icon>
+              </button>
+              <a routerLink="/login" class="ts-btn ts-btn--secondary px-6 py-3">Acceder al panel</a>
+            </div>
+          </div>
+
+          <!-- Datos de contacto y redes: solo aparecen los que estén completos en site-config.ts -->
+          <ul *ngIf="contactLinks.length" class="contact__list">
+            <li *ngFor="let link of contactLinks; let i = index" data-reveal="up" [style.--i]="i">
+              <a
+                *ngIf="link.url; else textOnly"
+                class="contact__item"
+                [href]="link.url"
+                [attr.target]="link.url.startsWith('http') ? '_blank' : null"
+                rel="noopener"
+              >
+                <span class="contact__icon"><app-icon [name]="link.icon" size="sm"></app-icon></span>
+                <span class="min-w-0">
+                  <span class="block text-xs text-muted">{{ link.label }}</span>
+                  <span class="block truncate text-sm font-medium text-ink">{{ link.value || 'Abrir' }}</span>
+                </span>
+              </a>
+              <!-- Ej. ubicación: tiene texto pero no enlace -->
+              <ng-template #textOnly>
+                <div class="contact__item">
+                  <span class="contact__icon"><app-icon [name]="link.icon" size="sm"></app-icon></span>
+                  <span class="min-w-0">
+                    <span class="block text-xs text-muted">{{ link.label }}</span>
+                    <span class="block text-sm font-medium text-ink">{{ link.value }}</span>
+                  </span>
+                </div>
+              </ng-template>
+            </li>
+          </ul>
+        </div>
+      </section>
     </div>
   </section>
+
+  <footer class="home-footer relative z-10">
+    <div class="mx-auto grid max-w-6xl gap-8 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
+      <div class="space-y-3">
+        <div class="flex items-center gap-2">
+          <img src="assets/logo_ts.png" alt="" class="h-7 w-auto" />
+          <span class="font-semibold tracking-tight">TacticSphere</span>
+        </div>
+        <p class="max-w-xs text-sm text-muted">
+          Consultoría tecnológica, desarrollo de software, ciencia de datos y agentes de IA.
+        </p>
+        <div *ngIf="socialLinks.length" class="flex gap-2 pt-1">
+          <a
+            *ngFor="let link of socialLinks"
+            class="home-footer__social"
+            [href]="link.url"
+            target="_blank"
+            rel="noopener"
+            [attr.aria-label]="link.label"
+          >
+            <app-icon [name]="link.icon" size="sm"></app-icon>
+          </a>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <p class="ts-label">Secciones</p>
+        <ul class="space-y-2 text-sm">
+          <li *ngFor="let link of navLinks">
+            <button type="button" class="home-footer__link" (click)="scrollTo(link.id)">{{ link.label }}</button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="space-y-3">
+        <p class="ts-label">Servicios</p>
+        <ul class="space-y-2 text-sm">
+          <li *ngFor="let service of services">
+            <button type="button" class="home-footer__link" (click)="openModal(service.key)">{{ service.title }}</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-border">
+      <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-5 text-xs text-muted sm:flex-row">
+        <span>© {{ year }} TacticSphere. Todos los derechos reservados.</span>
+        <span>Consultoría basada en ITIL&nbsp;4</span>
+      </div>
+    </div>
+  </footer>
 </div>
 
-<ts-modal title="Solicitar consultoría" [open]="modalOpen()" (close)="closeModal()">
+<app-chat-widget (contact)="openModal($event)" (navigate)="scrollTo($event)"></app-chat-widget>
+
+<ts-modal title="Conversemos" [open]="modalOpen()" (close)="closeModal()">
   <form class="space-y-5" [formGroup]="form" (ngSubmit)="onSubmitConsulting()">
     <div class="space-y-2">
-      <label class="ts-label block" for="consulting-company">Empresa</label>
-      <input
-        id="consulting-company"
-        type="text"
-        class="ts-input"
-        placeholder="Nombre de la empresa"
-        formControlName="company"
-        autocomplete="organization"
-        required
-      />
-      <p class="text-xs text-error" *ngIf="form.controls.company.touched && form.controls.company.invalid">
-        Ingresa un nombre de empresa válido (mínimo 2 caracteres).
+      <span class="ts-label block" id="consulting-service-label">¿Qué necesitas?</span>
+      <div class="service-picker" role="radiogroup" aria-labelledby="consulting-service-label">
+        <button
+          *ngFor="let option of serviceOptions"
+          type="button"
+          role="radio"
+          class="service-picker__option"
+          [class.is-selected]="form.controls.service.value === option.key"
+          [attr.aria-checked]="form.controls.service.value === option.key"
+          (click)="selectService(option.key)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+      <p class="text-xs text-error" *ngIf="form.controls.service.touched && form.controls.service.invalid">
+        Selecciona el tipo de servicio.
       </p>
     </div>
 
+    <div class="grid gap-5 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="ts-label block" for="consulting-company">Empresa</label>
+        <input
+          id="consulting-company"
+          type="text"
+          class="ts-input"
+          placeholder="Nombre de la empresa"
+          formControlName="company"
+          autocomplete="organization"
+          required
+        />
+        <p class="text-xs text-error" *ngIf="form.controls.company.touched && form.controls.company.invalid">
+          Ingresa un nombre de empresa válido (mínimo 2 caracteres).
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="ts-label block" for="consulting-email">Correo de contacto</label>
+        <input
+          id="consulting-email"
+          type="email"
+          class="ts-input"
+          placeholder="nombre@empresa.com"
+          formControlName="email"
+          autocomplete="email"
+          required
+        />
+        <p class="text-xs text-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
+          Ingresa un correo electrónico válido.
+        </p>
+      </div>
+    </div>
+
     <div class="space-y-2">
-      <label class="ts-label block" for="consulting-email">Correo de contacto</label>
-      <input
-        id="consulting-email"
-        type="email"
-        class="ts-input"
-        placeholder="nombre@empresa.com"
-        formControlName="email"
-        autocomplete="email"
-        required
-      />
-      <p class="text-xs text-error" *ngIf="form.controls.email.touched && form.controls.email.invalid">
-        Ingresa un correo electrónico válido.
-      </p>
+      <label class="ts-label block" for="consulting-message">Mensaje <span class="normal-case tracking-normal">(opcional)</span></label>
+      <textarea
+        id="consulting-message"
+        class="ts-input min-h-[6rem] resize-y"
+        placeholder="Cuéntanos brevemente tu proyecto o necesidad"
+        formControlName="message"
+        maxlength="2000"
+      ></textarea>
     </div>
 
     <div *ngIf="submitState() === 'success'" class="rounded-xl border border-border bg-[#f6f6f6] p-3 text-sm text-ink">

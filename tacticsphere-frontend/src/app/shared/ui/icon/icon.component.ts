@@ -32,7 +32,28 @@ export type IconName =
   | 'x'
   | 'check'
   | 'circle'
-  | 'filter';
+  | 'filter'
+  | 'arrow-right'
+  | 'clipboard-check'
+  | 'chart-column'
+  | 'map'
+  | 'rocket'
+  | 'cloud'
+  | 'database'
+  | 'chart-pie'
+  | 'brain'
+  | 'compass'
+  | 'code-xml'
+  | 'brain-circuit'
+  | 'bot'
+  | 'linkedin'
+  | 'instagram'
+  | 'message-circle'
+  | 'map-pin'
+  | 'send'
+  | 'arrow-left'
+  | 'rotate-ccw'
+  | 'quote';
 
 type IconSize = 'sm' | 'md' | 'lg';
 type IconVariant = 'default' | 'muted' | 'danger' | 'accent' | 'success';
@@ -69,6 +90,27 @@ const iconNameMap: Record<IconName, string> = {
   'check': 'Check',
   'circle': 'Circle',
   'filter': 'Filter',
+  'arrow-right': 'ArrowRight',
+  'clipboard-check': 'ClipboardCheck',
+  'chart-column': 'ChartColumn',
+  'map': 'Map',
+  'rocket': 'Rocket',
+  'cloud': 'Cloud',
+  'database': 'Database',
+  'chart-pie': 'ChartPie',
+  'brain': 'Brain',
+  'compass': 'Compass',
+  'code-xml': 'CodeXml',
+  'brain-circuit': 'BrainCircuit',
+  'bot': 'Bot',
+  'linkedin': 'Linkedin',
+  'instagram': 'Instagram',
+  'message-circle': 'MessageCircle',
+  'map-pin': 'MapPin',
+  'send': 'Send',
+  'arrow-left': 'ArrowLeft',
+  'rotate-ccw': 'RotateCcw',
+  'quote': 'Quote',
 };
 
 const sizeMap: Record<IconSize, number> = {

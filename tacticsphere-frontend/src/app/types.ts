@@ -416,10 +416,22 @@ export interface Asignacion {
   anonimo: boolean;
 }
 
+export type LeadServiceKey = 'consultoria' | 'desarrollo' | 'ciencia_datos' | 'agentes_ia' | 'otro';
+
+export const LEAD_SERVICE_LABELS: Record<LeadServiceKey, string> = {
+  consultoria: 'Consultoría tecnológica',
+  desarrollo: 'Desarrollo de software',
+  ciencia_datos: 'Ciencia de datos',
+  agentes_ia: 'Agentes de IA',
+  otro: 'Otro',
+};
+
 export interface Lead {
   id: number;
   company: string;
   email: string;
+  service?: LeadServiceKey | null;
+  message?: string | null;
   created_at: string; // ISO
 }
 

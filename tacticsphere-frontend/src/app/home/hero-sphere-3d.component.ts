@@ -32,11 +32,23 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
   private sphere!: THREE.Mesh;
   private animationFrameId: number | null = null;
   private resizeListener?: () => void;
+  private pointerListener?: (event: PointerEvent) => void;
+  private scrollListener?: () => void;
+
+  // Inclinación objetivo según el mouse y estado suavizado (lerp)
+  private targetTilt = { x: 0, y: 0 };
+  private currentTilt = { x: 0, y: 0 };
+  private baseRotation = { x: 0, y: 0 };
+  private scrollProgress = 0;
+  private currentScroll = 0;
+  private reducedMotion = false;
 
   ngAfterViewInit(): void {
     if (!this.canvasRef?.nativeElement) {
       return;
     }
+
+    this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
     // Esperar un frame para que el wrapper se haya renderizado completamente
     requestAnimationFrame(() => {
@@ -45,6 +57,7 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
       this.updateRendererSize(); // Asegurar que el tamaño se calcule correctamente
       this.startAnimation();
       this.setupResizeListener();
+      this.setupInteractionListeners();
     });
   }
 
@@ -128,22 +141,51 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
   }
 
   private startAnimation(): void {
+    const speed = this.reducedMotion ? 0 : 1;
+
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
 
-      // Rotar la esfera suavemente (rotación más lenta)
       if (this.sphere) {
-        this.sphere.rotation.y += 0.001;
-        this.sphere.rotation.x += 0.0005;
+        // Rotación base continua; el scroll la acelera levemente
+        this.currentScroll += (this.scrollProgress - this.currentScroll) * 0.03;
+        this.baseRotation.y += 0.001 * speed * (1 + this.currentScroll * 0.6);
+        this.baseRotation.x += 0.0005 * speed;
+
+        // Inclinación suave hacia la posición del mouse
+        this.currentTilt.x += (this.targetTilt.x - this.currentTilt.x) * 0.015;
+        this.currentTilt.y += (this.targetTilt.y - this.currentTilt.y) * 0.015;
+
+        this.sphere.rotation.x = this.baseRotation.x + this.currentTilt.x;
+        this.sphere.rotation.y = this.baseRotation.y + this.currentTilt.y;
       }
 
-      // Renderizar
       if (this.renderer && this.scene && this.camera) {
         this.renderer.render(this.scene, this.camera);
       }
     };
 
     animate();
+  }
+
+  private setupInteractionListeners(): void {
+    if (this.reducedMotion) {
+      return;
+    }
+
+    this.pointerListener = (event: PointerEvent) => {
+      const nx = event.clientX / window.innerWidth - 0.5;
+      const ny = event.clientY / window.innerHeight - 0.5;
+      this.targetTilt = { x: ny * 0.12, y: nx * 0.16 };
+    };
+
+    this.scrollListener = () => {
+      const max = Math.max(window.innerHeight, 1);
+      this.scrollProgress = Math.min(window.scrollY / max, 1);
+    };
+
+    window.addEventListener('pointermove', this.pointerListener, { passive: true });
+    window.addEventListener('scroll', this.scrollListener, { passive: true });
   }
 
   private setupResizeListener(): void {
@@ -166,6 +208,16 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
     if (this.resizeListener) {
       window.removeEventListener('resize', this.resizeListener);
       this.resizeListener = undefined;
+    }
+
+    if (this.pointerListener) {
+      window.removeEventListener('pointermove', this.pointerListener);
+      this.pointerListener = undefined;
+    }
+
+    if (this.scrollListener) {
+      window.removeEventListener('scroll', this.scrollListener);
+      this.scrollListener = undefined;
     }
 
     // Limpiar Three.js
