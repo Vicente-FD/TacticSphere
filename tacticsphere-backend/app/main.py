@@ -386,7 +386,15 @@ def create_consulting_lead_endpoint(payload: LeadCreate, db: Session = Depends(g
 
         raise HTTPException(status_code=422, detail="La empresa es obligatoria")
 
-    lead = crud.create_consulting_lead(db, company=company, email=payload.email.lower())
+    message = (payload.message or "").strip() or None
+
+    lead = crud.create_consulting_lead(
+        db,
+        company=company,
+        email=payload.email.lower(),
+        service=payload.service,
+        message=message,
+    )
 
     return lead
 

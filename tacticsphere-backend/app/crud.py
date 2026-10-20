@@ -2057,8 +2057,14 @@ def list_responses_for_export(
 # CONSULTING LEADS
 # ======================================================
 
-def create_consulting_lead(db: Session, company: str, email: str) -> ConsultingLead:
-    lead = ConsultingLead(company=company, email=email.lower())
+def create_consulting_lead(
+    db: Session,
+    company: str,
+    email: str,
+    service: Optional[str] = None,
+    message: Optional[str] = None,
+) -> ConsultingLead:
+    lead = ConsultingLead(company=company, email=email.lower(), service=service, message=message)
     db.add(lead)
     db.commit()
     db.refresh(lead)

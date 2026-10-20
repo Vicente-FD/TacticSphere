@@ -215,14 +215,20 @@ class SubpilarUpdate(BaseModel):
 # LEADS / CONSULTING REQUESTS
 # ======================================================
 
+LeadService = Literal["consultoria", "desarrollo", "ciencia_datos", "agentes_ia", "otro"]
+
 class LeadCreate(BaseModel):
     company: str
     email: EmailStr
+    service: Optional[LeadService] = None
+    message: Optional[str] = Field(default=None, max_length=2000)
 
 class LeadRead(BaseModel):
     id: int
     company: str
     email: EmailStr
+    service: Optional[str] = None
+    message: Optional[str] = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
