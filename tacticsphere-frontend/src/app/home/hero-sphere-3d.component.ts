@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as THREE from 'three';
 
@@ -26,6 +26,14 @@ import * as THREE from 'three';
 export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvasRef', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
+  private readonly zone = inject(NgZone);
+
+  // Dibujar a ~30 fps y con resolución acotada basta para una esfera que gira lento,
+  // y reduce mucho el trabajo del navegador en celulares
+  private static readonly FRAME_MS = 1000 / 30;
+  private static readonly MAX_PIXEL_RATIO = 1.5;
+  private lastFrameTime = 0;
+
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
@@ -50,14 +58,17 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
 
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-    // Esperar un frame para que el wrapper se haya renderizado completamente
-    requestAnimationFrame(() => {
-      this.initThree();
-      this.createSphere();
-      this.updateRendererSize(); // Asegurar que el tamaño se calcule correctamente
-      this.startAnimation();
-      this.setupResizeListener();
-      this.setupInteractionListeners();
+    // Fuera de la zona de Angular: el bucle de animación no debe disparar detección de cambios
+    this.zone.runOutsideAngular(() => {
+      // Esperar un frame para que el wrapper se haya renderizado completamente
+      requestAnimationFrame(() => {
+        this.initThree();
+        this.createSphere();
+        this.updateRendererSize(); // Asegurar que el tamaño se calcule correctamente
+        this.startAnimation();
+        this.setupResizeListener();
+        this.setupInteractionListeners();
+      });
     });
   }
 
@@ -114,7 +125,7 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
 
     // Actualizar tamaño del renderer
     this.renderer.setSize(clientWidth, clientHeight, false);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, HeroSphere3dComponent.MAX_PIXEL_RATIO));
 
     // Actualizar aspecto de la cámara
     this.camera.aspect = clientWidth / clientHeight;
@@ -143,18 +154,27 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
   private startAnimation(): void {
     const speed = this.reducedMotion ? 0 : 1;
 
-    const animate = () => {
+    const animate = (now: number) => {
       this.animationFrameId = requestAnimationFrame(animate);
+
+      const elapsed = now - this.lastFrameTime;
+      if (elapsed < HeroSphere3dComponent.FRAME_MS) {
+        return;
+      }
+      // Factor respecto de un cuadro a 60 fps; se acota para no saltar tras una pausa larga
+      const steps = Math.min(elapsed / (1000 / 60), 4);
+      this.lastFrameTime = now;
 
       if (this.sphere) {
         // Rotación base continua; el scroll la acelera levemente
-        this.currentScroll += (this.scrollProgress - this.currentScroll) * 0.03;
-        this.baseRotation.y += 0.001 * speed * (1 + this.currentScroll * 0.6);
-        this.baseRotation.x += 0.0005 * speed;
+        this.currentScroll += (this.scrollProgress - this.currentScroll) * (1 - Math.pow(1 - 0.03, steps));
+        this.baseRotation.y += 0.001 * speed * steps * (1 + this.currentScroll * 0.6);
+        this.baseRotation.x += 0.0005 * speed * steps;
 
         // Inclinación suave hacia la posición del mouse
-        this.currentTilt.x += (this.targetTilt.x - this.currentTilt.x) * 0.015;
-        this.currentTilt.y += (this.targetTilt.y - this.currentTilt.y) * 0.015;
+        const ease = 1 - Math.pow(1 - 0.015, steps);
+        this.currentTilt.x += (this.targetTilt.x - this.currentTilt.x) * ease;
+        this.currentTilt.y += (this.targetTilt.y - this.currentTilt.y) * ease;
 
         this.sphere.rotation.x = this.baseRotation.x + this.currentTilt.x;
         this.sphere.rotation.y = this.baseRotation.y + this.currentTilt.y;
@@ -165,7 +185,7 @@ export class HeroSphere3dComponent implements AfterViewInit, OnDestroy {
       }
     };
 
-    animate();
+    this.animationFrameId = requestAnimationFrame(animate);
   }
 
   private setupInteractionListeners(): void {

@@ -571,6 +571,16 @@
   color: inherit !important;
 }
 
+/* ---------- Espacio reservado de componentes diferidos (evita saltos de diseño) ---------- */
+
+.home-page .defer-placeholder--preview {
+  min-height: 26rem;
+}
+
+.home-page .defer-placeholder--quiz {
+  min-height: 15rem;
+}
+
 /* ---------- Esfera diferida ---------- */
 
 .home-page .sphere-fade-in {

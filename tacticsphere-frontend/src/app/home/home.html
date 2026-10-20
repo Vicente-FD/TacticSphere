@@ -120,7 +120,9 @@
       <!-- 1. Manifiesto: el texto se ilumina palabra por palabra con el scroll -->
       <section id="nosotros" class="manifesto" aria-label="Quiénes somos">
         <p class="ts-label">Quiénes somos</p>
-        <p id="manifiesto-texto" class="manifesto__text" [attr.aria-label]="manifestoPlain">
+        <p id="manifiesto-texto" class="manifesto__text">
+          <!-- Texto completo para lectores de pantalla; las palabras animadas van ocultas -->
+          <span class="sr-only">{{ manifestoPlain }}</span>
           <ng-container *ngFor="let word of manifesto; let i = index">
             <span
               class="manifesto__word"
@@ -205,7 +207,12 @@
           </div>
         </div>
 
-        <app-platform-preview></app-platform-preview>
+        <!-- Componentes bajo el pliegue: se cargan al acercarse para aligerar el arranque -->
+        @defer (on viewport) {
+          <app-platform-preview></app-platform-preview>
+        } @placeholder {
+          <div class="defer-placeholder defer-placeholder--preview" aria-hidden="true"></div>
+        }
 
         <ol class="process-line" aria-label="Cómo trabajamos">
           <li *ngFor="let step of processSteps; let i = index" class="process-line__step" data-reveal="up" [style.--i]="i">
@@ -244,7 +251,11 @@
 
       <!-- 5. Mini-diagnóstico -->
       <section id="diagnostico" class="ts-card min-w-0" data-reveal="up">
-        <app-maturity-quiz (requestDiagnosis)="openModal('consultoria', $event)"></app-maturity-quiz>
+        @defer (on viewport) {
+          <app-maturity-quiz (requestDiagnosis)="openModal('consultoria', $event)"></app-maturity-quiz>
+        } @placeholder {
+          <div class="defer-placeholder defer-placeholder--quiz" aria-hidden="true"></div>
+        }
       </section>
 
       <!-- Casos, logos y testimonio: ocultos hasta tener datos reales (SITE.showCases) -->
@@ -521,7 +532,9 @@
   </footer>
 </div>
 
-<app-chat-widget (contact)="openModal($event)" (navigate)="scrollTo($event)"></app-chat-widget>
+@defer (on idle) {
+  <app-chat-widget (contact)="openModal($event)" (navigate)="scrollTo($event)"></app-chat-widget>
+}
 
 <ts-modal title="Conversemos" [open]="modalOpen()" (close)="closeModal()">
   <form class="space-y-5" [formGroup]="form" (ngSubmit)="onSubmitConsulting()">
