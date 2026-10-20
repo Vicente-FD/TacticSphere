@@ -113,6 +113,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")  # â cont
 
 from .audit import audit_log
 
+from .schema_patches import ensure_additive_columns
+
 app = FastAPI(title="TacticSphere API")
 
 
@@ -148,6 +150,10 @@ app.add_middleware(
 # Crear tablas si no existen
 
 Base.metadata.create_all(bind=engine)
+
+# Agregar columnas nuevas a tablas existentes (Render no ejecuta Alembic al desplegar)
+
+ensure_additive_columns(engine)
 
 
 
