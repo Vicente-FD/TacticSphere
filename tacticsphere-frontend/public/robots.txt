@@ -1,0 +1,10 @@
+# Solo la landing pública es indexable; la plataforma requiere inicio de sesión.
+User-agent: *
+Allow: /home
+Disallow: /login
+Disallow: /password/
+Disallow: /results
+Disallow: /survey
+Disallow: /admin
+
+Sitemap: https://tacticsphere.cl/sitemap.xml

@@ -40,7 +40,7 @@ export type QuizQuestion = {
 
 export const SITE = {
   // Dominio público, se usa para la vista previa al compartir el enlace (index.html)
-  url: 'https://tacticsphere-prod.web.app',
+  url: 'https://tacticsphere.cl',
 
   // WhatsApp: solo dígitos con código de país, ej. '56912345678'
   contact: [

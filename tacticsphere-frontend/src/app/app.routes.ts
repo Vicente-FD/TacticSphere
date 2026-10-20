@@ -99,5 +99,8 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: '**', redirectTo: 'home' },
+  {
+    path: '**',
+    loadComponent: () => import('./not-found/not-found').then((m) => m.NotFoundComponent),
+  },
 ];
