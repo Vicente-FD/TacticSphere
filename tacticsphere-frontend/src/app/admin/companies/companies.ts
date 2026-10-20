@@ -9,6 +9,8 @@ import { CompanyService } from '../../company.service';
 import { LeadService } from '../../core/services/lead.service';
 import { NotificationCenterService } from '../../core/services/notification-center.service';
 import { Empresa, LEAD_SERVICE_LABELS, Lead } from '../../types';
+import { LeadsInsightsComponent } from './leads-insights.component';
+import { parseQuizSummary } from './lead-insights';
 
 @Component({
   standalone: true,
@@ -19,6 +21,7 @@ import { Empresa, LEAD_SERVICE_LABELS, Lead } from '../../types';
     NgxSkeletonLoaderModule,
     IconComponent,
     ModalComponent,
+    LeadsInsightsComponent,
   ],
   template: `
     <div class="ts-page">
@@ -241,6 +244,8 @@ import { Empresa, LEAD_SERVICE_LABELS, Lead } from '../../types';
             </ngx-skeleton-loader>
           </div>
 
+          <app-leads-insights *ngIf="!loadingLeads && leads().length" [leads]="leads()"></app-leads-insights>
+
           <div *ngIf="!loadingLeads && leads().length" class="overflow-x-auto">
             <table class="ts-table min-w-full">
               <thead>
@@ -256,7 +261,14 @@ import { Empresa, LEAD_SERVICE_LABELS, Lead } from '../../types';
                 <tr *ngFor="let lead of leads(); trackBy: trackByLead">
                   <td class="py-3">
                     <p class="font-medium text-ink">{{ lead.company }}</p>
-                    <p *ngIf="lead.message" class="mt-1 max-w-xs whitespace-pre-line text-xs text-muted">{{ lead.message }}</p>
+                    <ng-container *ngIf="quizSummary(lead.message) as quiz; else plainMessage">
+                      <span class="ts-badge mt-1" [attr.title]="lead.message">
+                        Mini-diagnóstico · nivel {{ quiz.level }} ({{ quiz.levelName }})
+                      </span>
+                    </ng-container>
+                    <ng-template #plainMessage>
+                      <p *ngIf="lead.message" class="mt-1 max-w-xs whitespace-pre-line text-xs text-muted">{{ lead.message }}</p>
+                    </ng-template>
                   </td>
                   <td class="py-3 text-sm">
                     <span *ngIf="lead.service; else noService" class="ts-badge">{{ serviceLabels[lead.service] }}</span>
@@ -540,6 +552,7 @@ export class CompaniesComponent implements OnInit {
   private notificationCenter = inject(NotificationCenterService);
 
   readonly serviceLabels = LEAD_SERVICE_LABELS;
+  readonly quizSummary = parseQuizSummary;
 
   empresas: WritableSignal<Empresa[]> = signal<Empresa[]>([]);
   loadingList = true;
