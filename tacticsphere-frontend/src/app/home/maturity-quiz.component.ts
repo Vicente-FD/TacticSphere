@@ -1,18 +1,16 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Output, computed, signal } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
-import { NgxEchartsModule } from 'ngx-echarts';
-import type { EChartsOption } from 'echarts';
 import { IconComponent } from '../shared/ui/icon/icon.component';
 import { SITE } from './site-config';
 
 // Mini-diagnóstico del home: una pregunta por pilar con 5 opciones (niveles 1 a 5).
-// Al terminar muestra un radar con los 4 pilares, el nivel estimado y una invitación
+// Al terminar muestra "tu esfera de madurez" (4 sectores, uno por pilar), el nivel estimado y una invitación
 // a pedir el diagnóstico completo (el padre abre el formulario con el resumen).
 @Component({
   standalone: true,
   selector: 'app-maturity-quiz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgFor, NgIf, NgxEchartsModule, IconComponent],
+  imports: [NgFor, NgIf, IconComponent],
   template: `
     <div class="quiz">
       <!-- Inicio -->
@@ -70,7 +68,30 @@ import { SITE } from './site-config';
       <!-- Resultado -->
       <div *ngIf="step() === questions.length" class="quiz__panel quiz__result">
         <div class="grid items-center gap-8 md:grid-cols-[1.1fr_1fr]">
-          <div class="quiz__chart" echarts [options]="chartOptions()" [autoResize]="true"></div>
+          <!-- Tu esfera de madurez: cada sector crece desde el centro hasta el nivel del pilar -->
+          <figure class="quiz__sphere">
+            <svg viewBox="-190 -140 380 280" role="img" [attr.aria-label]="sphereLabel()">
+              <g class="quiz__sphere-grid">
+                <circle *ngFor="let r of levelRadii" [attr.r]="r" />
+                <ellipse rx="100" ry="34" />
+                <ellipse rx="34" ry="100" />
+              </g>
+              <path
+                *ngFor="let w of wedges(); let i = index"
+                class="quiz__wedge"
+                [attr.d]="w.path"
+                [style.--i]="i"
+              />
+              <circle class="quiz__sphere-outline" r="100" />
+              <g *ngFor="let w of wedges()" class="quiz__sphere-label">
+                <text [attr.x]="w.labelX" [attr.y]="w.labelY" [attr.text-anchor]="w.anchor">{{ w.pillar }}</text>
+                <text class="quiz__sphere-value" [attr.x]="w.labelX" [attr.y]="w.labelY + 16" [attr.text-anchor]="w.anchor">
+                  {{ w.value }}/5
+                </text>
+              </g>
+            </svg>
+            <figcaption class="text-center text-xs text-muted">Tu esfera de madurez</figcaption>
+          </figure>
 
           <div class="space-y-4 text-left">
             <p class="ts-label">Tu nivel estimado</p>
@@ -205,9 +226,60 @@ import { SITE } from './site-config';
       color: #0f0f0f;
     }
 
-    .quiz__chart {
+    .quiz__sphere {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .quiz__sphere svg {
       width: 100%;
-      height: 320px;
+      height: auto;
+      overflow: visible;
+    }
+
+    .quiz__sphere-grid circle,
+    .quiz__sphere-grid ellipse {
+      fill: none;
+      stroke: #eeeef0;
+      stroke-width: 1;
+    }
+
+    .quiz__sphere-outline {
+      fill: none;
+      stroke: #d4d4d8;
+      stroke-width: 1;
+    }
+
+    .quiz__wedge {
+      fill: #0f0f0f;
+      fill-opacity: 0.88;
+      stroke: #fff;
+      stroke-width: 2;
+      transform-box: view-box;
+      transform-origin: 50% 50%;
+      animation: wedgeGrow 0.9s var(--ease) both;
+      animation-delay: calc(var(--i) * 160ms + 200ms);
+    }
+
+    .quiz__sphere-label text {
+      font-size: 11px;
+      fill: #6b7280;
+    }
+
+    .quiz__sphere-label .quiz__sphere-value {
+      font-size: 12px;
+      font-weight: 600;
+      fill: #0f0f0f;
+    }
+
+    @keyframes wedgeGrow {
+      from {
+        transform: scale(0);
+      }
+      to {
+        transform: scale(1);
+      }
     }
 
     .quiz__level {
@@ -268,15 +340,16 @@ import { SITE } from './site-config';
     }
 
     @media (max-width: 640px) {
-      .quiz__chart {
-        height: 260px;
+      .quiz__sphere svg {
+        max-height: 260px;
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
       .quiz__panel,
       .quiz__option,
-      .quiz__level-number {
+      .quiz__level-number,
+      .quiz__wedge {
         animation: none;
         opacity: 1;
         transform: none;
@@ -306,34 +379,41 @@ export class MaturityQuizComponent {
     return this.questions[values.indexOf(min)];
   });
 
-  readonly chartOptions = computed<EChartsOption>(() => ({
-    animationDuration: 1200,
-    animationEasing: 'cubicOut',
-    radar: {
-      indicator: this.questions.map((q) => ({ name: q.pillar, max: 5 })),
-      radius: '62%',
-      splitNumber: 5,
-      axisName: { color: '#6b7280', fontSize: 11 },
-      splitLine: { lineStyle: { color: '#e5e7eb' } },
-      splitArea: { areaStyle: { color: ['#ffffff', '#fafafa'] } },
-      axisLine: { lineStyle: { color: '#e5e7eb' } },
-    },
-    series: [
-      {
-        type: 'radar',
-        symbolSize: 6,
-        data: [
-          {
-            value: this.answers(),
-            name: 'Tu empresa',
-            lineStyle: { color: '#0f0f0f', width: 2 },
-            itemStyle: { color: '#0f0f0f' },
-            areaStyle: { color: 'rgba(15, 15, 15, 0.12)' },
-          },
-        ],
-      },
-    ],
-  }));
+  // Anillos de nivel (1 a 5) de la esfera; radio exterior = 100
+  readonly levelRadii = [20, 40, 60, 80, 100];
+
+  // Un sector por pilar, en sentido horario desde arriba; radio proporcional al nivel
+  readonly wedges = computed(() =>
+    this.questions.map((q, i) => {
+      const value = this.answers()[i] ?? 0;
+      const r = value * 20;
+      const start = -90 + i * 90;
+      const end = start + 90;
+      const mid = ((start + 45) * Math.PI) / 180;
+      const point = (deg: number, radius: number) => {
+        const rad = (deg * Math.PI) / 180;
+        return `${(Math.cos(rad) * radius).toFixed(2)},${(Math.sin(rad) * radius).toFixed(2)}`;
+      };
+      const labelX = Math.cos(mid) * 112;
+      const labelY = Math.sin(mid) * 112 + (Math.sin(mid) > 0 ? 8 : -12);
+      return {
+        pillar: q.pillar,
+        value,
+        path: `M0,0 L${point(start, r)} A${r},${r} 0 0 1 ${point(end, r)} Z`,
+        labelX,
+        labelY,
+        anchor: labelX >= 0 ? 'start' : 'end',
+      };
+    }),
+  );
+
+  readonly sphereLabel = computed(
+    () =>
+      'Tu esfera de madurez: ' +
+      this.wedges()
+        .map((w) => `${w.pillar} ${w.value} de 5`)
+        .join(', '),
+  );
 
   private advanceTimer: ReturnType<typeof setTimeout> | null = null;
 

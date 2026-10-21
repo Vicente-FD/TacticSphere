@@ -24,6 +24,8 @@ import { HeroLogoComponent } from './hero-logo.component';
 import { MaturityQuizComponent } from './maturity-quiz.component';
 import { PlatformPreviewComponent } from './platform-preview.component';
 import { ChatWidgetComponent } from './chat-widget.component';
+import { OrbitService, ServicesOrbitComponent } from './services-orbit.component';
+import { ContactSphereComponent } from './contact-sphere.component';
 import { ContactLink, SITE, contactHref } from './site-config';
 import { LEAD_SERVICE_LABELS, LeadServiceKey } from '../types';
 import {
@@ -60,7 +62,7 @@ type ProcessStep = { icon: IconName; title: string; text: string };
 
 type Service = { key: LeadServiceKey; icon: IconName; title: string; text: string; tags: string[] };
 
-type TeamMember = { name: string };
+type TeamMember = { name: string; position: 'back' | 'left' | 'right' | 'front'; label: string };
 
 type NavLink = { id: string; label: string };
 
@@ -86,6 +88,8 @@ const CONTACT_ICONS: Record<ContactLink['key'], IconName> = {
     MaturityQuizComponent,
     PlatformPreviewComponent,
     ChatWidgetComponent,
+    ServicesOrbitComponent,
+    ContactSphereComponent,
   ],
   templateUrl: './home.html',
   styleUrl: './home.css',
@@ -213,6 +217,13 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     },
   ];
 
+  // Diagrama orbital: la consultoría es el núcleo; el resto de servicios orbita a su alrededor
+  readonly orbitCore: OrbitService = this.toOrbit('consultoria');
+  readonly orbitSatellites: OrbitService[] = (['desarrollo', 'ciencia_datos', 'agentes_ia'] as LeadServiceKey[]).map(
+    (key) => this.toOrbit(key),
+  );
+  readonly activeService = signal<LeadServiceKey | null>(null);
+
   readonly processSteps: ProcessStep[] = [
     {
       icon: 'clipboard-check',
@@ -243,7 +254,6 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
       'con el rigor de ITIL 4 y la [experiencia] de haber construido nuestra propia plataforma.',
   );
   readonly manifestoPlain = this.manifesto.map((w) => w.text).join(' ');
-  readonly manifestoLit = signal(0);
 
   readonly trustReasons: { icon: IconName; title: string; text: string }[] = [
     {
@@ -269,12 +279,12 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
   ];
 
   readonly teamPhoto = 'assets/team/equipo.jpg';
-  // En el mismo orden en que aparecen en la foto, de izquierda a derecha
+  // Las tarjetas se ubican en rombo, igual que las personas en la foto (de arriba hacia abajo)
   readonly teamMembers: TeamMember[] = [
-    { name: 'Vicente Fernández' },
-    { name: 'Samanta Navarro' },
-    { name: 'Javier Auspont' },
-    { name: 'Marcelo Darras' },
+    { name: 'Javier Auspont', position: 'back', label: 'Atrás' },
+    { name: 'Vicente Fernández', position: 'left', label: 'Izquierda' },
+    { name: 'Marcelo Darras', position: 'right', label: 'Derecha' },
+    { name: 'Samanta Navarro', position: 'front', label: 'Adelante' },
   ];
   readonly teamPhotoFailed = signal(false);
   readonly year = new Date().getFullYear();
@@ -294,7 +304,7 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
   private observer?: IntersectionObserver;
   private scrollFrame: number | null = null;
-  private readonly reducedMotion =
+  protected readonly reducedMotion =
     typeof window !== 'undefined' &&
     (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
@@ -331,6 +341,11 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     this.submitState.set('idle');
     this.form.reset({ company: '', email: '', service, message });
     this.modalOpen.set(true);
+  }
+
+  private toOrbit(key: LeadServiceKey): OrbitService {
+    const service = this.services.find((s) => s.key === key)!;
+    return { key, title: service.title, icon: service.icon };
   }
 
   selectService(key: LeadServiceKey): void {
@@ -437,7 +452,6 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
     if (this.reducedMotion || typeof IntersectionObserver === 'undefined') {
       targets.forEach((el) => el.classList.add('is-visible'));
-      this.manifestoLit.set(this.manifesto.length);
       this.caseValues.set(SITE.cases.map((c) => c.metric.value));
       return;
     }
@@ -505,15 +519,5 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     this.showScrollIndicator.set(
       contentSection ? contentSection.getBoundingClientRect().top > 200 : scrollY < 100,
     );
-
-    // El manifiesto se "pinta" de gris a negro a medida que atraviesa la pantalla
-    const manifesto = document.getElementById('manifiesto-texto');
-    if (manifesto && !this.reducedMotion) {
-      const rect = manifesto.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = (vh * 0.85 - rect.top) / (rect.height + vh * 0.35);
-      const clamped = Math.min(Math.max(progress, 0), 1);
-      this.manifestoLit.set(Math.round(clamped * this.manifesto.length));
-    }
   }
 }

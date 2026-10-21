@@ -117,22 +117,24 @@
 
   <section class="relative z-10 py-20 pt-24 lg:pt-32" id="content-section">
     <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6">
-      <!-- 1. Manifiesto: el texto se ilumina palabra por palabra con el scroll -->
+      <!-- 1. Manifiesto: las palabras aparecen en cascada al entrar en pantalla -->
       <section id="nosotros" class="manifesto" aria-label="Quiénes somos">
         <p class="ts-label">Quiénes somos</p>
-        <p id="manifiesto-texto" class="manifesto__text">
+        <p id="manifiesto-texto" class="manifesto__text" data-reveal="words">
           <!-- Texto completo para lectores de pantalla; las palabras animadas van ocultas -->
           <span class="sr-only">{{ manifestoPlain }}</span>
           <ng-container *ngFor="let word of manifesto; let i = index">
             <span
               class="manifesto__word"
-              [class.is-lit]="i < manifestoLit()"
               [class.is-key]="word.highlight"
+              [style.--w]="i"
               aria-hidden="true"
             >{{ word.text }}</span>{{ ' ' }}
           </ng-container>
         </p>
       </section>
+
+      <div class="orbit-divider" aria-hidden="true"><span class="orbit-divider__dot"></span></div>
 
       <!-- 2. Servicios + tecnologías -->
       <section id="services" class="space-y-6">
@@ -144,10 +146,25 @@
           </p>
         </div>
 
+        <div class="services-layout">
+          <div class="services-layout__orbit" data-reveal="up">
+            <app-services-orbit
+              [core]="orbitCore"
+              [satellites]="orbitSatellites"
+              [active]="activeService()"
+              (activate)="activeService.set($event)"
+              (select)="openModal($event)"
+            ></app-services-orbit>
+            <p class="mt-4 text-center text-sm text-muted">Estrategia en el núcleo. Capacidades en órbita.</p>
+          </div>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <div
             *ngFor="let service of services; let i = index"
             class="service-card ts-card"
+            [class.is-highlighted]="activeService() === service.key"
+            (mouseenter)="activeService.set(service.key)"
+            (mouseleave)="activeService.set(null)"
             data-reveal="up"
             [style.--i]="i"
           >
@@ -164,6 +181,7 @@
               <app-icon name="arrow-right" size="sm"></app-icon>
             </button>
           </div>
+        </div>
         </div>
 
         <div class="tech-marquee" data-reveal="up" aria-label="Tecnologías que usamos">
@@ -214,6 +232,14 @@
           <div class="defer-placeholder defer-placeholder--preview" aria-hidden="true"></div>
         }
 
+        <div class="process-arc">
+          <!-- Arco de órbita que une los pasos; un punto lo recorre -->
+          <svg class="process-arc__path" viewBox="0 0 1000 90" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M125,70 Q500,-25 875,70" />
+            <circle *ngIf="!reducedMotion" r="4" class="process-arc__dot">
+              <animateMotion dur="7s" repeatCount="indefinite" path="M125,70 Q500,-25 875,70" />
+            </circle>
+          </svg>
         <ol class="process-line" aria-label="Cómo trabajamos">
           <li *ngFor="let step of processSteps; let i = index" class="process-line__step" data-reveal="up" [style.--i]="i">
             <span class="process-line__dot">
@@ -223,6 +249,7 @@
             <span class="text-sm font-semibold text-ink">{{ step.title }}</span>
           </li>
         </ol>
+        </div>
       </section>
 
       <!-- 4. Banda de IA: lleva al mini-diagnóstico -->
@@ -368,14 +395,16 @@
             </span>
           </p>
 
-          <ul class="grid w-full grid-cols-2 gap-4 md:grid-cols-4">
+          <!-- Rombo: cada tarjeta ocupa la posición de la persona en la foto -->
+          <ul class="team-diamond">
             <li
               *ngFor="let member of teamMembers; let i = index"
               class="team-member"
+              [attr.data-pos]="member.position"
               data-reveal="up"
               [style.--i]="i"
             >
-              <span class="team-member__index">{{ (i + 1).toString().padStart(2, '0') }}</span>
+              <span class="team-member__index">{{ member.label }}</span>
               <p class="font-semibold text-ink">{{ member.name }}</p>
             </li>
           </ul>
@@ -428,6 +457,8 @@
           </div>
         </div>
       </section>
+
+      <div class="orbit-divider" aria-hidden="true"><span class="orbit-divider__dot"></span></div>
 
       <!-- 8. Contacto -->
       <section id="contacto" class="contact ts-card min-w-0" data-reveal="up">
@@ -538,6 +569,12 @@
 
 <ts-modal title="Conversemos" [open]="modalOpen()" (close)="closeModal()">
   <form class="space-y-5" [formGroup]="form" (ngSubmit)="onSubmitConsulting()">
+    <app-contact-sphere
+      *ngIf="modalOpen()"
+      [selected]="form.controls.service.value"
+      (select)="selectService($event)"
+    ></app-contact-sphere>
+
     <div class="space-y-2">
       <span class="ts-label block" id="consulting-service-label">¿Qué necesitas?</span>
       <div class="service-picker" role="radiogroup" aria-labelledby="consulting-service-label">

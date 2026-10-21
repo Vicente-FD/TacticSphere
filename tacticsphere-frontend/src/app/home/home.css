@@ -520,6 +520,52 @@
 }
 
 /* Posición en la foto (01 = extremo izquierdo) */
+/* Rombo: 4 filas de media tarjeta; cada tarjeta ocupa 2 filas y se escalonan como en la foto */
+.home-page .team-diamond {
+  display: grid;
+  width: 100%;
+  max-width: 46rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 2.6rem;
+  gap: 0.6rem 1rem;
+}
+
+.home-page .team-diamond .team-member {
+  grid-row-end: span 2;
+}
+
+.home-page .team-member[data-pos='back'] {
+  grid-column: 2;
+  grid-row-start: 1;
+}
+
+.home-page .team-member[data-pos='left'] {
+  grid-column: 1;
+  grid-row-start: 2;
+}
+
+.home-page .team-member[data-pos='right'] {
+  grid-column: 3;
+  grid-row-start: 2;
+}
+
+.home-page .team-member[data-pos='front'] {
+  grid-column: 2;
+  grid-row-start: 3;
+}
+
+@media (max-width: 640px) {
+  .home-page .team-diamond {
+    grid-auto-rows: 2.9rem;
+    gap: 0.5rem 0.5rem;
+  }
+
+  .home-page .team-diamond .team-member {
+    padding: 0.7rem;
+    font-size: 0.875rem;
+  }
+}
+
 .home-page .team-member__index {
   display: block;
   margin-bottom: 0.35rem;
@@ -970,38 +1016,118 @@
   letter-spacing: -0.02em;
 }
 
-/* Cada palabra parte en gris claro y pasa a negro al "iluminarse" con el scroll */
+/* Texto en gris oscuro; las palabras clave quedan en negro para dar jerarquía */
 .home-page .manifesto__word {
-  color: #d4d4d8;
-  transition: color 0.35s ease;
-}
-
-.home-page .manifesto__word.is-lit {
-  color: #0f0f0f;
+  display: inline-block;
+  color: #71717a;
+  transition: opacity 0.7s var(--home-ease), transform 0.7s var(--home-ease), filter 0.7s var(--home-ease);
+  transition-delay: calc(var(--w, 0) * 30ms);
 }
 
 .home-page .manifesto__word.is-key {
-  position: relative;
-  white-space: nowrap;
+  color: #0f0f0f;
 }
 
-/* Las palabras clave reciben un subrayado fino que se dibuja al iluminarse (bajo los descendentes) */
-.home-page .manifesto__word.is-key::after {
+/* Al entrar en pantalla las palabras suben en cascada (una sola vez). El párrafo en sí no se
+   desvanece: solo se animan sus palabras. */
+.home-page [data-reveal='words'].reveal-armed:not(.is-visible) {
+  opacity: 1;
+}
+
+.home-page [data-reveal='words'].reveal-armed:not(.is-visible) .manifesto__word {
+  opacity: 0;
+  transform: translateY(0.5em);
+  filter: blur(6px);
+}
+
+/* ---------- Servicios: diagrama orbital + tarjetas ---------- */
+
+.home-page .services-layout {
+  display: grid;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .home-page .services-layout {
+    grid-template-columns: 0.85fr 1.4fr;
+  }
+}
+
+.home-page .service-card.is-highlighted {
+  border-color: #0f0f0f;
+  box-shadow: 0 18px 36px -24px rgba(15, 15, 15, 0.45);
+}
+
+.home-page .service-card.is-highlighted::before {
+  transform: scaleX(1);
+}
+
+.home-page .service-card.is-highlighted .service-card__icon {
+  background: #0f0f0f;
+  color: #fff;
+}
+
+/* ---------- Separador orbital ---------- */
+
+.home-page .orbit-divider {
+  position: relative;
+  height: 2.5rem;
+  margin: 0.5rem 0;
+}
+
+/* Arco suave, como el borde de una órbita vista de lado */
+.home-page .orbit-divider::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -0.12em;
-  height: 0.06em;
-  border-radius: 9999px;
-  background: #0f0f0f;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.6s var(--home-ease);
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 100%;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
 }
 
-.home-page .manifesto__word.is-key.is-lit::after {
-  transform: scaleX(1);
+.home-page .orbit-divider__dot {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 100%;
+}
+
+.home-page .orbit-divider__dot::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #0f0f0f;
+  animation: dividerDot 9s ease-in-out infinite alternate;
+}
+
+@keyframes dividerDot {
+  0% {
+    left: 0;
+    bottom: 60%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  50% {
+    bottom: -4px;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 7px);
+    bottom: 60%;
+    opacity: 0;
+  }
 }
 
 /* ---------- Banda de urgencia IA ---------- */
@@ -1110,15 +1236,41 @@
   gap: 1rem;
 }
 
-/* Línea que une los pasos */
-.home-page .process-line::before {
-  content: '';
+/* Los pasos se apoyan sobre un arco de órbita: los del centro quedan más arriba */
+.home-page .process-arc {
+  position: relative;
+}
+
+.home-page .process-arc__path {
   position: absolute;
-  top: 1.1rem;
-  left: 12.5%;
-  right: 12.5%;
-  height: 1px;
-  background: #e5e7eb;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: 90px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.home-page .process-arc__path path {
+  fill: none;
+  stroke: #d4d4d8;
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.home-page .process-arc__dot {
+  fill: #0f0f0f;
+}
+
+/* Centro de cada punto sobre la curva: y = 70 en los extremos y ≈ 28 en los del medio */
+.home-page .process-line__step:nth-child(1),
+.home-page .process-line__step:nth-child(4) {
+  padding-top: 52px;
+}
+
+.home-page .process-line__step:nth-child(2),
+.home-page .process-line__step:nth-child(3) {
+  padding-top: 10px;
 }
 
 .home-page .process-line__step {
@@ -1162,8 +1314,12 @@
     row-gap: 1.5rem;
   }
 
-  .home-page .process-line::before {
+  .home-page .process-arc__path {
     display: none;
+  }
+
+  .home-page .process-line__step:nth-child(n) {
+    padding-top: 0;
   }
 }
 
