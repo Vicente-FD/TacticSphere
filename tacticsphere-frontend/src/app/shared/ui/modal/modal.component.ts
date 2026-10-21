@@ -13,13 +13,13 @@ import { CommonModule } from '@angular/common';
   imports: [CommonModule],
   template: `
     <div
-      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-200"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm transition-opacity duration-200"
       *ngIf="open"
       (click)="handleBackdrop($event)"
       role="presentation"
     >
       <div
-        class="ts-card w-full max-w-lg animate-subtleUp shadow-card"
+        class="ts-card w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain animate-subtleUp shadow-card"
         role="dialog"
         [attr.aria-modal]="true"
         [attr.aria-label]="title"
